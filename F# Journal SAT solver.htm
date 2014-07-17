@@ -1,0 +1,124 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/SATSolver.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20SAT%20solver_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20SAT%20solver_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20SAT%20solver_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20SAT%20solver_files/title.gif"> 
+    </TD>
+    <TD><IMG src="F%23%20Journal%20SAT%20solver_files/left.gif"> 
+</TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Boolean Satisfiability Solver</H1>
+      <P>Satisfiability solvers or SAT solvers are programs than solve logical 
+      problems. A boolean SAT solver is one than solves the problem of finding 
+      sets of variable bindings for which a given boolean expression evaluates 
+      to true.</P>
+      <P>The boolean SAT solver described in this article requires input to be 
+      in conjunctive normal form. In this form, the boolean expression is 
+      written as a formula which is a list of clauses each of which is a list of 
+      literals. The formula is satisfied when every clause evaluates to 
+      <CODE>true</CODE>. A clause evaluates to <CODE>true</CODE> when any of its 
+      elements evaluate to <CODE>true</CODE>.</P>
+      <H2>Implementation</H2>
+      <P>We begin by defining a literal in our language which is either 
+      <CODE>x</CODE> or <CODE>not&nbsp;x</CODE> for any <CODE>x</CODE>, 
+      represented as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Literal&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Yes&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Not&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(~-)&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;f&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Yes&nbsp;x&nbsp;-&gt;&nbsp;Not&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Not&nbsp;x&nbsp;-&gt;&nbsp;Yes&nbsp;x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Literal&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Yes&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Not&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;~-&nbsp;)&nbsp;:&nbsp;f:Literal&nbsp;-&gt;&nbsp;Literal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Note that we have overloaded the unary minus (negation) operator in 
+      order to provide negation of a literal, i.e. <CODE>-x</CODE> means 
+      <CODE>not&nbsp;x</CODE>.</P>
+      <P>The following <CODE>findUnit</CODE> function returns an arbitrary unit 
+      literal of a formula, or <CODE>None</CODE> if one does not exist:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;findUnit&nbsp;cs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.tryPick&nbsp;(function&nbsp;[x]&nbsp;-&gt;&nbsp;Some&nbsp;x&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None)&nbsp;cs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;findUnit&nbsp;:&nbsp;seq&lt;'a&nbsp;list&gt;&nbsp;-&gt;&nbsp;'a&nbsp;option</CODE></P>
+      <P>Given a formula and a literal, the following <CODE>resolve</CODE> 
+      function returns the updated formula formed by setting the indicated 
+      variable to the specified value:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;resolve&nbsp;f&nbsp;(literal:&nbsp;Literal)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List.choose&nbsp;(fun&nbsp;clause&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Seq.exists&nbsp;((=)&nbsp;literal)&nbsp;clause&nbsp;then&nbsp;None&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(List.filter&nbsp;((&lt;&gt;)&nbsp;-literal)&nbsp;clause))&nbsp;f;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;resolve&nbsp;:&nbsp;Literal&nbsp;list&nbsp;list&nbsp;-&gt;&nbsp;Literal&nbsp;-&gt;&nbsp;Literal&nbsp;list&nbsp;list</CODE></P>
+      <P>This works by first removing all clauses that contain the indicated 
+      literal (since they're all resolved), then removing from each other clause 
+      all copies of the negation of that literal.</P>
+      <P>Given a literal and a formula, the following <CODE>isPure</CODE> 
+      function returns whether that literal is pure in the formula, i.e. the 
+      literal's negation appears nowhere in the formula:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;isPure&nbsp;f&nbsp;literal&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;List.forall&nbsp;(List.forall&nbsp;((&lt;&gt;)&nbsp;literal))&nbsp;f&nbsp;then&nbsp;Some&nbsp;literal&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;isPure&nbsp;:&nbsp;'a&nbsp;list&nbsp;list&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;option&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>Given a list of clauses, the following <CODE>findPureLiteral</CODE> 
+      finds a pure literal and returns it if one exists:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;findPureLiteral&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.concat&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.distinct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.tryPick&nbsp;(isPure&nbsp;f);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;findPureLiteral&nbsp;:&nbsp;'a&nbsp;list&nbsp;list&nbsp;-&gt;&nbsp;'a&nbsp;option&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>Finally, the following <CODE>solve</CODE> function uses the DPLL 
+      algorithm to determine all sets of variable bindings that satisfy the 
+      given set of boolean constraints:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;solve&nbsp;vars&nbsp;clauses&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;match&nbsp;clauses&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;yield&nbsp;vars<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]::f&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(nextLiteral::_)::_&nbsp;as&nbsp;f&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;List.exists&nbsp;List.isEmpty&nbsp;f&nbsp;then&nbsp;()&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;vars&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;nextLiteral&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Yes&nbsp;x&nbsp;-&gt;&nbsp;Map.add&nbsp;x&nbsp;(f&nbsp;true)&nbsp;vars<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Not&nbsp;x&nbsp;-&gt;&nbsp;Map.add&nbsp;x&nbsp;(f&nbsp;false)&nbsp;vars<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;solve&nbsp;(vars&nbsp;id)&nbsp;(resolve&nbsp;f&nbsp;nextLiteral)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;solve&nbsp;(vars&nbsp;not)&nbsp;(resolve&nbsp;f&nbsp;-nextLiteral)&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;solve&nbsp;:&nbsp;Map&lt;string,bool&gt;&nbsp;-&gt;&nbsp;Literal&nbsp;list&nbsp;list&nbsp;-&gt;&nbsp;seq&lt;Map&lt;string,bool&gt;&gt;</CODE></P>
+      <P>The recursive <CODE>solve</CODE> function accepts a set of bound 
+      variables <CODE>vars</CODE> and a formula.</P>
+      <P>If all clauses have been satisfied then the current set of variable 
+      bindings <CODE>vars</CODE> is yielded as a solution. If the first clause 
+      is empty then nothing is yielded otherwise the first literal is taken from 
+      the first clause.</P>
+      <H2>Results</H2>
+      <P>The simplest test is to find all sets of variable bindings for which 
+      the formula <CODE>y</CODE> evaluates to <CODE>true</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;solve&nbsp;Map.empty&nbsp;[[Yes&nbsp;"x"]];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;Map&lt;string,bool&gt;&gt;&nbsp;=&nbsp;seq&nbsp;[map&nbsp;[("x",&nbsp;true)]]</CODE></P>
+      <P>As expected, the answer is that <CODE>y=true</CODE> is the only set of 
+      variable bindings for which <CODE>y</CODE> evaluates to 
+      <CODE>true</CODE>.</P>
+      <P>The following test represents the formula 
+      <CODE>x&nbsp;||&nbsp;not&nbsp;x</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;solve&nbsp;Map.empty&nbsp;[[Yes&nbsp;"x";&nbsp;Not&nbsp;"x"]];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;Map&lt;string,bool&gt;&gt;&nbsp;=&nbsp;seq&nbsp;[map&nbsp;[("x",&nbsp;true)];&nbsp;map&nbsp;[("x",&nbsp;false)]]</CODE></P>
+      <P>Note that this formula has a single clause.</P>
+      <P>In this case, two sets of variable bindings solve the formula: 
+      <CODE>x=true</CODE> and <CODE>x=false</CODE>.</P>
+      <P>The following test represents the formula 
+      <CODE>x&nbsp;&amp;&amp;&nbsp;not&nbsp;y</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;solve&nbsp;Map.empty&nbsp;[[Yes&nbsp;"x"];&nbsp;[Not&nbsp;"y"]];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;Map&lt;string,bool&gt;&gt;&nbsp;=&nbsp;seq&nbsp;[map&nbsp;[("x",&nbsp;true);&nbsp;("y",&nbsp;false)]]</CODE></P>
+      <P>Note that this formula has two clauses.</P>
+      <P>In this case, the formula evaluates to <CODE>true</CODE> when 
+      <CODE>x=true</CODE> and <CODE>y=false</CODE>.</P>
+      <P>The following finds all solutions to 
+      <CODE>x&nbsp;&amp;&amp;&nbsp;not&nbsp;x</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;solve&nbsp;Map.empty&nbsp;[[Yes&nbsp;"x"];&nbsp;[Not&nbsp;"x"]];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;Map&lt;string,bool&gt;&gt;&nbsp;=&nbsp;seq&nbsp;[]</CODE></P>
+      <P>In this case, there are no solutions as the two clauses are mutually 
+      exclusive.</P>
+      <P>The following solves 
+      <CODE>(x&nbsp;||&nbsp;not&nbsp;x)&nbsp;&amp;&amp;&nbsp;y</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;solve&nbsp;Map.empty&nbsp;[[Yes&nbsp;"x";&nbsp;Not&nbsp;"x"];&nbsp;[Yes&nbsp;"y"]];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;Map&lt;string,bool&gt;&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;[map&nbsp;[("x",&nbsp;true);&nbsp;("y",&nbsp;true)];&nbsp;map&nbsp;[("x",&nbsp;false);&nbsp;("y",&nbsp;true)]]</CODE></P>
+      <P>In this case, <CODE>x</CODE> can be <CODE>true</CODE> or 
+      <CODE>false</CODE> and <CODE>y</CODE> must be <CODE>true</CODE>.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a simple 
+      boolean SAT solver that can find sets of variable bindings that solve a 
+      problem.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of 
+      metaprogramming and theorem proving.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20SAT%20solver_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

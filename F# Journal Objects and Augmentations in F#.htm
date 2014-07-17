@@ -1,0 +1,354 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0077)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/objects.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Objects and Augmentations in F#</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Objects and Augmentations in F#</TITLE>     
+<LINK href="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Objects and Augmentations in F#</H1>
+      <P>In addition to functional programming, the F# language also offers 
+      object-oriented programming (OOP) in harmony with the .NET platform. The 
+      F# language takes powerful OOP concepts from C# and supplements them with 
+      elegant functional constructs. The result combines the best aspects of 
+      functional and object-oriented programming.</P>
+      <H2>Introduction</H2>
+      <P>Existing functional languages such as              <A href="http://www.ffconsultancy.com/products/ocaml_for_scientists/">OCaml</A> 
+      and              <A href="http://www.haskell.org/">Haskell</A> have 
+      demonstrated that concepts from functional programming allow many problems 
+      to be solved more simply and elegantly than with more common programming 
+      paradigms like object-oriented programming. Thanks to its heritage, F# 
+      programmers can leverage functional programming and never need to worry 
+      about the object-oriented intermediate representation used by .NET.        
+         </P>
+      <P>However, interoperability is one of the key benefits of the F# 
+      programming language and, in order to interoperate with object-oriented 
+      languages like C#, it is necessary to be able to manipulate and even 
+      create objects in F# programs.</P>
+      <P>This article gives a brief overview of object-oriented programming 
+      before describing some of the advantages that objects provide in the 
+      context of F# and how these advantages can be exploited by augmenting F# 
+      types with object-oriented constructs.</P>
+      <H2>Object-oriented programming</H2>
+      <P>Classes are a core concept in object-oriented programming. A class is a 
+      type of object. Class definitions describe the interface that an object of 
+      that class must present to the outside world. In order to present these 
+      interfaces, objects encapsulate all manner of definitions, functions 
+      (members), values (properties) and even types (nested classes).</P>
+      <P>Moreover, the relationships between classes may be described by 
+      inheritance relationships. A derived class is expected to provide all of 
+      the features of its parent and possibly more.</P>
+      <P>For example, an F# record type representing a two-dimensional vector 
+      with mutable components may be written:</P>
+<PRE>&gt; type Vec2 = {mutable x: float; mutable y: float};;</PRE>
+      <P>This native F# type is equivalent to a C# class that implements two 
+      properties called              <CODE>X</CODE> and              
+      <CODE>Y</CODE> :           </P>
+<PRE>&gt; type Vec2(a : float, b : float) = class
+    let mutable x = a
+    let mutable y = b</PRE>
+<PRE>    member r.X
+      with get() = x
+      and set(v) = x &lt;- v</PRE>
+<PRE>    member r.Y
+      with get() = y
+      and set(v) = y &lt;- v
+  end;;</PRE>
+      <P>Although the definition of the class is longer than the definition of 
+      the record, the class-based approach opens up the getting and setting of 
+      the properties              <CODE>X</CODE> and              <CODE>Y</CODE> 
+      such that we could insert computations to be performed when the properties 
+      are retreived or adjusted. Indeed, the representation of a property value 
+      inside a class might be replaced, e.g. to use a polar internal 
+      representation.           </P>
+      <P>Note that, unlike C#, this F# class definition has an implicit 
+      constructor. Class constructors may also be written explicitly in F#, 
+      although this is typically less desirable:</P>
+<PRE>&gt; type Vec2 = class
+    val mutable x : float
+    val mutable y : float</PRE>
+<PRE>    new(a, b) = {x=a; y=b}</PRE>
+<PRE>    member r.X
+      with get() = r.x
+      and set(v) = r.x &lt;- v</PRE>
+<PRE>    member r.Y
+      with get() = r.y
+      and set(v) = r.y &lt;- v
+  end;;</PRE>
+      <P>Another interesting difference is that the              
+      <CODE>new</CODE>  keyword found in most mainstream object-oriented 
+      programming languages (C++, C# and Java) is redundant in F# for 
+      user-defined classes and may be omitted:           </P>
+<PRE>&gt; Vec2(3., 4.);;
+val it : Vec2 = ...</PRE>
+      <P>This article describes some of the interesting ways that classes may be 
+      augmented with useful constructs in F#.</P>
+      <H2>Augmentations</H2>
+      <P>We may wish to add a              <CODE>Length</CODE> member function 
+      to our              <CODE>Vec2</CODE> class. This can be achieved using a 
+      C# style:           </P>
+<PRE>&gt; type Vec2(a : float, b : float) = class
+    let mutable x = a
+    let mutable y = b</PRE>
+<PRE>    member r.X
+      with get() = x
+      and set(v) = x &lt;- v</PRE>
+<PRE>    member r.Y
+      with get() = y
+      and set(v) = y &lt;- v</PRE>
+<PRE>    member r.Length() = sqrt(r.X*r.X + r.Y*r.Y)
+  end;;</PRE>
+      <P>Note that the definition of the              <CODE>Length</CODE> member 
+      function is careful to use the abstractions (the              
+      <CODE>X</CODE> and              <CODE>Y</CODE> properties) rather than 
+      dissecting the internal representation itself (the              
+      <CODE>x</CODE> and              <CODE>y</CODE> variables), as this reduces 
+      the number of code changes required when the internal representation of 
+      the properties is altered.           </P>
+      <P>Alternatively, the              <CODE>Length</CODE> member function may 
+      be added to the much more succinct F# record definition, as an 
+      augmentation:           </P>
+<PRE>&gt; type Vec2 = {mutable x: float; mutable y: float} with
+    member r.Length() = sqrt(r.x*r.x + r.y*r.y)
+  end;;</PRE>
+      <P>This demonstrates how simply and easily the native-F# types may be 
+      extended as if they were classes.</P>
+      <P>Augmenting a native F# type with member functions is typically 
+      undesirable because the conventional function style (separating the 
+      functions from the types they act upon) is easier:</P>
+<PRE>&gt; let length r = sqrt(r.x*r.x + r.y*r.y);;
+val length : Vec2 -&gt; float</PRE>
+      <P>However, the .NET platform provides more interesting forms of 
+      augmentation that cannot be written in the conventional functional 
+      style.</P>
+      <H3>Getters and setters</H3>
+      <P>The getters and setters of a property are the simplest useful 
+      augmentation. In the case of our              <CODE>Vec2</CODE> type, we 
+      could allow the vector length to be both written and read. This can be 
+      accomplished by implementing              <CODE>Length</CODE> as a 
+      property, rather than a member function, and providing a getter and a 
+      setter for the              <CODE>Length</CODE> property:           </P>
+<PRE>&gt; type Vec2 = {mutable x: float; mutable y: float} with
+    member r.Length
+      with get() = sqrt(r.x*r.x + r.y*r.y)
+      and set(s) =
+        let s = s / r.Length
+	r.x &lt;- s * r.x
+	r.y &lt;- s * r.y
+  end;;</PRE>
+      <P>For example, the vector              <I>(3, 4)</I> may be scaled to 
+      unit length:           </P>
+<PRE>&gt; let r = Vec2(3., 4.);;
+val r : Vec2
+&gt; r.Length &lt;- 1.;;
+&gt; r.x, r.y;;
+val it : float * float = (0.6, 0.8)</PRE>
+      <P>Getters and setters provide a powerful method of abstraction, useful in 
+      a variety of circumstances. Most notably, getters and setters are an 
+      excellent way to provide a clear and simple interface to GUI objects. As 
+      we shall see, GUI programming is one of the pedagogical examples for 
+      object-oriented design.</P>
+      <H3>Indexing</H3>
+      <P>Many data structures are indexed. Arrays map integers indexes onto 
+      array elements. Hash tables are indexed by arbitrary key values. One can 
+      imagine several other data structures where indexing can be useful.</P>
+      <P>Data structures are indexed in F# using the notation:</P>
+<PRE>&gt; a.[i];;</PRE>
+      <P>This notation for indexing may be overloaded for a new class definition 
+      by implementing a property called              <CODE>Item</CODE> .         
+        </P>
+      <P>We have already met the binary tree data structure:</P>
+<PRE>&gt; type 'a t =
+    | Empty
+    | Node of 'a t * 'a * 'a t;;</PRE>
+      <P>Consider a binary tree used to represent an arbitrary sequence with 
+      indexing of each element by an integer. This may be implemented by 
+      supplementing each node with the number of elements it contains and 
+      searching the tree in the getter of the              <CODE>Item</CODE> 
+      property:           </P>
+<PRE>&gt; type 'a t =
+    | Empty
+    | Node of 'a t * 'a * 'a t * int with</PRE>
+<PRE>    member r.Item
+      with get i =
+        match i, r with
+        | _, Empty -&gt; raise Not_found
+        | 0, Node(Empty, v, _, _) -&gt; v
+        | i, Node(Empty, _, r, _) -&gt; r.[i - 1]
+        | i, Node(Node(_, _, _, j) as l, v, r, _) -&gt;
+            if j &gt; i then l.[i] else
+              if j = i then v else
+                r.[i - j - 1]
+  end;;</PRE>
+      <P>The              <CODE>Item</CODE> property must reside in the type 
+      definition (object-oriented style) but the related definitions that make 
+      this type useful may be written in the functional style. The values used 
+      to construct an immutable sequence may be written:           </P>
+<PRE>&gt; let empty = Empty;;
+val empty : 'a t
+&gt; let node = Node(l, v, r, size l + 1 + size r);;
+val node : ('a t * 'a * 'a t) -&gt; 'a t</PRE>
+      <P>Functions to insert elements at the front or back of a sequence:</P>
+<PRE>&gt; let prepend first back = node(Empty, first, back);;
+val prepend : 'a * 'a t -&gt; 'a t
+&gt; let append front last = node(front, last, Empty);;
+val prepend : 'a t * 'a -&gt; 'a t</PRE>
+      <P>A function to convert an IEnumerable into our immutable sequence 
+      type:</P>
+<PRE>&gt; let of_seq seq = Seq.fold append Empty seq;;
+val of_seq : #seq&lt;'a&gt; -&gt; 'a t</PRE>
+      <P>and so on. We shall return to this example in a future article, as 
+      immutable sequences can be very useful in the context of purely functional 
+      programming.</P>
+      <H3>Operator Overloading</H3>
+      <P>The final form of augmentation, but by no means the least important, is 
+      operator overloading. The F# programming language is unusual in that it 
+      combines the type inference of              <A href="http://www.ffconsultancy.com/products/ocaml_for_scientists/">OCaml</A> 
+      with the operator overloading of C++ and C#. Reconciling these methods is 
+      not easy because operator overloading makes type inference ambiguous. 
+      Consequently, F# programs may require type annotations.           </P>
+      <P>For example, a function to square a number acquires the default type 
+      for the              <CODE>*</CODE> operator of              
+      <CODE>int</CODE> :           </P>
+<PRE>&gt; let sqr x = x * x;;
+val sqr : int -&gt; int</PRE>
+      <P>The default may be overridden by annotating the type of the argument    
+                <CODE>x</CODE> to the function              <CODE>sqr</CODE> to 
+      be a              <CODE>float</CODE> . The F# compiler then infers the use 
+      of floating point multiplication rather than integer multiplication:       
+          </P>
+<PRE>&gt; let sqr (x : float) = x * x;;
+val sqr : float -&gt; float</PRE>
+      <P>Existing operators (such as              <CODE>+</CODE> and             
+       <CODE>*</CODE> ) may be overloaded to work on user-defined types by 
+      augmenting the type definition with static member functions called         
+           <CODE>( + )</CODE> and              <CODE>( * )</CODE> that accept a 
+      pair of arguments (rather than being curried).           </P>
+      <P>Consider a variant that might be used to represent symbolic 
+      expressions:</P>
+<PRE>&gt; type expr =
+    | Int of int
+    | Var of string
+    | Add of expr * expr
+    | Mul of expr * expr;;</PRE>
+      <P>Constructing symbolic expressions requires a rather laborious use of 
+      prefix notation. For example, the expression              <I>a x           
+          <SUP>2</SUP> + b x + c             </I> may be constructed with:       
+          </P>
+<PRE>&gt; let x, a, b, c = Var "x", Var "a", Var "b", Var "c";;
+val x : expr
+val a : expr
+val b : expr
+val c : expr
+&gt; let expr = Add(Add(Mul(Mul(a, x), x), Mul(b, x)), c);;
+val expr : expr</PRE>
+      <P>Needless to say, this approach to constructing symbolic expressions is 
+      rather tedious.</P>
+      <P>Fortunately, this can be addressed by augmenting the              
+      <CODE>expr</CODE> type with definitions for overloaded operators           
+         <CODE>+</CODE> and              <CODE>*</CODE> that make it easier to 
+      construct values of the type              <CODE>expr</CODE> :           
+      </P>
+<PRE>&gt; type expr =
+    | Int of int
+    | Var of string
+    | Add of expr * expr
+    | Mul of expr * expr with</PRE>
+<PRE>    static member ( + ) (f, g) = Add(f, g)
+    static member ( * ) (f, g) = Mul(f, g)
+  end</PRE>
+      <P>Note the spaces in              <CODE>( * )</CODE> to disambiguate it 
+      from the start of an F# comment.           </P>
+      <P>Our example expression may now be constructed more elegantly:</P>
+<PRE>&gt; let e = a * x * x + b * x + c;;
+val e : expr</PRE>
+      <P>Similarly, functions that act upon symbolic expressions may be written 
+      more elegantly using these overloaded operators. For example, the 
+      following function computes the derivative of a symbolic expression        
+            <CODE>e</CODE> with respect to a variable name              
+      <CODE>x</CODE> :           </P>
+<PRE>&gt; let rec d e x =
+    match e with
+    | Int _ -&gt; Int 0
+    | Add(f, g) -&gt; d f x + d g x
+    | Mul(f, g) -&gt; f * d g x + g * d f x
+    | Var v -&gt; Int (if v=x then 1 else 0);;
+val d : expr -&gt; string -&gt; expr</PRE>
+      <P>As an interesting finale, let us compute the symbolic derivative of our 
+      example expression:</P>
+<PRE>&gt; d e "x";;
+val it : expr =
+  Add
+   (Add
+     (Add (Mul (Mul (Var "a", Var "x"), Int 1),
+       Mul (Var "x", Add (Mul (Var "a", Int 1), Mul (Var "x", Int 0)))),
+     Add (Mul (Var "b", Int 1), Mul (Var "x", Int 0))),
+   Int 0)</PRE>
+      <P>This result would clearly benefit from some simplification. We shall 
+      return to the topic of symbolic manipulation in later articles in the 
+      context of interpreters, computer algebra systems and metaprogramming. 
+      Suffice to say that simplifying reduction rules may be inserted into the 
+      overloaded              <CODE>+</CODE> and              <CODE>*</CODE> 
+      operators, to simplify expressions as they are constructed.           </P>
+      <H2>Expressiveness</H2>
+      <P>Before concluding this article, let us highlight the main theoretical 
+      difference that underpins the different forms of expressiveness exhibited 
+      by the functional and object-oriented programming styles.</P>
+      <P>Object-oriented programming is all about encapsulating related type and 
+      function definitions in classes. Consequently, this approach is most 
+      suitable when objects are used to represent entities that encapsulate 
+      well. For example, the functionality provided by a GUI control is 
+      well-defined during design and the functions required for a given control 
+      are limited in number and unambiguous to define.</P>
+      <P>In contrast, the functional style takes the transpose view of the same 
+      situation. Types and functions are separated and inheritance relationships 
+      are flattened into single sum types. This approach is preferable when the 
+      extent of a type is well-defined by design but the number of functions 
+      that act upon the type is unlimited. For example, a binary tree is known 
+      to have only branches and leaves, the contents of which are well-defined, 
+      but the number of functions acting on binary trees is unlimited.</P>
+      <P>So the essential difference between object-oriented and functional 
+      programming is that the former makes it easier to create new types whereas 
+      the latter makes it easier to create new 
+functions.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Objects%20and%20Augmentations%20in%20F%23_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

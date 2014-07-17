@@ -1,0 +1,431 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0074)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/wpf1.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Windows Presentation Foundation: basic controls</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Windows Presentation Foundation: basic 
+controls</TITLE>     <LINK href="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Windows Presentation Foundation: basic controls</H1>
+      <P>Microsoft's new Windows Presentation Foundation (WPF) is the next 
+      generation of graphical user interface technology, facilitating rich 
+      interactive content that is seamlessly integrated with related 
+      technologies. This article is the first in a series examining how WPF can 
+      be used from the F# programming language. We begin with an overview of WPF 
+      and describe the kinds of GUI applications that will benefit the most from 
+      using F# before surveying the basic GUI elements provided by WPF.</P>
+      <H2>Introduction</H2>
+      <P>Microsoft              <A href="http://msdn.microsoft.com/en-us/netframework/aa663326.aspx">describes</A> 
+      WPF as the "foundation for building applications and high fidelity 
+      experiences in Windows Vista, blending together application UI, documents, 
+      and media content, while exploiting the full power of your computer". This 
+      is compelling shop-talk but there are important practical reasons for 
+      professional developers to use WPF and, even, to migrate to Windows and 
+      the .NET platform just for WPF:           </P>
+      <P>
+      <UL>
+        <LI>WPF has now been very widely deployed because it has been a core 
+        component of .NET for over two years (since 3.0).</LI>
+        <LI>WPF is extremely reliable compared to alternatives like OpenGL 
+        (under Windows), Managed Direct X and XNA Game Studio. This is largely 
+        because Microsoft had to test WPF exhaustively before the launch of 
+        Vista.</LI>
+        <LI>WPF has been integrated into Windows (XP as well as Vista), giving 
+        the smoothest possible transition between user interfaces.</LI>
+        <LI>WPF is seeing rapid adoption among developers, e.g. Amazon already 
+        list 166 books that cover WPF.</LI></UL>
+      <P></P>
+      <P>The following graph from the              <A href="http://www.google.com/trends?q=wpf&amp;ctab=0&amp;geo=all&amp;date=all&amp;sort=0">Google 
+      Trend for the search keyword WPF</A> illustrates just how rapidly this new 
+      technology is being adopted by developers, particularly since its official 
+      release in November 2006:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/trend.gif"> 
+                  </P>
+      <P></P>
+      <P>The combination of these factors mean that .NET applications using WPF 
+      can provide rich and performant GUIs that will run out-of-the-box on a 
+      huge number of computers. In other words, Windows Presentation Foundation 
+      offers a much higher return on investment (ROI) than alternative 
+      techologies like              <A href="http://msdn.microsoft.com/en-us/library/dd30h2yb.aspx">Windows 
+      Forms</A> ,              <A href="http://trolltech.com/products">Qt</A> 
+      and              <A href="http://www.gtk.org/">GTK+</A> .           </P>
+      <H2>Getting started</H2>
+      <P>Using WPF from F# is easy. First, open the project window of the Visual 
+      Studio project and select "Windows Application" to stop F# from spawning a 
+      console window when your project is started:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/project.gif"> 
+                  </P>
+      <P></P>
+      <P>Then go to the Solution Explorer and add references to              
+      <CODE>WindowsBase</CODE> ,              <CODE>PresentationCore</CODE> and  
+                  <CODE>PresentationFramework</CODE> :           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/references.gif"> 
+                  </P>
+      <P></P>
+      <P>Alternatively, WPF may be used from F# script files after the DLLs have 
+      been referenced:</P>
+<PRE>&gt; #r "WindowsBase.dll";;
+&gt; #I "C:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0";;
+&gt; #r "PresentationFramework.dll";;
+&gt; #r "PresentationCore.dll";;</PRE>
+      <P>Now you're ready to start writing WPF code in F#.</P>
+      <H2>A blank window</H2>
+      <P>The simplest example is, of course, a blank window. We begin by opening 
+      the following namespace:</P>
+<PRE>&gt; open System.Windows;;</PRE>
+      <P>Windows are represented by the              
+      <CODE>System.Windows.Window</CODE> class. The following              
+      <CODE>make_window</CODE>  function uses the constructor of this class to 
+      create a new window, set some properties and return the object 
+      representing the window:           </P>
+<PRE>&gt; let make_window() =
+    let window = Window()
+    window.Title &lt;- "Windows Presentation Foundation demo"
+    window.Width &lt;- 707.
+    window.Height &lt;- 500.
+    window.Icon &lt;-
+      System.Uri "http://www.ffconsultancy.com/favicon.ico"
+      |&gt; Media.Imaging.BitmapFrame.Create
+    window.Content &lt;- "Window content"
+    window;;
+val make_window : unit -&gt; System.Windows.Window</PRE>
+      <P>The              <CODE>Title</CODE> property sets the text in the title 
+      bar of the window. The              <CODE>Width</CODE> and              
+      <CODE>Height</CODE> properties set the initial dimensions of the window 
+      including its decorations. Note that WPF uses floating point numbers in 
+      coordinates. The              <CODE>Icon</CODE> property sets the icon 
+      that appears in the top-left corner of the window and in the task bar. In 
+      this case, we download the FlyingFrog favicon used on our website. 
+      Finally, the              <CODE>Content</CODE> property sets the contents 
+      of the window. Note that any reference type can be used here. This 
+      uniformity is one of WPF's most incredible achievements: strings, pixmaps 
+      and 2D/3D vector graphics may be placed anywhere in a GUI with WPF.        
+         </P>
+<PRE>&gt; let application = Application();;
+val application : Application
+&gt; application.Run(make_window());;</PRE>
+      <P>This program produces the following window:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/blank.gif"> 
+                  </P>
+      <P></P>
+      <P>F# interactive runs in Single Threaded Apartment (STA) mode 
+      automatically but a standalone program must either spawn a thread and set 
+      the apartment mode before the thread is started, or mark the main program 
+      with a .NET attribute that requests STA mode for the main thread of the 
+      program. The latter is the simplest option and may be achieved with:</P>
+<PRE>[&lt;System.STAThread&gt;]
+do
+  make_window()
+  |&gt; (Application()).Run
+  |&gt; ignore</PRE>
+      <P>However, using WPF interactively is problematic in F#. Firstly, only 
+      one application may be spawned in a given AppDomain. Secondly, that 
+      application may be              <CODE>Run</CODE> only once. Thirdly, WPF 
+      is not inherently thread safe and, consequently, GUI work is most easily 
+      done entirely in the UI thread. So there is no easy way to spawn and 
+      manipulate windows from an F# interactive session. The solution is to 
+      spawn a UI thread and wrap every single piece of code that involves WPF, 
+      dispatching its execution to the UI thread. This is one of the main tasks 
+      of our              <A href="http://www.ffconsultancy.com/products/fsharp_for_visualization/">F# 
+      for Visualization</A> library, for example, which provides a thread-safe 
+      functional interface to the graphical features of WPF that may be used 
+      easily from F# interactive sessions.           </P>
+      <H2>Simple containers</H2>
+      <P>WPF bundles a variety of familiar containers that are used in the 
+      following program:</P>
+<PRE>[&lt;System.STAThread&gt;]
+do
+  let panel = Controls.StackPanel()</PRE>
+<PRE>  let add control =
+    control |&gt; panel.Children.Add |&gt; ignore</PRE>
+<PRE>  Controls.Button(Content="Button") |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.CheckBox(Content="Check box") |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.RadioButton(Content="Radio button 1", GroupName="A") |&gt; add
+  Controls.RadioButton(Content="Radio button 2", GroupName="A") |&gt; add
+  Controls.RadioButton(Content="Radio button 3", GroupName="A") |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.RadioButton(Content="Radio button 1", GroupName="B") |&gt; add
+  Controls.RadioButton(Content="Radio button 2", GroupName="B") |&gt; add
+  Controls.RadioButton(Content="Radio button 3", GroupName="B") |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.Label(Content="This is a label") |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.Frame(Source=System.Uri "http://www.ffconsultancy.com") |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.GroupBox(Header="Group box", Content="Content") |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.Expander(Header="Expander", Content="Content") |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.Label(Content="Hover over here to see a tooltip",
+                 ToolTip=Controls.ToolTip(Content="This is the tooltip"))
+  |&gt; add
+  
+  let window = Window()
+  window.Title &lt;- "Windows Presentation Foundation demo"
+  window.Width &lt;- 707.
+  window.Height &lt;- 500.
+  window.Icon &lt;-
+    System.Uri "http://www.ffconsultancy.com/favicon.ico"
+    |&gt; Media.Imaging.BitmapFrame.Create
+  window.Content &lt;- panel
+  
+  window
+  |&gt; (Application()).Run
+  |&gt; ignore</PRE>
+      <P>This program produces the following output:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/buttons.gif"> 
+                  </P>
+      <P></P>
+      <P>The              <CODE>Controls.Button</CODE> class provides a simple 
+      button that may be clicked by the user. Clicks are handled 
+      programmatically using events and will be discussed in a future article. 
+      Buttons display content inside them that is set using their              
+      <CODE>Content</CODE> property. In this case, the content is the string     
+               <CODE>"Button"</CODE> which is displayed as text, but the 
+      contents could be any kind of UI element.           </P>
+      <P>The              <CODE>Controls.CheckBox</CODE> class provides a check 
+      box that is toggled between two states (displayed as an empty box or a 
+      tick in a box) by the user. The contents of a check box are displayed to 
+      the right of the box.           </P>
+      <P>The              <CODE>Controls.RadioButton</CODE> class provides a 
+      more sophisticated UI element that allows the user to choose between a 
+      selection of options. The different groups of options in any given window 
+      are distinguished by the              <CODE>GroupName</CODE> property of 
+      the radio button. Like the              <CODE>CheckBox</CODE> , the 
+      contents of a              <CODE>RadioButton</CODE> are displayed to the 
+      right of its graphical depiction.           </P>
+      <P>The              <CODE>Controls.Label</CODE> class annotates part of a 
+      window with the given content, which is usually a few words of text.       
+          </P>
+      <P>The              <CODE>Controls.Frame</CODE> control is used to wrap 
+      external content and, in particular, provide a web browser for HTML 
+      content that may be fetched over the web. In this case, we have displayed 
+      our company's home page. Note that the web browser is fully functional: 
+      links may be clicked on to browse the web and a context-sensitive menu 
+      even provides the usual options such as "Back".           </P>
+      <P>The              <CODE>Controls.GroupBox</CODE> class provides an 
+      annotated frame that may be used to categorize UI elements (hierarchically 
+      if necessary).           </P>
+      <P>The              <CODE>Controls.Expander</CODE> class provides an 
+      extensible control that allows the user to shrink the control by making 
+      its content invisible. This control is new in WPF (it did not exist in 
+      WinForms).           </P>
+      <P>Finally, the              <CODE>Controls.ToolTip</CODE> class is used 
+      to add tool tips to controls via their              <CODE>ToolTip</CODE> 
+      property.           </P>
+      <P>The              <CODE>Controls.Button</CODE> ,              
+      <CODE>Controls.CheckBox</CODE> and              
+      <CODE>Controls.RadioButton</CODE> classes are all derived from the         
+           <CODE>Controls.ButtonBase</CODE> base class. The              
+      <CODE>Controls.ComboBox</CODE> ,              
+      <CODE>Controls.ListBox</CODE> and              
+      <CODE>Controls.TabControl</CODE> classes are derived from the              
+      <CODE>Selector</CODE> base class.           </P>
+      <P>Note that the containers displayed in this window were placed in a      
+             <CODE>Controls.StackPanel</CODE> . This is another kind of control 
+      used to control the layout of its children. In this case, the controls are 
+      simply stacked vertically with the first control appearing at the top.     
+            </P>
+      <P>The basic WPF controls described in this section all allow a single 
+      item to be chosen at a time, e.g. one radio button or one tab.</P>
+      <H2>Items Controls</H2>
+      <P>Items controls are all derived from the base class              
+      <CODE>Controls.ItemsControl</CODE> and provide controls that may 
+      encapsulate more than one item at a time.           </P>
+      <P>The              <CODE>Controls.ItemsControl</CODE> class provides an   
+                 <CODE>ItemsSource</CODE> member that allows us to set the items 
+      in an items control from an              <CODE>IEnumerable</CODE> (or 
+      other source). This makes it easy to initialize such classes in F# by 
+      using a sequence expression.           </P>
+      <P>The following main program constructs a variety of items controls:</P>
+<PRE>[&lt;System.STAThread&gt;]
+do
+  let panel = Controls.StackPanel()</PRE>
+<PRE>  let add control =
+    control |&gt; panel.Children.Add |&gt; ignore</PRE>
+<PRE>  Controls.ListBox(ItemsSource=[1..3]) |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.ListView(ItemsSource=[1..3]) |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.TabControl(
+    ItemsSource=
+      [ for i in 1 .. 3 -&gt;
+          Controls.TabItem(Header=sprintf "Tab %d" i, Content=i) ])
+  |&gt; add</PRE>
+<PRE>  Controls.Separator() |&gt; add</PRE>
+<PRE>  Controls.ComboBox(ItemsSource=[1..3]) |&gt; add
+  
+  window
+  |&gt; (Application()).Run
+  |&gt; ignore</PRE>
+      <P>Note that we give sequences of              <CODE>int</CODE> values. 
+      The              <CODE>ItemsSource</CODE> property is effectively 
+      dynamically typed and automatically converts these numbers into strings 
+      for rendering.           </P>
+      <P>This program produces the following output:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/itemcontrols.gif"> 
+                  </P>
+      <P></P>
+      <P>The              <CODE>Controls.ListBox</CODE> and              
+      <CODE>Controls.ListView</CODE> controls provide very similar 
+      functionality. Specifically, they both display a sequence of controls 
+      vertically and allow the user to choose one of them. An immediate 
+      difference between the two controls is that the default settings of        
+            <CODE>ListView</CODE> allow multiple items to be selected using 
+      modifier keys (just like Windows Explorer in detail mode). Another 
+      important difference is that the              <CODE>ListView</CODE> 
+      control can present content derived from a "view" using its              
+      <CODE>View</CODE> property. In particular, the              
+      <CODE>Controls.GridView</CODE> class may be used to provide a grid of data 
+      that may be viewed in the              <CODE>ListView</CODE> control.      
+           </P>
+      <P>The              <CODE>Controls.TabControl</CODE> class provides a 
+      sequence of panes with tabs that the user may click on to switch from one 
+      pane to the other. This is an efficient way to leverage virtual screen 
+      real estate without resorting to scrolling. Note that we populated the     
+               <CODE>TabControl</CODE> using a sequence of              
+      <CODE>Controls.TabItem</CODE> objects because we wanted to add a header to 
+      each tab as well as its content.           </P>
+      <P>Finally, the              <CODE>ComboBox</CODE> control displays a 
+      single item and provides a drop down menu from which a different choice 
+      may be selected.           </P>
+      <H2>Menus</H2>
+      <P>WPF provides two kinds of menus. The first is typically used at the top 
+      of a window (containing File, Edit etc. submenus) and is provided by the   
+                 <CODE>Controls.Menu</CODE> class. The other is a context 
+      sensitive menu that pops up when the user right-clicks the mouse and is 
+      provided by the              <CODE>Controls.ContextMenu</CODE> class.      
+           </P>
+      <P>The following code elegantly composes a menu from a selection of 
+      strings:</P>
+<PRE>  let menu = Controls.Menu()
+  let item header items =
+    let items =
+      [ for item in items -&gt;
+          Controls.MenuItem(Header=item) ]
+    Controls.MenuItem(Header=header, ItemsSource=items)
+  menu.ItemsSource &lt;-
+    [ item "File" ["New"; "Open"; "Exit"];
+      item "Edit" ["Cut"; "Copy"; "Paste"];
+      item "Help" ["Contents"; "About this demo"] ]</PRE>
+      <P>Note that each item is wrapped in the              
+      <CODE>Controls.MenuItem</CODE> class, providing the appearance of a menu 
+      item rather than a bare string.           </P>
+      <P>The above code produces the following graphical result:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/menubar.gif"> 
+                  </P>
+      <P></P>
+      <P>Context menus may be composed using the same              
+      <CODE>item</CODE> function:           </P>
+<PRE>  let menu = Controls.ContextMenu()
+  menu.ItemsSource &lt;-
+    [ item "File" ["New"; "Open"; "Exit"];
+      item "Edit" ["Cut"; "Copy"; "Paste"];
+      item "Help" ["Contents"; "About this demo"] ]</PRE>
+      <P>This code produces the following graphical result when the right-hand 
+      mouse button is clicked, spawning the context-sensitive menu that may then 
+      be navigated:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/contextmenu.gif"> 
+                  </P>
+      <P></P>
+      <P>Context sensitive menus are particularly useful when a GUI is tight on 
+      space and a menu bar would introduce unnecessary clutter. However, the 
+      existence of a context menu may not be obvious to the user.</P>
+      <H2>Tree views</H2>
+      <P>The final WPF control examined in this article is the tree view. This 
+      control presents a tree of data as a sequence of expandable subtrees.</P>
+      <P>The following excerpt may be used to construct any tree representing 
+      the structure of a directory on disk:</P>
+<PRE>let rec file_tree dir leaf node =
+  seq {
+        for dir in System.IO.Directory.GetDirectories dir -&gt;
+          file_tree dir leaf node
+        for file in System.IO.Directory.GetFiles dir -&gt;
+          leaf file
+      }
+  |&gt; node dir</PRE>
+      <P>For example, the following code visualizes a directory hierarchy using 
+      a tree view control:</P>
+<PRE>let treeview = Controls.TreeView()
+treeview.ItemsSource &lt;-
+  [ file_tree __SOURCE_DIRECTORY__
+      (fun x -&gt; Controls.TreeViewItem(Header=x))
+      (fun x xs -&gt; Controls.TreeViewItem(Header=x, ItemsSource=xs)) ]</PRE>
+      <P>This wraps both leaves and nodes in the              
+      <CODE>Controls.TreeViewItem</CODE> class, which is required for reliable 
+      rendering. Only nodes have their items specified by the              
+      <CODE>ItemsSource</CODE> property. Note how elegant this code is thanks to 
+      the use of sequences.           </P>
+      <P>This program produces the following graphical output when run on an 
+      example directory:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/treeview.gif"> 
+                  </P>
+      <P></P>
+      <P>Note how the nodes in the tree may be collapsed.</P>
+      <H2>Summary</H2>
+      <P>The F# programming language allows us to adopt a more declarative style 
+      that offers a significant space saving for larger GUIs. However, F# code 
+      cannot currently be generated using the Visual Studio GUI designer 
+      tool.</P>
+      <P>So F# and WPF work best together for complex GUIs requiring a 
+      substantial amount of computation. Visualization for technical computing 
+      (e.g. graph plotting, network layout) and games programming are obvious 
+      applications that satisfies these requirements.</P>
+      <P>This article has described the design of WPF and the basic controls 
+      offered by this library. Future F#.NET Journal articles about WPF will 
+      cover structured layout, design patterns for GUI programming, 2D and 3D 
+      vector graphics, data binding and multimedia content. We shall develop 
+      several interesting GUI applications along the 
+way!</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Windows%20Presentation%20Foundation%20basic%20controls_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

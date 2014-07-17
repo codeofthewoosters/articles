@@ -1,0 +1,200 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/FSharpOnLinux.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20f%23%20on%20linux_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20f%23%20on%20linux_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20f%23%20on%20linux_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20f%23%20on%20linux_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20f%23%20on%20linux_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>F# on Linux by Martin Trojer</H1>
+      <P>The F# software foundation was recently formed to help diversify the F# 
+      programming language beyond the Microsoft ecosystem. This article is the 
+      first in a series looking at the use of F# on non-Microsoft operating 
+      systems, specifically Linux on the desktop and on a Raspberry Pi.</P>
+      <H2>Introduction</H2>
+      <P>Linux is a very popular operating system on servers and embedded 
+      systems. Can you run F# on these platforms? The answer is yes, F# runs 
+      nicely on the Mono runtime. Mono is an open source implementation of the 
+      CLR and tools such as a C# compiler. Mono is now 8 years old and has 
+      evolved at a steady pace since its initial release. Concerns have been 
+      raised regarding Mono's technology in the past but recent developments and 
+      the release of Mono 3 has made the runtime viable for many F# 
+      applications.</P>
+      <P>F# in Mono's default IDE (MonoDevelop) is now stable enough to be 
+      useful for real world F# projects.</P>
+      <P>In this article we will go through setting up Mono, F# and MonoDevelop 
+      on a Linux system. We'll also review some benchmark tests that compare F# 
+      execution speed on Mono vs .NET. Finally, a guide how to get F# running on 
+      the Raspberry Pi!</P>
+      <H2>Installing Mono</H2>
+      <P>Most Linux distributions have Mono packages, typically the latest 
+      stable version which at the time of writing this article is 2.10. This 
+      version is fine for development, but if you want to use modern garbage 
+      collection technologies, and are concerned about performance of long 
+      running programs, you should consider using Mono 3. See the benchmark 
+      section for more details and the appendix on how to build Mono 3.</P>
+      <P>On Ubuntu/Debian systems you can install Mono by typing the following 
+      in a terminal window (it will be slightly different other distros);</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;apt-get&nbsp;install&nbsp;mono-complete<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>Note that the use of <CODE>sudo</CODE> in the examples below might be 
+      different on other distributions. Also note that the instructions below is 
+      for Bash, if you are using a different shell, syntax might vary.</P>
+      <P>The following writes the current Mono version number to the 
+console:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;mono&nbsp;--version<BR>&nbsp;&nbsp;&nbsp;&nbsp;Mono&nbsp;JIT&nbsp;compiler&nbsp;version&nbsp;2.10.8.1&nbsp;(Debian&nbsp;2.10.8.1-5)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Copyright&nbsp;(C)&nbsp;2002-2011&nbsp;Novell,&nbsp;Inc,&nbsp;Xamarin,&nbsp;Inc&nbsp;and&nbsp;Contributors.&nbsp;www.mono-project.com<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TLS:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;__thread<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SIGSEGV:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Notifications:&nbsp;epoll<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Architecture:&nbsp;&nbsp;armel,vfp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Disabled:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;none<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Misc:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;softdebug<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LLVM:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;supported,&nbsp;not&nbsp;enabled.<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GC:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Included&nbsp;Boehm&nbsp;(with&nbsp;typed&nbsp;GC&nbsp;and&nbsp;Parallel&nbsp;Mark)<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <H2>Building F#</H2>
+      <P>Your Linux distribution most likely won't have a package for F#, and if 
+      it does it is probably an old version.</P>
+      <P>In order to build F# you'll need a couple more tools on your Linux 
+      system. The easiest way to get them is to use your distribution's package 
+      manager. In this article we use the Ubuntu/Debian packages, you'll find 
+      equivalent packages on other distributions.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;apt-get&nbsp;install&nbsp;build-essential&nbsp;automake&nbsp;gettext&nbsp;git<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>Then you clone the official F# repository on github;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;git&nbsp;clone&nbsp;https://github.com/fsharp/fsharp.git<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;./autogen.sh&nbsp;--prefix=/usr<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;make<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>If you look at the output while building F# you'll notice that F# 3 is 
+      a bootstrapped language, meaning (most of) F# is written in F#!</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;make&nbsp;install<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>Now you should have a working F# environment!</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;fsharpi<BR>&nbsp;&nbsp;&nbsp;&nbsp;F#&nbsp;Interactive&nbsp;for&nbsp;F#&nbsp;3.0&nbsp;(Open&nbsp;Source&nbsp;Edition)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Freely&nbsp;distributed&nbsp;under&nbsp;the&nbsp;Apache&nbsp;2.0&nbsp;Open&nbsp;Source&nbsp;License</CODE></P>
+      <P>For help type <CODE>#help;;</CODE></P>
+      <H2>Building MonoDevelop</H2>
+      <P>There are many editor / IDE options for working with F# projects, for 
+      instance we have been using F# and emacs quite successfully 
+      (https://github.com/fsharp/fsharpbinding/tree/master/emacs). If you're 
+      used to Visual Studio you're probably looking for a more holistic IDE 
+      solution, and for that we recommend using MonoDevelop.</P>
+      <P>Your Linux distribution probably have an package for MonoDevelop, but 
+      it's probably out of date, so we recommend that you build the latest 
+      version from source.</P>
+      <P>First install some missing Mono libraries;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;apt-get&nbsp;install&nbsp;libmono-addins-gui-cil-dev&nbsp;libglade2.0-cil-dev&nbsp;libgnome2.0-cil-dev&nbsp;libgconf2.0-cil-dev<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>You'll find the MonoDevelop source snapshots here:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;http://download.mono-project.com/sources/monodevelop/</CODE></P>
+      <P>At the time of writing this article we recommend using version 
+      3.0.6.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;./configure&nbsp;--prefix=/usr/local<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;make<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;make&nbsp;install<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <H2>F# work-flow in MonoDevelop</H2>
+      <P>First launch MonoDevelop;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;monodevelop<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>Now you have to install the F# bindings, this is a one-time 
+      configuration; Menu option 
+      <CODE>Tools&nbsp;&#8594;&nbsp;Add-in&nbsp;Manager</CODE>, then Gallery tab and 
+      Language bindings. Click install on F# Language Bindings.</P>
+      <P>Then create a simple F# solution 
+      <CODE>File&nbsp;&#8594;&nbsp;New&nbsp;&#8594;&nbsp;Solution</CODE>, then, F# 3.0 
+      Console Program.</P>
+      <P>Right click on the program node and chose 
+      <CODE>Options&nbsp;&#8594;&nbsp;Build&nbsp;&#8594;&nbsp;General</CODE>, and then 
+      select .NET 4.0.</P>
+      <P>Now you can build, then run or debug your code similarly to Visual 
+      Studio. <CODE>Ctrl+Enter</CODE> sends the selection to the F# interactive 
+      window.</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <H2>F# Benchmarks, Mono vs .NET</H2>
+      <P>We ran some benchmarks comparing execution time on .NET 4.5 / Win8, and 
+      Mono 2.10 and 3.0.3 / Ubuntu 12.04. These tests were run on VMs on the 
+      same hardware. We used 3 different F# benchmarks taken from the Computer 
+      Language Benchmarks Game http://benchmarksgame.alioth.debian.org. The same 
+      output binaries from the F# compiler (Release configuration) were used on 
+      both platforms.</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <H2>F# on the Raspberry Pi</H2>
+      <P>The default Debian distribution for Raspberry Pi (Raspbian "wheezy") 
+      has Mono packages. At the time of writing this article, the Mono packages 
+      for the pi only work on the "soft float" version of Rasbian.</P>
+      <P>Installing Mono on the pi is exactly same as on your Linux PC:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;apt-get&nbsp;install&nbsp;mono-complete<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>Next we need to get F# on the pi. First of all, you don't need to 
+      "install" F# on your pi if you only intend to use it as an execution 
+      environment. Just bundle the FSharp.Core.DLL with your assemblies and they 
+      will run on Mono just fine. Ideally you would use a PC for you development 
+      and then just test on your pi.</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>If you do need fsharp (fsharpc and fsharpi) on your pi, you need to 
+      follow the same build steps as above to build it. Please aware that this 
+      will take a long time to finish. One trick we used was to use the same 
+      build folder on the pi that we used to build F# on our Linux system. The 
+      F# folder has all the binaries already build and ready to be installed. 
+      Since they are all .NET assemblies they run unchanged on a ARM CPU target 
+      (the pi) and and x86 PC! This will save you some 8 hours of waiting for 
+      the F# build to finish.</P>
+      <P>At the time of writing the OSS version of F# on Github does not compile 
+      correctly but you can compile F# on a desktop using <CODE>make</CODE> and 
+      then copy this to the Raspberry Pi for installation using 
+      <CODE>sudo&nbsp;make&nbsp;install</CODE> as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;linux-pc$&nbsp;tar&nbsp;-zcvf&nbsp;fsharp.tar.gz&nbsp;fsharp/<BR>&nbsp;&nbsp;&nbsp;&nbsp;linux-pc$&nbsp;scp&nbsp;fsharp.tar.gz&nbsp;pi@raspberrypi:<BR>&nbsp;&nbsp;&nbsp;&nbsp;pi$&nbsp;tar&nbsp;-zxvf&nbsp;fsharp.tar.gz<BR>&nbsp;&nbsp;&nbsp;&nbsp;pi$&nbsp;./autogen.sh&nbsp;--prefix=/usr<BR>&nbsp;&nbsp;&nbsp;&nbsp;pi$&nbsp;sudo&nbsp;make&nbsp;install<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <H2>Summary</H2>
+      <P>On average, our experience is that .NET ranges from 1 to 2x faster 
+      running F# code than Mono. For many applications, the speed in which Mono 
+      can run F# is fast enough. An easy bargain considering all the power and 
+      productivity that F# gives you!</P>
+      <P>Mono, with the use of LLVM, natively supports many CPU architectures 
+      (like x86, ARM, PPC etc) which opens the door to many interesting 
+      possibilities including iOS and Android.</P>
+      <P>Even though Mono looks impressive, it is important to understand its 
+      limitations. In particular, some popular .NET frameworks are missing: WPF, 
+      WF and WCF.</P>
+      <H2>Appendix: Building Mono</H2>
+      <P>Depending on your Linux distribution, you may have a recent Mono 
+      environment already installed, or easily installable via you package 
+      manager. At the time of writing the article, we recommend you using Mono 
+      3.0.3.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;mono&nbsp;--version<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>The most straight forward way to build mono, the C# compiler and 
+      additional libraries is to use a source tarball. You can find them here 
+      http://download.mono-project.com/sources/mono/</P>
+      <P>Make sure you have all the build tools on your system;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;apt-get&nbsp;install&nbsp;build-essential&nbsp;automake&nbsp;gettext<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>We recommend you installing Mono in /usr/local, to build and install it 
+      do;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;./configure&nbsp;--prefix=/usr/local<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;make<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;make&nbsp;install<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>No setup the environment variables for path and share libraries;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;export&nbsp;PATH=$PATH:/usr/local/bin<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>And finally test that the Mono executable works properly;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;mono&nbsp;--version<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <H2>Appendix: Build extra UI mono libraries</H2>
+      <P>If you want to build MonoDevelop (or other UI applications on top of 
+      your home-built Mono) you need to take some extra steps.</P>
+      <P>First we need to get some extra dependencies;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;apt-get&nbsp;install&nbsp;libglib2.0-dev&nbsp;libpoango1.0-dev&nbsp;libatk1.0-dev&nbsp;libgtk2.0-dev&nbsp;libglade2-dev&nbsp;libgnome2-dev&nbsp;libgnomecanvas2-dev&nbsp;libgnomeui-dev<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>You also need to download, build and install the following Mono 
+      libraries (found under http://download.mono-project.com/sources/);</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;gtk-sharp-2.12.11<BR>&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;gnome-sharp-2.24.1<BR>&nbsp;&nbsp;&nbsp;&nbsp;-&nbsp;mono-addins<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>The build/install commands for all there are the same as before;</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;./configure&nbsp;-prefix=/usr/local<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;make<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;sudo&nbsp;make&nbsp;install<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20f%23%20on%20linux_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

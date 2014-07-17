@@ -1,0 +1,474 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0094)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/leveraging_static_typing.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Reducing development costs with Static Typing</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Reducing development costs with Static 
+Typing</TITLE>     <LINK href="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Reducing development costs with Static Typing</H1>
+      <P>The F# language arms programmers with the most sophisticated static 
+      type system of any mainstream programming language. This static type 
+      system can be used to remove large classes of common bugs that are 
+      otherwise tedious or impossible to track down, drastically reducing 
+      software development costs. However, learning how and when to leverage 
+      such a type system is an art that requires significant effort to learn. 
+      This article describes idiomatic F# style and a variety of techniques that 
+      can be used to leverage the static type system in order to catch errors 
+      earlier and more easily.</P>
+      <H2>Classic structure of an ML program</H2>
+      <P>The ML family of languages is now well over three decades old and the 
+      basic structure of an ML program has become widely accepted: programs are 
+      broken down into many small type definitions and many small functions that 
+      act upon them. A strong correlation between types and functions is to be 
+      expected and, in many cases, related type and value definitions are 
+      encapsulated into modules. Auxiliary functions are often written 
+      independently (as opposed to being nested) and are then hidden by a module 
+      signature to shadow them from users.</P>
+      <P>The following "expr.fs" file demonstrates many of these points:</P>
+<PRE>#light</PRE>
+<PRE>module Expr</PRE>
+<PRE>type t =
+  | Int of int
+  | Var of string
+  | Add of t * t
+  | Mul of t * t</PRE>
+<PRE>let rec print ff = function
+  | Int n -&gt; fprintf ff "%d" n
+  | Var var -&gt; fprintf ff "%s" var
+  | Add(f, g) -&gt; fprintf ff "%a + %a" print f print g
+  | Mul(f, g) -&gt; fprintf ff "%a %a" print_prod f print_prod g
+and print_prod ff = function
+  | Add _ as f -&gt; fprintf ff "(%a)" print f
+  | f -&gt; print ff f
+and prints sep ff = function
+  | [] -&gt; ()
+  | [h] -&gt; print ff h
+  | h::t -&gt; fprintf ff "%a%s%a" print h sep (prints sep) t</PRE>
+      <P>Along with the related "expr.fsi" module signature file:</P>
+<PRE>#light</PRE>
+<PRE>module Expr</PRE>
+<PRE>open System.IO</PRE>
+<PRE>type t =
+  | Int of int
+  | Var of string
+  | private Add of t * t
+  | private Mul of t * t</PRE>
+<PRE>val print : TextWriter -&gt; t -&gt; unit
+val prints : string -&gt; TextWriter -&gt; t list -&gt; unit</PRE>
+      <P>Note the following characteristics of this module:</P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>Expr</CODE> module encapsulates 
+        definitions related to symbolic expressions, including the variant type  
+                        <CODE>Expr.t</CODE> used to represent symbolic 
+        expressions and functions for printing expressions and lists of 
+        expressions.               </LI>
+        <LI>The signature of the                  <CODE>Expr</CODE> module acts 
+        as machine-verified documentation for the module. Errors in development 
+        that result in different types being inferred for definitions exposed by 
+        the                  <CODE>Expr</CODE> module will be caught at compile 
+        time by the static type checker due to inconsistency with this 
+        signature.               </LI>
+        <LI>Both the                  <CODE>print</CODE> and                  
+        <CODE>prints</CODE> functions are exposed even though the former can be 
+        trivially derived from the latter in user code.               </LI>
+        <LI>The auxiliary                  <CODE>print_prod</CODE> function, for 
+        bracketing subexpressions in a product, is written as a top-level 
+        function within the module and then hidden by the module's signature.    
+                   </LI></UL>
+      <P></P>
+      <P>In the absence of a static type checker to catch errors (i.e. in a 
+      dynamic language) one might only expose the              
+      <CODE>prints</CODE>  function and pass it a singleton list and an empty 
+      separator when printing a single expression rather than bloating the API 
+      with the trivially-specialized              <CODE>print</CODE> function. 
+      However, using the more specific              <CODE>print</CODE> function 
+      conveys more information to the static type checker which, in turn, can 
+      catch more bugs and remove more run-time tests. In this sense, the type    
+                <CODE>Expr.t</CODE> is a more accurate or              
+      <I>constrained</I> representation of a singleton list than the type        
+            <CODE>Expr.t list</CODE> . Using more constrained types conveys more 
+      specific information to the static type checker that will then perform 
+      more useful checks on the code. Learning how best to convey type 
+      information is the essence of leveraging a static type system.           
+      </P>
+      <P>As we shall see in the remainder of this article, F#'s static type 
+      system allows more sophisticated constraints to be conveyed to the type 
+      system and checked for correctness than this example has shown. The 
+      objective of leveraging the static type system is always to use the 
+      compiler to prove that important potential sources of error have been 
+      removed. The consequence is a greatly reduced need for unit testing and 
+      much faster development speed.</P>
+      <H2>Statically-known lengths</H2>
+      <P>The previous example explained how lists should be removed when they 
+      are expected to only ever contain a single element. Similarly, F#'s type 
+      system can represent fixed-length sequences and sequences that must have 
+      at least a minimum number of elements.</P>
+      <H3>Fixed lengths</H3>
+      <P>In the absence of a static type system, a function with two arguments 
+      might accept a list of arguments and raise an error if the number of 
+      arguments (i.e. the length of the list) is not two:</P>
+<PRE>&gt; let f = function
+    | [x; y] -&gt; atan2 x y
+    | _ -&gt; invalid_arg "f";;
+val f : float list -&gt; float</PRE>
+      <P>Provided the correct number of arguments is conveyed to this function, 
+      this dynamic style of programming only results in slow execution due to 
+      the unnecessary overhead of using a list:</P>
+<PRE>&gt; f [2.; 3.];;
+val it : float = 0.5880026035</PRE>
+      <P>However, a call site that erroneously supplies this              
+      <CODE>f</CODE> function with the wrong number of arguments results in a 
+      run-time error, an exception:           </P>
+<PRE>&gt; f [];;
+Microsoft.FSharp.Core.InvalidArgumentException: f
+   at FSI_0019.f(List`1 _arg5)
+   at &lt;StartupCode$FSI_0021&gt;.FSI_0021._main()
+stopped due to error</PRE>
+      <P>Note that such sources of run-time error are typically explicit in the 
+      code (as is the case here).</P>
+      <P>This source of run-time errors is easily removed using static type 
+      checking by writing              <CODE>f</CODE> as a function of two 
+      arguments, either as a 2-tuple or in curried form:           </P>
+<PRE>&gt; let f(x, y) = atan2 x y;;
+val f : float * float -&gt; float</PRE>
+      <P>Attempting to supply zero arguments to              <CODE>f</CODE> 
+      results in a type error that is caught at compile-time rather than at 
+      run-time:           </P>
+<PRE>&gt; f();;
+stdin(13,1): error: FS0001: This expression has type
+	unit
+but is here used with type
+	float * float
+stopped due to error</PRE>
+      <P>A common situation where lists are sometimes used to pass variable 
+      numbers of arguments in dynamic programming languages like Mathematica is 
+      solved in F# using a different language feature: optional arguments. This 
+      topic will be covered in detail in a future F#.NET Journal article.</P>
+      <H2>Minimum lengths</H2>
+      <P>Programs often manipulate sequences (such as lists) that are known to 
+      have at least one element, i.e. they should never be empty. Although the 
+      ordinary              <CODE>list</CODE> type can be used in this 
+      situation, that type's ability to represent an empty list culminates in 
+      unwanted sources of run-time error.           </P>
+      <P>Consider the              <CODE>List.fold1_left</CODE> function that 
+      applies a given operator between the elements of a list. These semantics 
+      mean that this function does not need a base case for the accumulator and 
+      fails on the empty sequence. A straightforward implementation of this 
+      function might be:           </P>
+<PRE>&gt; let rec fold1_left f = function
+    | h::t -&gt; List.fold_left f h t
+    | [] -&gt; invalid_arg "fold1_left";;
+val reduce : ('a -&gt; 'a -&gt; 'a) -&gt; 'a list -&gt; 'a</PRE>
+      <P>If this function were used as-is in production code then it would 
+      perpetually be a potential source of run-time errors. This is never 
+      desirable and the static type system can be used to remove that run-time 
+      error safe in the knowledge that it has been proven redundant (i.e. can 
+      never be executed) by the F# compiler.</P>
+      <P>The F# type system allows us to migrate from using the              
+      <CODE>list</CODE> type to a very similar but subtly different data 
+      structure that is unable to represent the empty sequence and, 
+      consequently, allows us to statically enforce the requirement that 
+      sequences have at least one element. The type is the pair or 2-tuple       
+             <CODE>'a * 'a list</CODE> where the first element of the pair 
+      represents the head of the sequence and the second element represents the 
+      tail.           </P>
+      <P>Reusing the existing              <CODE>list</CODE> type is easiest but 
+      our new type (say              <CODE>list1</CODE> ) could also be declared 
+      independently using a variant type such as the following:           </P>
+<PRE>&gt; type 'a list1 =
+    | End of 'a
+    | Cons of 'a * 'a list1;;</PRE>
+      <P>Note that there is no representation of the empty sequence in this type 
+      either.</P>
+      <P>As an educational exercise, let us migrate to the more expressively 
+      typed pair-based implementation with an intermediate step. The             
+       <CODE>fold1_left</CODE> function may be rewritten as follows:           
+      </P>
+<PRE>&gt; let rec fold1_left f = function
+    | h, t -&gt; List.fold_left f h t
+    | _ -&gt; invalid_arg "List.fold1_left";;
+file1.fs(44,6): warning: FS0026: This rule will never be matched.
+val reduce : ('a -&gt; 'b -&gt; 'a) -&gt; 'a * 'b list -&gt; 'a</PRE>
+      <P>Note how the F# compiler has determined that the match case containing 
+      the run-time error is redundant because the first pattern (over the 
+      2-tuple) now covers every possible value of this type. This is a direct 
+      result of the 2-tuple representation requiring the existence of both a 
+      head and a tail for the sequence and, therefore, any value of this type is 
+      guaranteed to represent a sequence of one or more elements.</P>
+      <P>This implementation of the              <CODE>fold1_left</CODE> 
+      function can now be written more simply without the match case that had a 
+      run-time error:           </P>
+<PRE>&gt; let reduce f (h, t) =
+    List.fold_left f h t;;
+val reduce : ('a -&gt; 'b -&gt; 'a) -&gt; 'a * 'b list -&gt; 'a</PRE>
+      <P>Altering the type and, therefore, the data structure used by this 
+      function has allowed the potential source of run-time errors to be made 
+      redundant and safely removed from the program.</P>
+      <P>Choosing a data structure to enforce a minimum length for a sequence in 
+      this way is a common design pattern. Indeed, the              
+      <CODE>Add</CODE> and              <CODE>Mul</CODE> constructors in our 
+      first symbolic expression example both require exactly two arguments. This 
+      might seem mundane but it means that subsequent code never has to handle 
+      the cases of additions or multiplications with zero or one arguments. In 
+      contrast, Mathematica must handle these cases as any number of arguments 
+      can be passed to any function in Mathematica because it provides no static 
+      assurances.           </P>
+      <H2>Aim to remove sources of run-time error</H2>
+      <P>In the general case, production-quality programs contain a variety of 
+      types that can often grow to be quite complicated. If run-time errors 
+      become a problem then search the code for sources of run-time error, most 
+      notably              <CODE>invalid_arg</CODE> exceptions, and try to 
+      design alternate data structures that make the most problematic sources of 
+      run-time error redundant.           </P>
+      <P>Although powerful, F#'s type system cannot express all possible 
+      constraints. Consequently, non-trivial programs will always contain 
+      unwanted potential sources of run-time error. This is why the process of 
+      eliminating the most worrisome sources of error is an art rather than a 
+      science: the notion of "worrisome" cannot be quantified. Ultimately, the 
+      ability to leverage a static type system effectively boils largely down to 
+      experience.</P>
+      <H2>Use abstraction to enforce incompatibility between types</H2>
+      <P>Types are often aliased because new types can be represented as 
+      existing types. For example, a type representing a Universally Unique 
+      Identifier (UUID) might be stored internally as a string:</P>
+<PRE>&gt; type uuid = string;;
+type uuid = string</PRE>
+      <P>However, the static type checker does not distinguish between this new  
+                  <CODE>uuid</CODE> type and the original              
+      <CODE>string</CODE> type. For example, we do not want it to be possible to 
+      concatenate a value of the type              <CODE>string</CODE> with a 
+      value of the type              <CODE>uuid</CODE> accidentally:           
+      </P>
+<PRE>&gt; ("foo" : string) + ("bar" : uuid);;
+val it : string = "foobar"</PRE>
+      <P>The distinction between these types can be conveyed to the static type 
+      system by making the              <CODE>uuid</CODE> type abstract, by 
+      naming but not defining its contents in the signature of its enclosing 
+      module:           </P>
+<PRE>&gt; module Uuid : sig
+    type t
+    val of_string : string -&gt; t
+    val to_string : t -&gt; string
+  end = struct
+    type t = UUID of string
+    let of_string s = UUID s
+    let to_string (UUID s) = s
+  end;;
+module Uuid : begin
+  type t = UUID of string
+  val of_string : string -&gt; t
+  val to_string : t -&gt; string
+end</PRE>
+      <P>Note how the abstract type requires functions inside its module to 
+      construct and destruct values of this type because this cannot be done 
+      from outside this module. Also, aliases to existing types such as          
+          <CODE>string</CODE> cannot be made abstract directly in F# and the 
+      type must be wrapped in a new type constructor (in this case the           
+         <CODE>UUID</CODE> constructor).           </P>
+      <P>The              <CODE>Uuid.t</CODE> type is now regarded as being 
+      distinct from the              <CODE>string</CODE> type even though the 
+      values of these types share the same internal representation. So the 
+      previous example using equality now gives a static type error as desired:  
+               </P>
+<PRE>&gt; ("foo" : string) + (Uuid.of_string "bar");;
+stdin(2,20): error: FS0001: This expression has type
+	Uuid.t
+but is here used with type</PRE>
+<PRE>	string
+stopped due to error</PRE>
+      <P>The ability to make types incompatible using abstraction is very common 
+      and very useful.</P>
+      <H2>Phantom types</H2>
+      <P>A single type is sometimes used to represent different "kinds" of 
+      values of that type. When this type is abstract, it is possible to 
+      parameterize the type over a type variable that is never actually used. No 
+      values of this "phantom" type ever exist and, in fact, this type is 
+      completely removed from the program at compile-time. The sole purpose of 
+      this phantom type is to introduce a distinction between different kinds of 
+      the same type.</P>
+      <P>The previous UUID example serves as an excellent case study. UUIDs can 
+      be used to refer to many different kinds of entity. In the case of 
+      virtualization, a UUID might refer to a physical host, or a logical host, 
+      or a disk drive and so forth. However, we do not wish to reimplement the   
+                 <CODE>Uuid</CODE> module for each and every kind of UUID. 
+      Moreover, even if we did create many separate implementations to 
+      distinguish between them, we could not write functions that act upon any 
+      kind of UUID (such as a print function for all UUIDs).           </P>
+      <P>Phantom types provide a concise and elegant solution to this problem. 
+      The              <CODE>Uuid.t</CODE> type is simply parameterized over a 
+      type variable:           </P>
+<PRE>&gt; module Uuid : sig
+    type 'a t
+    val of_string : string -&gt; 'a t
+    val to_string : 'a t -&gt; string
+  end = struct
+    type 'a t = UUID of string
+    let of_string s = UUID s
+    let to_string (UUID s) = s
+  end;;
+module Uuid : begin
+  type 'a t = UUID of string
+  val of_string : string -&gt; 'a t
+  val to_string : 'a t -&gt; string
+end</PRE>
+      <P>This seemingly innocuous alteration allows us to tag any              
+      <CODE>Uuid.t</CODE> type with another type that represents the kind of 
+      UUID being referred to. For example, a new empty type              
+      <CODE>disk</CODE> can be used to parameterize all UUIDs that reference 
+      disks:           </P>
+<PRE>&gt;  type disk = Dummy;;
+type disk = Dummy
+&gt; let disks : disk Uuid.t list = [];;
+val disks : disk Uuid.t list = []</PRE>
+      <P>This allows the same implementation of the              
+      <CODE>Uuid.t</CODE> type to be used to handle both generic UUIDs (of the 
+      type              <CODE>'a Uuid.t</CODE> ) and specific UUIDs.           
+      </P>
+      <H2>Do not overuse inferred types</H2>
+      <P>Tuples are product types that do not need to be declared. The ability 
+      to use these types without having to declare them first has many benefits 
+      but overuse of this feature quickly becomes problematic. Bugs that slip 
+      through the static type system due to the overuse of inferred types are 
+      rare and, in practice, the more serious consequence is reduced clarity 
+      that impedes development.</P>
+      <P>Programmers learning F# often make the mistake of initially overusing 
+      tuples and quickly learn that tuples with four or more elements are 
+      generally more trouble than they are worth and that the solution is to use 
+      a record type because its explicitly-named fields help enormously to 
+      disambiguate between the elements of the product type.</P>
+      <P>The same principle applies to variant type constructors that take many 
+      arguments. Consider a type representing a subroutine or function in a 
+      Fortran 77 program:</P>
+<PRE>type subprogram =
+  | Subroutine of string * (string * Type.t) list * (string * (Type.t * Expr.t)) list * stmt list
+  | Function of string * (string * Type.t) list * (string * (Type.t * Expr.t)) list * stmt list * Type.t</PRE>
+      <P>These              <CODE>Subroutine</CODE> and              
+      <CODE>Function</CODE> type constructors clearly have a lot in common. 
+      Specifically, they both declare the subprogram name and the name and type 
+      of each argument, the name, type and value of each local variable and then 
+      the body of the subprogram as a list of statements. The only difference is 
+      that the              <CODE>Function</CODE> constructor represents a 
+      Fortran 77 function that returns a value and, consequently, also has a 
+      return type.           </P>
+      <P>This can be refactored into a much more comprehensible form as a 
+      record, using an optional return type to distinguish between a subroutine 
+      and a function. In this case, the record completely replaces the sum 
+      type:</P>
+<PRE>type subprogram =
+  {
+    name: string;
+    args: (string * Type.t) list;
+    locals: (string * (Type.t * Expr.t)) list;
+    body: stmt list;
+    ret: Type.t option
+  }</PRE>
+      <P>The following illustrates the correspondance between values of the old 
+      and new types:</P>
+<PRE>Subroutine("foo", ["X", Type.Real; "Y", Type.Real], ["Z", Type.Complex], [...])</PRE>
+<PRE>{name="foo"; args=["X", Type.Real; "Y", Type.Real]; locals=["Z", Type.Complex], body=[...]; ret=None}</PRE>
+      <P>The use of a record type with named fields here leads to much more 
+      comprehensible error messages compared to a 5-tuple.</P>
+      <H2>Avoid dynamic typing</H2>
+      <P>Dynamic typing can be achieved in F# by casting all types up to the 
+      base              <CODE>obj</CODE> type. This can be done using the 
+      built-in              <CODE>box</CODE> function:           </P>
+<PRE>&gt; box 3;;
+val it : obj = 3</PRE>
+      <P>This loses all static type information and, consequently, functions 
+      that use this style are highly susceptible to run-time errors.</P>
+      <P>Dynamic typing can be essential in interface code. However, this is 
+      typically only because existing .NET libraries have resorted to 
+      dynamically typed style rather than exposing a more appropriate class 
+      hierarchy. Excel interoperability is one such area, where all values are 
+      exchanged using the              <CODE>obj</CODE> type even though Excel 
+      can only handle a tiny number of types that could have been expressed more 
+      specifically using a suitable class hierarchy (analogous to an F# variant 
+      type).           </P>
+      <P>As a rule of thumb, transform all dynamically-typed values into 
+      statically typed values as soon as possible when dealing with interfaces. 
+      In other words, avoid trying to manipulate data structures that contain 
+      values of the type              <CODE>obj</CODE> in F# programs.           
+      </P>
+      <P>Another related language feature is the dynamic type test              
+      <CODE>:?</CODE> that can be used in pattern matches to distinguish between 
+      different subtypes at run-time. This is of particular use when handling 
+      exceptions propagated from non-F# libraries on .NET. However, this 
+      function has no place in self-contained F# code.           </P>
+      <H2>Avoid over-generalizations</H2>
+      <P>The ML and Haskell languages provide a feature known as              
+      <I>automatic generalization</I> by inferring the most general possible 
+      type. This is almost always extremely productive. There is very rarely any 
+      need to annotate function definitions by hand with information such as 
+      type variables and type constraints, as you must using forms of parametric 
+      polymorphism such as C++ templates or generics in C#. However, on rare 
+      occasions the inferred type can be more general than intended.           
+      </P>
+      <P>For example, the following implementation of the Kronecker delta 
+      function is inferred to have a generic type due to the use of the 
+      polymorphic              <CODE>=</CODE> operator:           </P>
+<PRE>&gt; let kronecker i j =
+    if i=j then 1 else 0;;
+val kronecker : 'a -&gt; 'a -&gt; int</PRE>
+      <P>The arguments were intended to be of the type              
+      <CODE>int</CODE> , so a type annotation can be used to constrain the type 
+      and applications of this              <CODE>kronecker</CODE> function will 
+      benefit from more rigorous type checking:           </P>
+<PRE>&gt; let kronecker (i : int) j =
+    if i=j then 1 else 0;;
+val kronecker : int -&gt; int -&gt; int</PRE>
+      <P>Over-generalization of types is not unusual but is rarely a source of 
+      bugs.</P>
+      <H2>Summary</H2>
+      <P>This article has described a variety of different ways that F#'s 
+      powerful static type system can be used effectively in order to catch 
+      important classes of bugs that are otherwise a sink for time and money 
+      during development.</P>
+      <P>In addition to the basic techniques covered in this article, the 
+      integration of object oriented and functional programming paradigms paves 
+      the way for a new breed of structured programming, going beyond almost all 
+      existing design patterns. The structuring of significant programs in F# is 
+      a substantially more involved topic and will be introduced in future 
+      F#.NET Journal articles.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Reducing%20development%20costs%20with%20Static%20Typing_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

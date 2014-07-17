@@ -1,0 +1,390 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0087)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/combinator_heaven.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Combinator Heaven</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Combinator%20Heaven_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Combinator%20Heaven_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Combinator%20Heaven_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Combinator Heaven</TITLE>     <LINK href="F%23%20Journal%20Combinator%20Heaven_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Combinator%20Heaven_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Combinator%20Heaven_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Combinator%20Heaven_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Combinator%20Heaven_files/left.gif">        
+     </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Combinator Heaven</H1>
+      <P>The ability to write higher-order functions that compose other 
+      functions in interesting ways is one of the most powerful forms of 
+      abstraction provided by the functional programming paradigm. Such 
+      functions are known as              <CODE>combinators</CODE> . This 
+      article describes the basic concepts behind combinators with a variety of 
+      examples to demonstrate how practically useful this form of functional 
+      abstraction can be.           </P>
+      <H2>Timer</H2>
+      <P>The ability to measure the time taken to evaluate a function 
+      application can be very useful, particularly in the context of optimizing 
+      programs to make them run more quickly.</P>
+      <P>Given a function application:</P>
+<PRE>f x</PRE>
+      <P>The time taken to apply the function to its argument may be measured by 
+      a suitable              <CODE>time</CODE> combinator written such that the 
+      changes required to the code are as uninvasive as possible:           </P>
+<PRE>time f x</PRE>
+      <P>This              <CODE>time</CODE> combinator is a curried, 
+      higher-order function that accepts a function              <CODE>f</CODE> 
+      and returns a function that applies              <CODE>f</CODE> , print 
+      the time taken and returns the result of the application of              
+      <CODE>f</CODE> . This may be implemented in F# as:           </P>
+<PRE>&gt; let time f x =
+    let t = new System.Diagnostics.Stopwatch()
+    t.Start()
+    try f x finally
+    printf "Took %dms\n" t.ElapsedMilliseconds;;
+val time : ('a -&gt; 'b) -&gt; 'a -&gt; 'b</PRE>
+      <P>Note that the              <CODE>try .. finally</CODE> construct is 
+      used to ensure that the result is printed even if              
+      <CODE>f</CODE> raises an exception.           </P>
+      <P>For example, the computation of 1000! may be timed with:</P>
+<PRE>&gt; time (Seq.fold ( * ) 1I) {1I .. 1000I};;
+Took 25ms
+val it : bigint
+= 40238726007709377354370243392300398571937486421071463254379991042993851239862
+9020592044208486969404800479988610197196058631666872994808558901323829669944590
+9974245040870737599188236277271887325197795059509952761208749754624970436014182
+7809464649629105639388743788648733711918104582578364784997701247663288983595573
+5432513185323958463075557409114262417474349347553428646576611667797396668820291
+2073791438537195882498081268678383745597317461360853795345242215865932019280908
+7829730843139284440328123155861103697680135730421616874760967587134831202547858
+9320767169132448426236131412508780208000261683151027341827977704784635868170164
+3650241536913982812648102130927612448963599287051149649754199093422215668325720
+8082133318611681155361583654698404670897560290095053761647584772842188967964624
+4945160765353408198901385442487984959953319101723355556602139450399736280750137
+8376153071277619268490343526252000158885351473316117021039681759215109077880193
+9317811419454525722386554146106289218796022383897147608850627686296714667469756
+2911234082439208160153780889893964518263243671616762179168909779911903754031274
+6222899880051954444142820121873617459926429565817466283029555702990243241531816
+1721046583203678690611726015878352075151628422554026517048330422614397428693306
+1690897968482590125458327168226458066526769958652682272807075781391858178889652
+2081643483448259932660433676601769996128318607883861502794659551311565520360939
+8818061213855860030143569452722420634463179746059468257310379008402443243846565
+7245014402821885252470935190620929023136493273497565513958720559654228749774011
+4133469627154228458623773875382304838656889764619273838149001407673104466402598
+9949022222176590433990188601856652648506179970235619389701786004081188972991831
+1021171229845901641921068884387121855646124960798722908519296819372388642614839
+6573822911231250241866493531439701374285319266498753372189406942814341185201580
+1412334482801505139969429015348307764456909907315243327828826986460278986432113
+9083506217095002597389863554277196742822248757586765752344220207573630569498825
+0879689281627538488633969099598262809561214509948717012445164612603790293091208
+8908694202851064018215439945715680594187274899809425474217358240106367740459574
+1785160829230135358081840096996372524230560855903700624271243416909004153690105
+9339838357779394109700277534720000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000000000000000000000I</PRE>
+      <P>The inferred type of the              <CODE>time</CODE> combinator is 
+      characteristic of combinators as it represents a function that converts 
+      one function into another:           </P>
+<PRE>('a -&gt; 'a) -&gt; ('a -&gt; 'a)</PRE>
+      <P>All combinators contain similar terms in their signatures.</P>
+      <P>The curried              <CODE>Seq.fold</CODE> function is partially 
+      applied with the two arguments              <CODE>( * ) 1I</CODE> but its 
+      last argument is applied by the              <CODE>time</CODE> combinator. 
+      This ensures that it is the evaluation of the              
+      <CODE>Seq.fold</CODE> function (that occurs only when all of its arguments 
+      have been applied) that is timed.           </P>
+      <P>This is a simple but effective use of a combinator to alter the 
+      functionality of an existing function invocation. Combinators can also be 
+      used to combine the functionality of other functions and even other 
+      combinators.</P>
+      <H2>Derivative</H2>
+      <P>In the context of numerical algorithms, the derivative operator may be 
+      expressed as a combinator that accepts a function and returns its 
+      derivative function. A numerical form of the derivative of a one-argument 
+      function may be written as:</P>
+<PRE>&gt; let d f x =
+    let dx = sqrt epsilon_float
+    (f(x + dx) - f(x - dx)) / (2. * dx);;
+val d : (float -&gt; float) -&gt; float -&gt; float</PRE>
+      <P>For example, given the function x             <SUP>3</SUP> - x - 1:     
+            </P>
+<PRE>&gt; let f x = x * x * x - x - 1.;;
+val f : float -&gt; float</PRE>
+      <P>The              <CODE>d</CODE> combinator can be used to approximate 
+      f'(2)=11:           </P>
+<PRE>&gt; d f 2.;;
+val it : float = 10.99999997</PRE>
+      <P> More importantly, as              <CODE>d</CODE> is a curried 
+      function, we can use              <CODE>d</CODE> to create derivative 
+      functions. For example, the derivative f'(x):           </P>
+<PRE>&gt; let f' = d f;;
+val f' : (float -&gt; float)</PRE>
+      <P>Note that the currying of the              <CODE>d</CODE> combinator 
+      makes it as easy as possible to obtain the derivative              <CODE>d 
+      f</CODE> simply by partially applying the combinator with its function 
+      argument.           </P>
+      <P>The function              <CODE>f'</CODE> can now be used as an 
+      ordinary function to calculate a numerical approximation to the derivative 
+      of              <CODE>f</CODE> for any              <CODE>x</CODE> . For 
+      example,              <CODE>f'(2)=11</CODE> :           </P>
+<PRE>&gt; f' 2.;;
+val it : float = 10.99999997</PRE>
+      <P>Most mathematical operators may be expressed elegantly as combinators 
+      in functional programming.</P>
+      <H2>Nest</H2>
+      <P>Many circumstances benefit from the ability to nest several repeated 
+      applications of a function              <CODE>f</CODE> to an argument      
+              <CODE>x</CODE> to give              <CODE>f(f(..f(x)..))</CODE> . 
+      This can be achieved using the following higher-order              
+      <CODE>nest</CODE> function:           </P>
+<PRE>&gt; let rec nest n f x =
+    if n=0 then x else
+      nest (n-1) f (f x);;
+val nest : int -&gt; ('a -&gt; 'a) -&gt; 'a -&gt; 'a</PRE>
+      <P>Partial application of the              <CODE>next</CODE> combinator 
+      with the number of required nestings returns a simpler combinator. For 
+      example, the following              <CODE>thrice</CODE> function computes  
+                  <CODE>f(f(f x))</CODE> :           </P>
+<PRE>&gt; let thrice f x =
+    nest 3 f x;;
+val thrice : ('a -&gt; 'a) -&gt; 'a -&gt; 'a</PRE>
+      <P>For example, the nest combinator may be used to implement 
+      multiplication in terms of repeated addition:</P>
+<PRE>&gt; let mul n m =
+    nest m (( + ) n) 0;;
+val mul : int -&gt; int -&gt; int
+&gt; mul 6 7;;
+val it : int = 42</PRE>
+      <P>Or raise-to-the power in terms of repeated multiplication:</P>
+<PRE>&gt; let pow n m =
+    nest m (( * ) n) 1;;
+val pow : int -&gt; int -&gt; int
+&gt; pow 6 7;;
+val it : int = 279936</PRE>
+      <P>This              <CODE>nest</CODE> combinator is actually useful in a 
+      wide variety of circumstances.           </P>
+      <P>The nest combinator may be used to chop a list in two at the given 
+      index by repeatedly decapitating the first element from the list:</P>
+<PRE>&gt; let chop n list =
+    let aux = function
+      | front, h::back -&gt; h::front, back
+      | _, [] -&gt; invalid_arg "chop"
+    nest n aux ([], list);;
+val chop : int -&gt; 'a list -&gt; 'a list * 'a list
+&gt; chop 3 [1;2;3;4;5;6;7;8;9];;
+val it : int list * int list = ([3; 2; 1], [4; 5; 6; 7; 8; 9])</PRE>
+      <P>Thus the              <CODE>nest</CODE> combinator may be used as a 
+      substitute for recursion to a certain depth. In fact, combinators may be 
+      used to factor out various different kinds of recursion. This can be a 
+      useful way to simplify core functionality and also allows abstraction from 
+      the kind of recursion used.           </P>
+      <H2>Iterating to fixed point</H2>
+      <P>Just as the              <CODE>nest</CODE> combinator allows recursion 
+      to a certain depth, so another combinator may be used to nest function 
+      applications until the argument is returned unaltered.           </P>
+      <P>We might call such a combinator the fixed point combinator, as this 
+      procedure is referred to as              <I>iterating to fixed point</I> . 
+      However, computer science literature uses this exact phrase to describe a 
+      more generic form of factored recursion known as the              <I>y</I> 
+      combinator.           </P>
+      <P>Iterative algorithms sometimes terminate when an iteration leaves the 
+      result unchanged. This is known as iterating to fixed point. A 
+      higher-order              <CODE>fixed_point</CODE> combinator may 
+      implement this functionality using recursion:           </P>
+<PRE>&gt; let rec fixed_point f x =
+    let f_x = f x
+    if x = f_x then x else fixed_point f f_x;;
+val fixed_point : ('a -&gt; 'b) -&gt; 'a -&gt; 'b</PRE>
+      <P>This              <CODE>fixed_point</CODE> combinator nests an 
+      arbitrary number of applications of the given function              
+      <CODE>f</CODE> to the argument              <CODE>x</CODE> until 
+      applications stop altering the result.           </P>
+      <P>For example, the golden ratio may be expressed as the fixed point of 
+      the iteration x             <SUB>n+1</SUB> =sqrt(1+x             
+      <SUB>n</SUB> ):           </P>
+<PRE>&gt; fixed_point (fun x -&gt; sqrt (1. + x)) 1.;;
+val it : float = 1.618033989</PRE>
+      <P>Note that this iterative algorithm gradually converges and does not 
+      terminate in theory. The function only terminated here because the next 
+      result was rounded to the same float value, i.e. the result was unchanged 
+      to within the error of a floating point value. Although this serves to 
+      demonstrate the functionality of our              <CODE>fixed_point</CODE> 
+      combinator in this case, this is a dangerous practice to use with 
+      floating-point numbers in general because non-trivial algorithms are may 
+      get stuck in infinite loops, alternating between different results and 
+      never terminating with this combinator.           </P>
+      <H2>Memoization</H2>
+      <P>A technique known as              <I>dynamic programming</I> requires 
+      the ability to remember previous results when dealing with divide and 
+      conquer algorithms that break large problems into smaller problems that 
+      overlap. By remembering the overlapping portions, recomputation can be 
+      avoided in order to improve efficiency.           </P>
+      <P>The act of remembering or              <I>caching</I> the previous 
+      results of a function as a mapping from previous inputs to their 
+      corresponding outputs is known as              <I>memoization</I> . The 
+      Fibonacci function is the pedagogical example of a function that can be 
+      accelerated using memoization:           </P>
+<PRE>&gt; let rec fib = function
+    | 0 | 1 as n -&gt; n
+    | n -&gt; fib(n-1) + fib(n-2);;
+val fib : int -&gt; int</PRE>
+      <P>This function is slow to compute even small Fibonacci numbers, taking 
+      0.495s to compute the 35             <SUP>th</SUP> Fibonacci number:       
+          </P>
+<PRE>&gt; time fib 35;;
+Took 495ms
+val it : int = 9227465</PRE>
+      <P>The              <CODE>fib</CODE> function is heavily recursive, making 
+      two recursive calls almost every time it is invoked (each of which make 
+      two more recursive calls and so on). Consequently, the asymptotic 
+      complexity of this function is O(2             <SUP>n</SUP> ). As the 
+      function is slow to execute, caching results can be a productive way to 
+      improve performance.           </P>
+      <H3>Simple memoization</H3>
+      <P>Fortunately, even the generic concept of caching the results of 
+      function calls can be factored out and expressed as a combinator. The 
+      simplest implementation of a              <CODE>memoize</CODE> combinator 
+      maintains a hash table mapping input arguments to output results for the 
+      given function:           </P>
+<PRE>&gt; let memoize f =
+    let m = Hashtbl.create 1
+    fun x -&gt;
+      try m.[x] with Not_found -&gt;
+      let f_x = f x
+      m.[x] &lt;- f_x
+      f_x;;
+val memoize : ('a -&gt; 'b) -&gt; 'a -&gt; 'b</PRE>
+      <P>Note that partial application of the function              
+      <CODE>f</CODE> to the              <CODE>memoize</CODE> combinator 
+      produces a new function that has the same properties as              
+      <CODE>f</CODE> but tries to look up previous results in a hash table each 
+      time it is invoked.           </P>
+      <P>This memoize combinator can be applied to the              
+      <CODE>fib</CODE> function to produce a new function that has the same type 
+      as the              <CODE>fib</CODE> function but transparently caches 
+      previously computed results:           </P>
+<PRE>&gt; let mfib = memoize fib;;
+val mfib: (int -&gt; int)</PRE>
+      <P>In the context of a particular input value such as              
+      <CODE>35</CODE> , this              <CODE>mfib</CODE> function is slow 
+      when invoked for the first time but fast for subsequent applications with 
+      the same argument:           </P>
+<PRE>&gt; time mfib 35;;
+Took 502ms
+val it : int = 9227465
+&gt; time mfib 35;;
+Took 0ms
+val it : int = 9227465</PRE>
+      <P>Memoization is useful in a variety of circumstances. However, this 
+      concept can be generalised even further to accomodate recursive 
+      functions.</P>
+      <H3>Recursive memoization</H3>
+      <P>The previous example cached the return values of the original           
+         <CODE>fib</CODE> function to improve performance when a calculation was 
+      repeated. However, when computing the 35             <SUP>th</SUP> 
+      Fibonacci number, the function still recomputes both the 33             
+      <SUP>rd</SUP> and 34             <SUP>th</SUP> numbers and, more 
+      importantly, these are not looked for in the cache. In this case, the 
+      caching would clearly be more effective if it could memoize the results of 
+      the recursive calls made inside the              <CODE>fib</CODE> function 
+      as well as the calls made from the outside.           </P>
+      <P>This can be done by first unravelling the              <CODE>fib</CODE> 
+      function such that it is no longer recursive, a technique sometimes known 
+      as "untying the recursive knot". To do this, the function is written as a 
+      higher-order function and is passed the function that it will recurse 
+      into. This is most easily written by adding an initial argument with the 
+      same name as the function (             <CODE>fib</CODE> ) itself and 
+      removing the now-redundant              <CODE>rec</CODE> from the 
+      definition:           </P>
+<PRE>&gt; let fib fib = function
+    | 0 | 1 as n -&gt; n
+    | n -&gt; fib(n-1) + fib(n-2);;
+val fib : (int -&gt; int) -&gt; int -&gt; int</PRE>
+      <P>By passing this              <CODE>fib</CODE> function a memoized 
+      version of itself as its first argument, the recursive calls inside the    
+                <CODE>fib</CODE> function can also be memoized. Doing this 
+      required a slightly modified version of the              
+      <CODE>memoize</CODE> combinator as well:           </P>
+<PRE>&gt; let memoize_rec f =
+    let m = Hashtbl.create 1
+    let rec f' x =
+      try m.[x] with Not_found -&gt;
+      let f_x = f f' x
+      m.[x] &lt;- f_x
+      f_x
+    f';;
+val memoize : (('a -&gt; 'b) -&gt; 'a -&gt; 'b) -&gt; ('a -&gt; 'b)</PRE>
+      <P>The nested              <CODE>f'</CODE> function is the memoized 
+      version of the              <CODE>f</CODE> function. Note that the         
+           <CODE>f'</CODE> function is careful to pass itself as the first 
+      argument to              <CODE>f</CODE> , so that calls in              
+      <CODE>f</CODE> that were recursive become calls to the memoized version    
+                <CODE>f'</CODE> instead.           </P>
+      <P>Applying memoize_rec to the untied              <CODE>fib</CODE> 
+      function creates a recursively memoized version of the              
+      <CODE>fib</CODE> function:           </P>
+<PRE>&gt; let mfib = memoize_rec fib;;
+val mfib : (int -&gt; int)</PRE>
+      <P>This function is not only quick to recompute Fibonacci numbers but is 
+      now asymptotically quicker to compute all Fibonacci numbers! Specifically, 
+      computing the              <I>n</I>             <SUP>th</SUP> number only 
+      requires results for the previous              <I>n</I> numbers to be 
+      computed, i.e. the asymptotic complexity has been reduces from O(e         
+          <SUP>n</SUP> ) to only O(n). Consequently, this function can be used 
+      to compute larger Fibonacci numbers very quickly.           </P>
+      <P>For example, computing the 45             <SUP>th</SUP> Fibonacci 
+      number now takes only 12ms:           </P>
+<PRE>&gt; time mfib 45;;
+Took 12ms
+val it : int = 1134903170</PRE>
+      <P>The ability to represent memoization as a combinator makes it much 
+      easier to use in functional languages. However, the growth of the hash 
+      table used to memoize previous results in this implementation is 
+      unbounded. This can sometimes be an effective memory leak when previous 
+      results are no longer needed and should be "forgotten". Consequently, it 
+      may be useful to replace the memoize combinator with an implementation 
+      that uses a more sophisticated data structure to remember only a certain 
+      number of the most commonly used answers, or even to measure the memory 
+      required by memoization and limit that.</P>
+      <H2>Summary</H2>
+      <P>Combinators are an extremely powerful way to exploit the composability 
+      offered by functional programming. Future F#.NET Journal articles will 
+      make extensive use of combinators. In particular, one future article is 
+      devoted to the use of combinators in writing parsers. However, combinators 
+      are useful in a wide variety of circumstances and are often used to inject 
+      new functionality into existing function calls, just as the              
+      <CODE>memoize</CODE> combinator did here.           
+</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Combinator%20Heaven_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

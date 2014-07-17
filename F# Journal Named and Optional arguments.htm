@@ -1,0 +1,467 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0101)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/labelled_and_optional_arguments.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Named and Optional arguments</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Named%20and%20Optional%20arguments_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Named%20and%20Optional%20arguments_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Named%20and%20Optional%20arguments_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Named and Optional arguments</TITLE>     <LINK 
+href="F%23%20Journal%20Named%20and%20Optional%20arguments_files/style.css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20Named%20and%20Optional%20arguments_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Named%20and%20Optional%20arguments_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Named%20and%20Optional%20arguments_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Named%20and%20Optional%20arguments_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Named and Optional arguments</H1>
+      <P>The F# programming language provides a variety of useful features that 
+      are not found in many other functional programming languages. This is why 
+      F# is widely accepted as a functional language for practical use. Named 
+      and optional arguments are two related features that can be used to great 
+      effect in simplifying interfaces. This article introduces the syntax 
+      required to define and use both named and optional arguments in F# and 
+      describes some pedagogical uses of these features, with references to 
+      existing libraries, as well as examining some of the problems often 
+      encountered by programmers using these features.</P>
+      <H2>Motivation</H2>
+      <P>Functions requiring many different arguments quickly become confusing 
+      if their order of application is not obvious. Named arguments introduce 
+      meaningful names for function arguments, strengthening type checking and 
+      improving reliability and clarity.</P>
+      <P>The interfaces of libraries that provide advanced functionality often 
+      expose a bewildering variety of options to the user. Moreover, the same 
+      options are often used for many practical applications, with their 
+      alternatives being much less common. When this is the case, a mechanism 
+      for defaulting to the most common option can greatly simplify the use of a 
+      library in the common case whilst still allowing advanced users to select 
+      esoteric options when necessary.</P>
+      <P>An idiomatic solution in C# is to introduce an entirely new class that 
+      represents the options for a function. This design pattern is ubiquitous 
+      in the .NET libraries. For example, the              
+      <CODE>PresentParameters</CODE> found in Managed DirectX represents the 
+      arguments for a              <CODE>Device</CODE> and typically require 
+      boilerplate code like the following:           </P>
+<PRE>let p = new PresentParameters()
+p.Windowed &lt;- true
+p.SwapEffect &lt;- SwapEffect.Discard
+p.EnableAutoDepthStencil &lt;- true
+p.AutoDepthStencilFormat &lt;- DepthFormat.D24S8</PRE>
+      <P>These were the primary motivations for the addition of special language 
+      features for named and optional arguments to the F# programming 
+      language.</P>
+      <H2>Using records to mimic named and optional arguments</H2>
+      <P>Few functional programming languages offer named and optional 
+      arguments. In the absence of real named and optional arguments, similar 
+      effects can be achieved using records. The fields of a record are named 
+      and functional record update allows a default value for each field of a 
+      record to be overridden when necessary. Studying the simplistic 
+      record-based approach to named and optional arguments is an instructive 
+      prelude to learning about F#'s custom support for these language 
+      features.</P>
+      <P>Consider the following ray-sphere intersection routine:</P>
+<PRE>&gt; let ray_sphere (ox, oy, oz) (dx, dy, dz) (cx, cy, cz) r =
+    let vx, vy, vz = cx - ox, cy - oy, cz - oz
+    let b = vx * dx + vy * dy + vz * dz
+    let disc = sqrt(b * b - (vx * vx + vy * vy + vz * vz) + r * r)
+    let t1, t2 = b - disc, b + disc
+    if t2 &lt;= 0. then infinity else
+      if t1 &gt; 0. then t1 else t2;;
+val ray_sphere :
+  float * float * float -&gt; float * float * float -&gt; float * float * float -&gt;
+  float -&gt; float</PRE>
+      <P>We may wish the origin of a ray and the center of a sphere to default 
+      to the zero vector and the radius of a sphere to default to unity. This 
+      effect can be achieved by representing these structures as record types    
+                <CODE>ray</CODE> and              <CODE>sphere</CODE> and 
+      providing default values of these record types (e.g. with the same names): 
+                </P>
+<PRE>&gt; type vec3 = float * float * float;;
+type vec3 = float * float * float</PRE>
+<PRE>&gt; type ray = { origin: vec3; direction: vec3 };;
+type ray = { origin : vec3; direction : vec3; }</PRE>
+<PRE>&gt; let ray = { origin = 0., 0., 0.; direction = 0., 0., 0. };;
+val ray : ray = {origin = (0., 0., 0.); direction = (0., 0., 0.)}</PRE>
+<PRE>&gt; type sphere = { center: vec3; radius: float };;
+type sphere = { center : vec3; radius : float; }</PRE>
+<PRE>&gt; let sphere = { center = 0., 0., 0.; radius = 1. };;
+val sphere : sphere = {center = (0., 0., 0.); radius = 1.}</PRE>
+      <P>The ray-sphere intersection routine may then be rewritten in terms of 
+      these new types:</P>
+<PRE>&gt; let ray_sphere {origin=ox, oy, oz; direction=dx, dy, dz} {center=cx, cy, cz; radius=r} =
+    let vx, vy, vz = cx - ox, cy - oy, cz - oz
+    let b = vx * dx + vy * dy + vz * dz
+    let disc = sqrt(b * b - (vx * vx + vy * vy + vz * vz) + r * r)
+    let t1, t2 = b - disc, b + disc
+    if t2 &lt;= 0. then infinity else
+      if t1 &gt; 0. then t1 else t2;;
+val ray_sphere : ray -&gt; sphere -&gt; float</PRE>
+      <P>Note the use of patterns inside the record arguments to this function. 
+      Records can always be deconstructed in this way and you can even specify 
+      only a subset of the fields in a pattern to implicitly ignore all 
+      others.</P>
+      <P>Functional record update (the              <CODE>{ record with 
+      field=value }</CODE> notation) may be used to override the defaults 
+      specified in the              <CODE>ray</CODE> and              
+      <CODE>sphere</CODE> values. For example, the following specifies only a 
+      non-default ray direction:           </P>
+<PRE># ray_sphere {ray with direction=0.6, 0.8, 0.} sphere;;
+val it : float = 1.0</PRE>
+      <P>This clearly scales better than having to specify all values at every 
+      function application.</P>
+      <H2>Syntax for named arguments</H2>
+      <P>The F# language provides a concise syntax for named arguments to 
+      members:</P>
+<PRE>&gt; type A() =
+    static member t.f(x, y) = x - y;;
+type A =
+  class
+    new : unit -&gt; A
+    static member f : x:int * y:int -&gt; int
+  end</PRE>
+      <P>Note how the names listed in the signature of the member in this class 
+      were taken from the names              <CODE>x</CODE> and              
+      <CODE>y</CODE> used for the arguments in the member definition.           
+      </P>
+      <P>The names              <CODE>x</CODE> and              <CODE>y</CODE> 
+      of the arguments may be neglecting when applying the arguments in the same 
+      order that they were specified in the definition:           </P>
+<PRE>&gt; A.f(2, 3);;
+val it : int = -1</PRE>
+      <P>Or they may be used explicitly when invoking the member:</P>
+<PRE>&gt; A.f(x=2, y=3);;
+val it : int = -1</PRE>
+      <P>This allows the arguments to be supplied out of order:</P>
+<PRE>&gt; A.f(y=2, x=3);;
+val it : int = 1</PRE>
+      <P>The following definition of              <CODE>ray_sphere</CODE> as a 
+      static member of a dummy class uses named arguments:           </P>
+<PRE>&gt; type A() =
+    static member ray_sphere(origin, direction, center, radius) =
+      let (ox, oy, oz), (dx, dy, dz), (cx, cy, cz) = origin, direction, center
+      let vx, vy, vz = cx - ox, cy - oy, cz - oz
+      let b = vx * dx + vy * dy + vz * dz
+      let disc = sqrt(b * b - (vx * vx + vy * vy + vz * vz) + radius * radius)
+      let t1, t2 = b - disc, b + disc
+      if t2 &lt;= 0. then infinity else
+        if t1 &gt; 0. then t1 else t2;;
+type A =
+  class
+    new : unit -&gt; A
+    static member
+      ray_sphere : origin:(float * float * float) *
+                   direction:(float * float * float) *
+                   center:(float * float * float) * radius:float -&gt; float
+  end</PRE>
+      <P>This provides the same benefits as named record fields but without the 
+      need to create new record types for every named argument.</P>
+      <P>The arguments to this function may be specified using the ordinary 
+      unnamed style:</P>
+<PRE>&gt; A.ray_sphere((0., 0., 0.), (0.6, 0.8, 0.), (0., 0., 0.), 1.);;
+val it : float = 1.0</PRE>
+      <P>Or by giving the names of all arguments and supplying them in any 
+      order:</P>
+<PRE>&gt; A.ray_sphere(radius=1., origin=(0., 0., 0.), direction=(0.6, 0.8, 0.), center=(0., 0., 0.));;
+val it : float = 1.0</PRE>
+      <P>So F#'s named arguments provide the same functionality as the 
+      record-based solution but without the need to define a new record type for 
+      every set of named arguments.</P>
+      <H2>Syntax for optional arguments</H2>
+      <P>In the simplest case, an optional argument is denoted with              
+      <CODE>?</CODE> and assumes an option type that is              <CODE>Some 
+      _</CODE> if a value was specified for the argument. For example:           
+      </P>
+<PRE>&gt; type A() =
+    static member ray_sphere(?origin, ?direction, ?center, ?radius) =
+      let ox, oy, oz = defaultArg origin (0., 0., 0.)
+      let dx, dy, dz = defaultArg direction (0., 0., 1.)
+      let cx, cy, cz = defaultArg center (0., 0., 0.)
+      let r = defaultArg radius 1.
+      let vx, vy, vz = cx - ox, cy - oy, cz - oz
+      let b = vx * dx + vy * dy + vz * dz
+      let disc = sqrt(b * b - (vx * vx + vy * vy + vz * vz) + r * r)
+      let t1, t2 = b - disc, b + disc
+      if t2 &lt;= 0. then infinity else
+        if t1 &gt; 0. then t1 else t2;;
+type A =
+  class
+    new : unit -&gt; A
+    static member
+      ray_sphere : ?origin:(float * float * float) *
+                   ?direction:(float * float * float) *
+                   ?center:(float * float * float) * ?radius:float -&gt; float
+  end</PRE>
+      <P>Omitting any of these optional arguments results in a              
+      <CODE>None</CODE> value being passed into the function body, whereupon the 
+                   <CODE>defaultArg</CODE> function is used to replaced the 
+      option type with a default value if none was specified.           </P>
+<PRE>&gt; ray_sphere(direction=(0.6, 0.8, 0.));;
+val it : float = 1.</PRE>
+      <P>Additionally, optional arguments may be specified in their boxed form 
+      by preceding their name with a              <CODE>?</CODE> in the 
+      application of the function:           </P>
+<PRE>&gt; ray_sphere(?direction=Some (0.6, 0.8, 0.));;
+val it : float = 1.</PRE>
+      <P>This makes it easy for a function with optional arguments to call 
+      another function with optional arguments without having to unbox and rebox 
+      the value of the argument.</P>
+      <P>Optional arguments are an excellent way to augment an API with sane 
+      defaults, allowing users to get started with a library with a minimum of 
+      fuss.</P>
+      <H2>Limitations</H2>
+      <P>Named and optional arguments in F# have some limitations. Most 
+      notably:</P>
+      <P>
+      <UL>
+        <LI>Unnamed arguments should appear first followed by optional arguments 
+        and then named arguments.</LI>
+        <LI>They can only be used in members and not in                  
+        <CODE>let</CODE> -bound definitions.               </LI>
+        <LI>Defining a single function with named or optional arguments requires 
+        a class to encapsulate the member.</LI>
+        <LI>They cannot be used when members are defined in functional form 
+        using                  <CODE>fun</CODE> or                  
+        <CODE>function</CODE> .               </LI>
+        <LI>They cannot be used when pattern matching is used to destructure the 
+        context of a function argument.</LI>
+        <LI>Named and optional arguments do not support partial application 
+        (currying) in F#.</LI></UL>
+      <P></P>
+      <H3>Replacing let-bound functions</H3>
+      <P>Fortunately,              <CODE>let</CODE> -bound functions are easily 
+      replaced by translating the encapsulating module into a class and the      
+              <CODE>let</CODE> -bound function into a static member function.    
+             </P>
+      <P>For example, given the following              <CODE>Foo.bar</CODE> 
+      function:           </P>
+<PRE>&gt; module Foo =
+    let bar n = n + 3;;
+module Foo = begin
+  val bar : int -&gt; int
+end</PRE>
+      <P>We can make the argument to the function optional by replacing the 
+      module with a class and the              <CODE>let</CODE> -bound function 
+      with a static member:           </P>
+<PRE>&gt; type Foo() =
+    static member bar(?n) = defaultArg n 0 + 3;;
+type Foo =
+  class
+    new : unit -&gt; Foo
+    static member bar : ?n:int -&gt; int
+  end</PRE>
+      <P>The              <CODE>Foo.bar</CODE> function may then be invoked 
+      either with or without its optional argument:           </P>
+<PRE>&gt; Foo.bar(5);;
+val it : int = 8
+&gt; Foo.bar 5;;
+val it : int = 8
+&gt; Foo.bar();;
+val it : int = 3</PRE>
+      <H3>Combining pattern matching and named or optional arguments</H3>
+      <P>Patterns are often used to destructure values such as tuples in the 
+      argument of a function definition. However, this conflicts with named and 
+      optional arguments because it is no longer clear what the name of the 
+      argument should be.</P>
+      <P>For example, the following function uses pattern matching to 
+      destructure a pair of pairs:</P>
+<PRE>&gt; module Foo =
+    let bar ((a, b), (c, d)) = a, b, c, d;;
+module Foo = begin
+  val bar : ('a * 'b) * ('c * 'd) -&gt; 'a * 'b * 'c * 'd
+end</PRE>
+      <P>This cannot be translated directly into named or optional arguments 
+      because the pairs do not have names. This problem can be solved by 
+      accepting the named or optional pair as a single value and then 
+      destructuring it inside the function body using a              
+      <CODE>let</CODE> definition:           </P>
+<PRE>&gt; type Foo() =
+    static member bar((a, b), ?cd) =
+      let c, d = defaultArg cd (a, b)
+      a, b, c, d;;
+type Foo =
+  class
+    new : unit -&gt; Foo
+    static member
+      bar : _arg5:('a0 * 'a1) * ?cd:('a0 * 'a1) -&gt; 'a0 * 'a1 * 'a0 * 'a1
+  end</PRE>
+      <P>Note how the anonymous pair was given the name              
+      <CODE>_arg5</CODE> .           </P>
+      <P>This              <CODE>Foo.bar</CODE> function may be now invoked with 
+      either one or two pairs as arguments:           </P>
+<PRE>&gt; Foo.bar((1,2), (3,4));;
+val it : int * int * int * int = (1, 2, 3, 4)
+&gt; Foo.bar((1,2));;
+val it : int * int * int * int = (1, 2, 1, 2)</PRE>
+      <P>Note that the seemingly superfluous parentheses in the latter case are 
+      actually required to indicate that the member has a single argument that 
+      is a tuple:</P>
+<PRE>&gt; Foo.bar(1,2);;</PRE>
+<PRE>  Foo.bar(1,2);;
+  --------^^</PRE>
+<PRE>stdin(5,9): error FS0001: This expression has type
+	int
+but is here used with type
+	'a * 'b.</PRE>
+      <P>Such subtlties arise at the border between OCaml-style functional 
+      programming where there is no difference between a function of two 
+      arguments and a function with one argument that is a pair, and C#-style 
+      programming where there is a distinction between these two sitations.</P>
+      <H2>Optional constructor arguments</H2>
+      <P>Object constructors behave just like ordinary members and, 
+      consequently, may also have named and optional arguments.</P>
+      <P>For example, the following is similar to the previous definition but 
+      handles the optional argument in the constructor:</P>
+<PRE>&gt; type Foo&lt;'a, 'b&gt;(ab : 'a * 'b, ?cd) =
+    member this.bar =
+      let (a, b), (c, d) = ab, defaultArg cd ab
+      a, b, c, d;;
+type Foo&lt;'a,'b&gt; =
+  class
+    new : ab:('a * 'b) * ?cd:('a * 'b) -&gt; Foo&lt;'a,'b&gt;
+    member bar : 'a * 'b * 'a * 'b
+  end</PRE>
+      <P>Note that is was necessary to add manual type annotations in this 
+      case.</P>
+      <H2>Setting properties at construction</H2>
+      <P>Although setting properties when a class is constructed is not strictly 
+      a use of named or optional arguments in the F# language, this technique is 
+      widely used to achieve a similar effect.</P>
+      <P>This design pattern uses properties with setters to set state and, in 
+      F#, these mutations may be written in-line within the call to the 
+      constructor.</P>
+      <P>For example, the following class              <CODE>A</CODE> provides a 
+      getter and a setter for a property              <CODE>X</CODE> :           
+      </P>
+<PRE>&gt; type A() =
+    let mutable x = 0
+    member this.X
+      with get() = x
+      and set(v) = x &lt;- v;;
+type A =
+  class
+    new : unit -&gt; A
+    member X : int
+    member X : int with set
+  end</PRE>
+      <P>This may be used in a similar style to an optional argument. If the 
+      property is not set (e.g. during object construction) then the getter will 
+      result the default value which is              <CODE>0</CODE> in this 
+      case:           </P>
+<PRE>&gt; A().X;;
+0
+val it : int = 0</PRE>
+      <P>However, the property may be set within the call to the 
+constructor:</P>
+<PRE>&gt; A(X=2).X;;
+x &lt;- 2
+2
+val it : int = 2</PRE>
+      <P>This is syntactic sugar for the following:</P>
+<PRE>&gt; let a = A();;
+val a : A
+&gt; a.X &lt;- 2;;
+x &lt;- 2
+val it : unit = ()
+&gt; a.X;;
+2
+val it : int = 2</PRE>
+      <P>The critical difference between this approach and real optional 
+      arguments is the presence of mutation, which can be a considerable 
+      headache if it is unnecessary. This can be seen by injecting statements to 
+      print out what exactly is going on during the construction of our 
+      object:</P>
+<PRE>  type A() as this =
+    let mutable x = 0
+    
+    do
+      printf "x = %d \n" this.X
+    
+    member this.X
+      with get() =
+        printf "%d\n" x
+        x
+      and set(v) =
+        printf "x &lt;- %d\n" v
+        x &lt;- v
+type A =
+  class
+    new : unit -&gt; A
+    member X : int
+    member X : int with set
+  end</PRE>
+      <P>Constructing this class with a non-default value of              
+      <CODE>x</CODE> shows that              <CODE>x</CODE> is originally 
+      initialized to the default value and then set to the specified value:      
+           </P>
+<PRE>&gt; A(X=2).X;;
+0
+x = 0 
+x &lt;- 2
+2
+val it : int = 2</PRE>
+      <P>The presence of mutation here silently imposes a strict order of 
+      evaluation on the initialization of the object. This is perilous and often 
+      unnecessary.</P>
+      <P>In contrast, the equivalent code using an optional argument rather than 
+      a property setter avoids mutation and the value is only ever either the 
+      default or the specified value, even during object construction:</P>
+<PRE>&gt; type A(?X) as this =
+    let mutable x = defaultArg X 0
+    
+    do
+      printf "x = %d \n" this.X
+    
+    member this.X
+      with get() =
+        printf "%d\n" x
+        x
+      and set(v) =
+        printf "x &lt;- %d\n" v
+        x &lt;- v;;
+&gt; A(X=2).X;;
+2
+x = 2 
+2
+val it : int = 2</PRE>
+      <P>Thus, optional arguments should be preferred over the setting of 
+      properties whenever possible.</P>
+      <H2>Summary</H2>
+      <P>The F# programming language provides named and optional arguments that 
+      can be used to allow arguments to be specified in any order and omitted. 
+      Although similar effects can be achieved using other techniques, such as 
+      records and property members, named and optional arguments have a variety 
+      of benefits that make them the best solution in the majority of 
+    cases.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Named%20and%20Optional%20arguments_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

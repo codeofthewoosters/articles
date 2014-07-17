@@ -1,0 +1,42 @@
+TABLE#page {
+	BORDER-TOP: #ffbb77 2px solid; BORDER-RIGHT: #ffbb77 2px solid; BORDER-BOTTOM: #ffbb77 2px solid; BORDER-LEFT: #ffbb77 2px solid; WIDTH: 960px; BACKGROUND-COLOR: #fff7f0
+}
+TABLE#page TD {
+	BORDER-TOP: #ffbb77 2px solid; BORDER-RIGHT: #ffbb77 2px solid; VERTICAL-ALIGN: top; BORDER-BOTTOM: #ffbb77 2px solid; BORDER-LEFT: #ffbb77 2px solid; WIDTH: 900px
+}
+TABLE#items {
+	BORDER-TOP: #000000 0px solid; BORDER-RIGHT: #000000 0px solid; BORDER-BOTTOM: #000000 0px solid; BORDER-LEFT: #000000 0px solid; WIDTH: 900px
+}
+TABLE#items TD {
+	BORDER-TOP: #000000 0px solid; BORDER-RIGHT: #000000 0px solid; VERTICAL-ALIGN: middle; BORDER-BOTTOM: #000000 0px solid; BORDER-LEFT: #000000 0px solid
+}
+TABLE#items TD.title {
+	FONT-SIZE: 1.2em; VERTICAL-ALIGN: middle; FONT-WEIGHT: bold; TEXT-ALIGN: center; WIDTH: 930px; BACKGROUND-COLOR: #ffbb77
+}
+TABLE#items TD.overview {
+	WIDTH: 100%; BACKGROUND-COLOR: #fff7f0
+}
+TABLE#item {
+	WIDTH: 930px
+}
+TABLE#item TD {
+	WIDTH: 0px
+}
+TABLE#item TD.view {
+	VERTICAL-ALIGN: middle; WIDTH: 128px
+}
+TABLE#item TD.details {
+	FONT-SIZE: 0.9em; WIDTH: 100%
+}
+.price {
+	FONT-FAMILY: Tahoma, Verdana, Arial, Helvetica, sans-serif
+}
+P.more {
+	FONT-SIZE: 0.9em; WHITE-SPACE: nowrap
+}
+P.testimonial {
+	FONT-SIZE: 0.9em; FONT-FAMILY: italic; TEXT-ALIGN: right
+}
+TABLE#footer {
+	FONT-SIZE: 7pt; TEXT-ALIGN: right; WIDTH: 960px; BACKGROUND-COLOR: #ffbb77
+}

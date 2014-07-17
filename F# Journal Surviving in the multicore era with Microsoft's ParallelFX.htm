@@ -1,0 +1,503 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0080)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/parallelfx.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Surviving in the multicore era with Microsoft's 
+ParallelFX</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Surviving in the multicore era with Microsoft's 
+ParallelFX</TITLE>     <LINK href="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Surviving in the multicore era with Microsoft's ParallelFX</H1>
+      <P>As the world transitions to multicore desktop computers over the next 
+      few years it is essential that software evolves to take advantage of this 
+      new dimension in processing power by exposing parallelism. Any software 
+      products that fail to evolve will suffer catastrophic losses in sales. The 
+      F# programming language uniquely combines natural parallelism at the 
+      language level with state-of-the-art capability at the implementation 
+      level thanks to its .NET foundation. Microsoft's new Task Parallel Library 
+      (TPL) is the keystone in building parallel F# programs and this article 
+      explains how this is done using Microsoft's latest Community Technology 
+      Preview (CTP) of the TPL.</P>
+      <H2>Introduction</H2>
+      <P>Exploiting multicore machines requires parallelism to be exposed in 
+      programs. Sections of a program that may be run in parallel can then be 
+      dispatched to different computation units (such as cores or separate 
+      CPUs).</P>
+      <P>In contrast, concurrency refers to the ability to overlap the handling 
+      of subtasks, such as handling multiple web server requests. Although the 
+      constructs for parallel and concurrent programming look very similar, 
+      their requirements are very different and it is important to keep this in 
+      mind when learning the subjects. Specifically, concurrency refers to tasks 
+      that are typically IO bound (i.e. spend most of their time waiting for 
+      input and output) rather than CPU bound. This means that constructs built 
+      for concurrency, such as the global .NET thread pool, often have 
+      considerable overheads for queueing new tasks and for running multiple 
+      CPU-intensive tasks simultaneously. Thus, it is necessary to provide a 
+      completely new set of constructs for parallelism and this is exactly what 
+      the Parallel FX part of the Task Parallel Library has done.</P>
+      <P>The F# language is naturally well suited to practical parallel 
+      programming thanks to the following properties:</P>
+      <P>
+      <UL>
+        <LI>Idiomatic F# programs make heavy use of immutable data 
+        structures.</LI>
+        <LI>Consequently, F# programs require few locks (mutexes) to synchronize 
+        access to mutable data structures.</LI>
+        <LI>Building upon .NET as a foundation allows F# to provide one of the 
+        world's most advanced and well-tested concurrent run-times, which is 
+        ideally suited to parallel programming on today's shared-memory 
+        computers.</LI></UL>
+      <P></P>
+      <P>Immutable data structures are not a clear benefit until you consider 
+      the software engineering problems that stem from idiomatic imperative 
+      style in modern mainstream languages like C++ and Java. In those 
+      languages, mutable data structures are considered perfectly normal and, 
+      although global state is often discouraged, mutable state is often shared 
+      across large areas of code. This is a recipe for disaster in the context 
+      of parallelism.</P>
+      <P>Firstly, determinism is maintained by locking mutable values in order 
+      to mutually exclude threads from mutating a data structure simultaneously. 
+      However, these locks are costly so it is essential to minimize contention 
+      between threads by splitting long-standing locks into many shorter locks. 
+      This fine-grained use of locking then becomes a problem in itself because 
+      every pair of locks is a potential source of deadlocks (threads that 
+      mutually wait on each other forever). Due to the presence of a large 
+      number of locks with fine-grained locking, you see a combinatoric 
+      explosion in the number of potential interactions that quickly becomes a 
+      maintainence nightmare. So mainstream languages are poorly equipped to 
+      deal with extensive parallelism in the context of general application 
+      programming.</P>
+      <P>At the other end of the spectrum, it is possible to write programs in a 
+      purely functional style and make no use of mutable data structures at all. 
+      Languages like Haskell and Erlang enforce this style of programming. 
+      However, even with the most sophisticated optimizing compilers currently 
+      available, purely functional data structures remain substantially slower 
+      in many cases than their mutable counterparts.</P>
+      <P>The F# programming language combines both of these worlds. Although 
+      mutable data structures are perfectly usable in F#, their use is 
+      discouraged in favor of immutable data structures. Consequently, 
+      production-quality F# programs typically make very little use of mutation, 
+      reserving it only for performance critical regions. Consequently, the 
+      number of locks required to make a program thread safe is greatly reduced. 
+      For example, our              <A href="http://www.ffconsultancy.com/products/fsharp_for_visualization">F# 
+      for Visualization</A> library comprises 250,000 lines of code but it 
+      requires only four locks in the entire library to achieve complete thread 
+      safety. With so few locks, the software engineering challenge of managing 
+      the potential interactions between them is greatly simplified.           
+      </P>
+      <H2>The Task Parallel Library (TPL)</H2>
+      <P>Microsoft's new Task Parallel Library provides an extra layer of 
+      abstraction over and above threads and locks that makes many common 
+      parallelizable tasks much easier to write. Moreover, the API used by the 
+      TPL is largely functional in style, making heavy use of higher-order 
+      functions to replace conventional looping constructs.</P>
+      <P>Internally, the TPL uses sophisticated scheduling algorithms in order 
+      to distribute parallelized computations efficiently. This complexity is 
+      hidden behind an elegant functional interface. The interface makes 
+      extensive use of .NET delegates including the              
+      <CODE>Action</CODE> and              <CODE>Func</CODE> classes introduced 
+      in .NET 3.0. However, the F# language transparently abstracts this 
+      incidental complexity and allows ordinary F# functions to be used 
+      everywhere instead, making F# particularly well suited to parallel 
+      programming.           </P>
+      <H2>Basic use</H2>
+      <P>Once .NET 3.5 and the TPL CTP are installed, the TPL may be referenced 
+      with:</P>
+<PRE>&gt; #r @"C:\Program Files\Reference Assemblies\Microsoft\Framework\v3.5\System.Core.dll";;
+&gt; #r @"C:\Program Files\Microsoft Parallel Extensions Dec07 CTP\System.Threading.dll";;</PRE>
+      <P>The              <CODE>Parallel.For</CODE> loop is one of the most 
+      basic parallel constructs provided by the Parallel FX library:           
+      </P>
+<PRE>&gt; Parallel.For(0, 10, printf "%d ");;
+8 9 0 1 2 3 4 5 6 7 val it : unit = ()</PRE>
+      <P>Note how the integers were printed out of order because the cycles of 
+      this loop are evaluated in parallel. In order to maintain determinism it 
+      is therefore essential for the cycles of this loop to be independent and 
+      this requires programmer's discipline because it is not checked (not even 
+      at run-time).</P>
+      <H2>Matrix Multiplication</H2>
+      <P>Many articles in magazines and journals have following the TPL 
+      documentation in using matrix-matrix multiply as an example of a simple 
+      function that can be effectively parallelized. As the F# standard library 
+      already contains a matrix implementation we can borrow their code. The 
+      standard library code is most easily browsed from Visual Studio by right 
+      clicking on identifiers and selecting "Go To Definition" to jump directly 
+      to the definition of the identifier in question.</P>
+      <P>The definition of              <CODE>Math.Matrix.mul</CODE> is:         
+        </P>
+<PRE>let mul (a:matrix) (b:matrix) = MS.mulM   a b</PRE>
+      <P>The definition of              
+      <CODE>Math.RawMatrixOps.Specialized.mulM</CODE> is:           </P>
+<PRE>let mulM a b = bopM DS.mulDMDS GU.mulDMGU DS.mulSMDS GU.mulSMGU a b</PRE>
+      <P>This function dispatches to dense (D) or sparse (S) routines either 
+      generic (G) or specialized over floats (S). So the product of two float 
+      matrices is computed by the              <CODE>DS.mulDMDS</CODE> which has 
+      the definition:           </P>
+<PRE>let mulDMDS a b =
+    let nA = ncolsDMDS a 
+    let mA = nrowsDMDS a
+    let nB = ncolsDMDS b 
+    let mB = nrowsDMDS b
+    if nA&lt;&gt;mB then invalid_arg "incompatible dimensions for matrix multiplication";
+    let arr = GU.createArray2 mA nB 
+    let arrA = a.arrDM 
+    let arrB = b.arrDM 
+    for i = 0 to mA - 1 do 
+        for j = 0 to nB - 1 do 
+            let mutable r = 0.0 
+            for k = 0 to mB - 1 do 
+                r &lt;- r + mul (getDMDSA arrA i k) (getDMDSA arrB k j)
+            GU.setArray2 arr i j r
+    mkDMDS arr</PRE>
+      <P>This triple-loop structure is very similar to the code given in the TPL 
+      documentation and gives this algorithm an O(n             <SUP>3</SUP> ) 
+      complexity.           </P>
+      <P>Rather than reusing the existing F# matrix implementation (which is in 
+      a state of flux), we shall write a new matrix multiply over the ordinary 
+      2D .NET array type:</P>
+<PRE>&gt; let mul a b =
+    let an, am = Array2.length1 a, Array2.length2 a
+    let bn, bm = Array2.length1 b, Array2.length2 b
+    let c = Array2.zero_create am bn
+    for i = 0 to am - 1 do
+      for j = 0 to bn - 1 do
+        let mutable r = 0.0
+        for k = 0 to bm - 1 do
+          r &lt;- r + a.[i,k] * b.[k,j]
+        c.[i,j] &lt;- r
+    c;;
+val mul : float [,] -&gt; float [,] -&gt; float [,]
+&gt; let n = 1000;;
+val n : int
+&gt; let a = Array2.init n n (fun _ _ -&gt; 1.);;
+val a : float [,]
+&gt; let b = Array2.init n n (fun _ _ -&gt; 1.);;
+val b : float [,]
+&gt; let c = time (mul a) b;;
+val c : float [,]
+Took 23285ms</PRE>
+      <P>This algorithm is a perfect example because it can be parallelized 
+      simply and effectively by noting that the outer loop can be performed in 
+      parallel and converting the current use of the built-in              
+      <CODE>for</CODE> loop into an application of the              
+      <CODE>Parallel.For</CODE> higher-order function:           </P>
+<PRE>&gt; let parmul a b =
+    let an, am = Array2.length1 a, Array2.length2 a
+    let bn, bm = Array2.length1 b, Array2.length2 b
+    let c = Array2.zero_create am bn
+    Parallel.For(0, am, fun i -&gt;
+      for j = 0 to bn - 1 do
+        let mutable r = 0.0
+        for k = 0 to bm - 1 do
+          r &lt;- r + a.[i,k] * b.[k,j]
+        c.[i,j] &lt;- r)
+    c;;
+&gt; let c = time (parmul a) b;;
+val c : float [,]
+Took 12437ms</PRE>
+      <P>In this case, we have achieved a speedup of 1.9× on a dual core 
+      machine, which is near optimal. In fact, when the dimension              
+      <CODE>am</CODE> of the matrix              <CODE>a</CODE> is large, this 
+      parallel implementation will always achieve near-optimal efficiency.       
+          </P>
+      <P>The Windows Task Manager can be used to visualize the CPU usage over 
+      time. The following chart illustrates the CPU usage on this dual core 
+      machine with the serial algorithm first followed by the parallel 
+      algorithm:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/usage.gif"> 
+                  </P>
+      <P></P>
+      <P>Note how the CPU usage is only 50% for the serial algorithm but rises 
+      to 100% for the parallel algorithm (that takes roughly half as long to 
+      complete).</P>
+      <P>However, not all algorithms are as easy to parallelize as a 
+      matrix-matrix multiply. The remainder of this article covers some design 
+      patterns that are commonly seen when parallelizing F# code.</P>
+      <H2>Fibonacci</H2>
+      <P>The trade-off between the overhead of spawning a concurrent computation 
+      compared to the benefit of performing computations in parallel is the 
+      single most important factor when parallelizing programs. This trade-off 
+      is well illustrated by the simple Fibonacci function:</P>
+<PRE>&gt; let rec fib = function
+    | 0 | 1 as n -&gt; n
+    | n -&gt; fib(n-1) + fib(n-2);;
+val fib : int -&gt; int
+&gt; time fib 30;;
+Took 21ms
+val it : int = 832040</PRE>
+      <P>This algorithm may be parallelized by creating a              
+      <I>future</I> that has one of the subproblems computed in parallel with 
+      the other at each stage:           </P>
+<PRE>&gt; let rec fib = function
+    | 0 | 1 as n -&gt; n
+    | n -&gt;
+        let p = System.Threading.Tasks.Future.Create(fun () -&gt; fib (n-2))
+        let q = fib(n-1)
+        p.Value + q;;
+val fib : int -&gt; int
+&gt; time fib 30;;
+Took 11156ms
+val it : int = 832040</PRE>
+      <P>Note how we are careful to factor out the subexpression              
+      <CODE>fib(n-1)</CODE> into a separate              <CODE>let</CODE> 
+      binding to ensure that it is computed in parallel with the future before 
+      the results are combined in the final line.           </P>
+      <P>This parallel version is extremely inefficient, taking 500× longer to 
+      complete in this case.</P>
+      <P>Fortunately, this parallel implementation can be made substantially 
+      more efficient in this case but it requires more effort than the matrix 
+      multiplication example even though this example is also embarassingly 
+      parallel. The poor performance in this case is dominated by the creation 
+      of futures, which is much more expensive than the two function 
+      applications and addition that otherwise occur in this branch of the       
+             <CODE>fib</CODE> function.           </P>
+      <P>A more efficient parallel implementation may be written by only 
+      parallelizing the evaluation of complicated subexpressions that take 
+      longer to compute. This amortizes the cost of spawning a parallel thread 
+      of execution. This is easily generalized over a parameter              
+      <CODE>i</CODE> in this case:           </P>
+<PRE>&gt; let rec fib i = function
+    | 0 | 1 as n -&gt; n
+    | n when n&lt;=i -&gt;
+        fib i (n-1) + fib i (n-2)
+    | n -&gt;
+        let p = System.Threading.Tasks.Future.Create(fun () -&gt; fib i (n-2))
+        let q = fib i (n-1)
+        p.Value + q;;
+val fib : int -&gt; int -&gt; int</PRE>
+      <P>In this case, we find a parameter of              <CODE>i = 16</CODE> 
+      lies at the border where the overhead of spawning parallel computations is 
+      equal to the performance gain obtained through parallelism on this dual 
+      core machine. Consequently, for              <CODE>i &gt; 16</CODE> we 
+      obtain a performance improvement of up to 2×:           </P>
+<PRE>&gt; time (fib 16) 30;;
+Took 22ms
+val it : int = 832040</PRE>
+      <P>This parallel implementation can be up to 25% faster than the original 
+      serial implementation. The remaining inefficiency is largely due to the 
+      use of a single              <CODE>fib</CODE> function for both serial and 
+      parallel use. Splitting this function into two separate functions and 
+      using the specialized serial implementation (which avoids a test per call) 
+      increases the performance improvement up to 80% faster over the serial 
+      version, as expected for a dual core system:           </P>
+      <P>The following graph illustrates the speedup when computing the 30       
+            <SUP>th</SUP> Fibonacci number using the first and second parallel 
+      implementations compared to the original serial implementation:           
+      </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/fibonacci_speedup.gif"> 
+                  </P>
+      <P></P>
+      <P>The performance improvement of the second version over the first is 
+      thanks to the use of a fully specialized serial function for quick 
+      calculations (when              <CODE>n</CODE> is small) that avoids the 
+      overhead of the extra test              <CODE>n &lt; i</CODE> in the 
+      majority of calculations. This trick is generally applicable and it is 
+      often well worth splitting an algorithm into serial and parallel versions 
+      with the parallel version calling the serial version for sufficiently 
+      simple subproblems.           </P>
+      <P>As              <CODE>i</CODE> is increased the performance rapidly 
+      improves. The threshold              <CODE>i = 16</CODE> corresponds to 
+      the time spent spawning ~10             <SUP>3</SUP> parallel computations 
+      being equal to the time spent performing ~10             <SUP>6</SUP> 
+      additions and pairs of function calls. Therefore, as a rule of thumb at 
+      the very least 1,000 primitive computations (such as machine-precision 
+      arithmetic operations) should be performed per parallel unit of 
+      computation. For example, this predicts that moving the parallel loop in 
+      the matrix-matrix multiply example from the outer loop to the middle loop 
+      (which still has 1,000 multiply and accumulate operations in it) will not 
+      degrade performance much beyond that of the serial implementation and, 
+      sure enough, we find this is still 35% faster than the serial 
+      implementation.           </P>
+      <P>The slight performance degredation at larger              
+      <CODE>i</CODE> is due to coarse-grained decomposition when the calculation 
+      is split into only a few parallel threads of different lengths that fail 
+      to fully exploit both cores. Eventually, for              <CODE>i = n = 
+      30</CODE> , no parallelism remains and version 2 recovers the performance 
+      of the serial implementation by calling it directly.           </P>
+      <H2>Building parallel aggregate operators</H2>
+      <P>Although the Parallel FX part of the TPL provides an elegant functional 
+      interface, a lot more functionality remains. For example, we are likely to 
+      want parallel replacements for the conventional higher-order              
+      <CODE>init</CODE> and              <CODE>map</CODE> functions and so on.   
+              </P>
+      <P>One of the most common and productive data parallel operations is 
+      called              <I>map-reduce</I> and is equivalent to the following 
+      serial implementation:           </P>
+<PRE>let map_reduce g f seq = reduce g (map f seq)</PRE>
+      <P>So              <CODE>map_reduce g f [1; 2; 3]</CODE> computes:         
+        </P>
+<PRE>g (g (f 1) (f 2)) (f 3)</PRE>
+      <P>For the parallel implementation, the operation              
+      <CODE>g</CODE> is assumed to be associative. So the above is considered to 
+      be equivalent to:           </P>
+<PRE>g (f 1) (g (f 2) (f 3))</PRE>
+      <P>This algorithm is of particular interest because it is extremely 
+      scalable and is used in some of the world's largest distributed 
+      applications, such as the Google search engine. Moreover, this algorithm 
+      is particularly well suited to the efficient parallelization of algorithms 
+      over hierarchical data structures, e.g. trees.</P>
+      <P>Consider the map-reduce algorithm acting upon an array. By splitting 
+      the array into slices of consecutive elements, map-reduce may be 
+      represented by a simple divide and conquer algorithm that can be 
+      implemented elegantly in F# as a recursive function:</P>
+<PRE>&gt; let serial_map_reduce g f (a : _ array) =
+    let rec of_slice i j =
+      match j - i with
+      | 1 -&gt; f a.[i]
+      | 2 -&gt; g (f a.[i]) (f a.[i+1])
+      | n -&gt;
+          let m = i + (j - i)/2
+          g (of_slice i m) (of_slice m j)
+    of_slice 0 (Array.length a);;
+val serial_map_reduce : ('a -&gt; 'a -&gt; 'a) -&gt; ('b -&gt; 'a) -&gt; 'b array -&gt; 'a</PRE>
+      <P>This serial implementation can be used as the template for a simple 
+      parallel implementation using futures:</P>
+<PRE>&gt; let map_reduce g f (a : _ array) =
+    let rec of_slice i j =
+      match j - i with
+      | 1 -&gt; f a.[i]
+      | 2 -&gt; g (f a.[i]) (f a.[i+1])
+      | n -&gt;
+          let m = i + (j - i)/2
+          let l = System.Threading.Tasks.Future.Create(fun () -&gt; of_slice i m)
+          let r = of_slice m j
+          g l.Value r
+    of_slice 0 (Array.length a);;
+val map_reduce : ('a -&gt; 'a -&gt; 'a) -&gt; ('b -&gt; 'a) -&gt; 'b array -&gt; 'a</PRE>
+      <P>As discussed before, this will almost certainly benefit significantly 
+      from the ability to resort to a serial implementation for short runs of 
+      elements. So we write the following final implementation of a parallel 
+      map-reduce function over arrays built upon the Parallel FX library:</P>
+<PRE>&gt; let map_reduce chunk g f (a : _ array) =
+    let rec of_slice i j =
+      if j-i &lt;= chunk then
+        let mutable accu = f a.[i]
+        for k=i+1 to j-1 do
+          accu &lt;- g accu (f a.[k])
+        accu
+      else
+        let m = i + (j - i)/2
+        let l = System.Threading.Tasks.Future.Create(fun () -&gt; of_slice i m)
+        let r = of_slice m j
+        g l.Value r
+    of_slice 0 (Array.length a);;
+val map_reduce : int -&gt; ('a -&gt; 'a -&gt; 'a) -&gt; ('b -&gt; 'a) -&gt; 'b array -&gt; 'a</PRE>
+      <P>For example, for a suitable chunk size (1024 in this case) we can 
+      immediately see a speedup on a simple operation:</P>
+<PRE>&gt; type 'a nested_list = Leaf of 'a | Node of 'a nested_list list;;
+&gt; let test_array = [|1 .. 65536|];;
+&gt; time (serial_map_reduce (fun l r -&gt; Node [l; r]) Leaf) test_array |&gt; ignore;;
+Took 107ms
+val it : unit = ()
+&gt; time (map_reduce 1024 (fun l r -&gt; Node [l; r]) Leaf) test_array |&gt; ignore;;
+Took 84ms
+val it : unit = ()</PRE>
+      <H2>Harder problems</H2>
+      <P>Just as most problems do not fit neatly into the embarassingly parallel 
+      set of tasks like the original matrix-matrix multiply example, so some 
+      tasks do not even fit into the intermediate complexity of the Fibonacci 
+      example.</P>
+      <P>One example of a task that is difficult to parallelize is the n         
+          <SUP>th</SUP> -nearest neighbor problem from graph theory described in 
+      the              <A href="http://www.ffconsultancy.com/products/ocaml_for_scientists/index.html">OCaml 
+      for Scientists</A> and              <A href="http://www.ffconsultancy.com/products/fsharp_for_scientists/index.html">F# 
+      for Scientists</A> books. The core of this algorithm computes the union of 
+      a sequence of sets that are themselves computed from the elements of a 
+      given set:           </P>
+<PRE>reduce union (map neighbors_of vertices)</PRE>
+      <P>This is a classic map-reduce problem and our parallel implementation 
+      can be used to accelerate the computation. To illustrate this, consider 
+      the related task of using our map-reduce function over an array to compute 
+      the union of the elements:</P>
+<PRE>&gt; time (serial_map_reduce Set.union Set.singleton) test_array;;
+Took 154ms
+val it : unit = ()
+&gt; time (map_reduce 64 Set.union Set.singleton) test_array;;
+Took 94ms
+val it : unit = ()</PRE>
+      <P>Again, a graph of the speedup obtained by the parallel implementation 
+      compared to the serial implementation as a function of the chunk size (the 
+      threshold below which the serial algorithm is applied) can be instrumental 
+      in understanding when parallelism can provide a performance 
+      improvement:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/map_reduce.gif"> 
+                  </P>
+      <P></P>
+      <P>In this case, the results are much less well defined. There is an 
+      optimal chunk size for this problem of around 50 but it is buried in 
+      noise. Moreover, the best performance improvements seen on this example 
+      are only 60% faster than the serial implementation, which is significantly 
+      farther from the optimal 2× speedup for this dual core machine that 
+      embarassingly parallel problems can obtain.</P>
+      <P>Out of interest, we also note that even our serial approach is 
+      substantially faster than the current implementation of              
+      <CODE>Set.of_array</CODE> :           </P>
+<PRE>&gt; time Set.of_array test_array;;
+Took 844ms
+val it : Set&lt;int&gt; = seq [1; 2; 3; 4; ...]
+&gt; time set test_array;;
+Took 2097ms
+val it : Set&lt;int&gt; = seq [1; 2; 3; 4; ...]</PRE>
+      <P>We can also use this equivalence to check our results:</P>
+<PRE>&gt; set test_array = serial_map_reduce Set.union Set.singleton test_array;;
+val it : bool = true
+&gt; set test_array = map_reduce 64 Set.union Set.singleton test_array;;
+val it : bool = true</PRE>
+      <P>Once the TPL is fully released, the F# standard library will be 
+      improved to include parallel implementations of many common higher-order 
+      functions such as those seen in this article.</P>
+      <H2>Summary</H2>
+      <P>This article has introduced the Parallel FX part of Microsoft's new 
+      Task Parallel Library. We have seen basic use of the Parallel FX library 
+      from F# as well as example applications ranging from those that are easily 
+      parallelized to more challenging examples. F# and the TPL are a formidable 
+      team for parallel programming and will clearly have a rosy future 
+      together.</P>
+      <P>On a related note, asynchronous workflows are a feature of F# designed 
+      specifically for dealing with concurrency (as opposed to parallelism) and 
+      will be covered in detail in a separate F#.NET Journal 
+  article.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Surviving%20in%20the%20multicore%20era%20with%20Microsoft's%20ParallelFX_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

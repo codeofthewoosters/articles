@@ -1,0 +1,175 @@
+﻿<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0080)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/calculator.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=utf-8" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20calculator_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20calculator_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20calculator_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20calculator_files/title.gif"> 
+    </TD>
+    <TD><IMG src="F%23%20Journal%20calculator_files/left.gif"> 
+</TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Calculator</H1>
+      <P>The pedagogical calculator sample demonstrates how a program can 
+      evaluate mathematical expressions originating from the user interface of a 
+      calculator. This article describes the design and implementation of a 
+      calculator application that uses Windows Presentation Foundation to 
+      provide a graphical user interface similar to that of a traditional 
+      calculator. In particular, every effort is made to leverage static 
+      checking in order to catch as many bugs at compile time as possible. This 
+      includes not only sophisticated union types to represent the state of the 
+      state machine but also exhaustiveness and redundancy checking of the 
+      advanced pattern matches that result as well as their factoring to reduce 
+      code size.</P>
+      <H2>Introduction</H2>
+      <P>This article describes the pedagogical example of a simple calculator 
+      implemented in the F# programming language with a graphical user interface 
+      allowing the user to perform simple calculations. However, this article 
+      takes the unusual angle of trying to leverage the static type system to 
+      catch as many errors at compile time as possible. This is accomplished 
+      using a combination of rich type definitions that force the programmer to 
+      separate concerns when dealing with distinct kinds of types and also by 
+      leveraging advanced features of the F# pattern matcher to handle multiple 
+      related cases simultaneously. Moreover, an interface is used to recombine 
+      the lost commonality between types in order to simplify the resulting 
+      code.</P>
+      <H2>Calculator as a state machine</H2>
+      <P>Typefulness is increased by breaking types apart into several simpler 
+      types that the type system then requires be treated separately by the 
+      programming. The advantage is the ability to convey more constraints to 
+      the static type system and, consequently, benefit from more pedantic 
+      static type checking but an immediate disadvantage is that any commonality 
+      between sibling types is lost. However, that commonality can be recovered 
+      by implementing the same interface in the related types.</P>
+      <P>The following <CODE>IEval</CODE> interface is used to represent any 
+      type that can be evaluated, including sums and products as well as the 
+      complete state of the calculator when the <CODE>=</CODE> symbol is 
+      clicked:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;IEval&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;Eval&nbsp;:&nbsp;'a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;IEval&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;member&nbsp;Eval&nbsp;:&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following <CODE>sumOperator</CODE> type represents the two kinds of 
+      operator supported by the calculator (addition and subtraction) that have 
+      the precedence of a sum operation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;sumOperator&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sub<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IEval&lt;float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;sum.Eval&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;sum&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;-&gt;&nbsp;(+)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sub&nbsp;-&gt;&nbsp;(-);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;sumOperator&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sub<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IEval&lt;(float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float)&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>In this case, the <CODE>IEval</CODE> interface is used to provide an 
+      <CODE>Eval</CODE> property implementing the appropriate arithmetic 
+      operator.</P>
+      <P>Similarly, the following <CODE>productOperator</CODE> provides the two 
+      operations, multiplication and division, that have product-level 
+      precedence as well as implementing the <CODE>IEval</CODE> interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;productOperator&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Div<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IEval&lt;float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;sum.Eval&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;sum&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul&nbsp;-&gt;&nbsp;(*)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Div&nbsp;-&gt;&nbsp;(/);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;productOperator&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Div<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IEval&lt;(float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float)&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following <CODE>input</CODE> type represents all of the different 
+      kinds of inputs handled by our calculator including the arithmetic 
+      operators:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;input&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Digit&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;SumOperator&nbsp;of&nbsp;sumOperator<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ProductOperator&nbsp;of&nbsp;productOperator<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Eq<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;override&nbsp;this.ToString()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;this&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Digit&nbsp;d&nbsp;-&gt;&nbsp;string&nbsp;d<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;SumOperator&nbsp;Add&nbsp;-&gt;&nbsp;"+"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;SumOperator&nbsp;Sub&nbsp;-&gt;&nbsp;"-"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ProductOperator&nbsp;Mul&nbsp;-&gt;&nbsp;"×"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ProductOperator&nbsp;Div&nbsp;-&gt;&nbsp;"÷"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Eq&nbsp;-&gt;&nbsp;"=";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;input&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Digit&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;SumOperator&nbsp;of&nbsp;sumOperator<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ProductOperator&nbsp;of&nbsp;productOperator<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Eq<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;override&nbsp;ToString&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The <CODE>ToString</CODE> member is overridden in order to pretty print 
+      the result.</P>
+      <P>The following <CODE>controls</CODE> array represents the layout of the 
+      grid of buttons that forms the GUI, using values of the <CODE>input</CODE> 
+      type for each entry:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;controls&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|[|Digit&nbsp;1;&nbsp;Digit&nbsp;2;&nbsp;Digit&nbsp;3;&nbsp;SumOperator&nbsp;Add|];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|Digit&nbsp;4;&nbsp;Digit&nbsp;5;&nbsp;Digit&nbsp;6;&nbsp;SumOperator&nbsp;Sub|];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|Digit&nbsp;7;&nbsp;Digit&nbsp;8;&nbsp;Digit&nbsp;9;&nbsp;ProductOperator&nbsp;Mul|];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|Eq;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Digit&nbsp;0;&nbsp;Eq;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ProductOperator&nbsp;Div|]|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;controls&nbsp;:&nbsp;input&nbsp;[]&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|[|Digit&nbsp;1;&nbsp;Digit&nbsp;2;&nbsp;Digit&nbsp;3;&nbsp;SumOperator&nbsp;Add|];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|Digit&nbsp;4;&nbsp;Digit&nbsp;5;&nbsp;Digit&nbsp;6;&nbsp;SumOperator&nbsp;Sub|];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|Digit&nbsp;7;&nbsp;Digit&nbsp;8;&nbsp;Digit&nbsp;9;&nbsp;ProductOperator&nbsp;Mul|];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|Eq;&nbsp;Digit&nbsp;0;&nbsp;Eq;&nbsp;ProductOperator&nbsp;Div|]|]</CODE></P>
+      <P>The following <CODE>sumOrProduct</CODE> union type represents two 
+      states of the calculator, with a previous operation that was either a sum 
+      or a product:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;sumOrProduct&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sum&nbsp;of&nbsp;float&nbsp;*&nbsp;sumOperator<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Product&nbsp;of&nbsp;&nbsp;(float&nbsp;*&nbsp;sumOperator)&nbsp;option&nbsp;*&nbsp;float&nbsp;*&nbsp;productOperator;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;sumOrProduct&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sum&nbsp;of&nbsp;float&nbsp;*&nbsp;sumOperator<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Product&nbsp;of&nbsp;(float&nbsp;*&nbsp;sumOperator)&nbsp;option&nbsp;*&nbsp;float&nbsp;*&nbsp;productOperator</CODE></P>
+      <P>The following <CODE>eval</CODE> function returns the <CODE>Eval</CODE> 
+      property of an object that implements the <CODE>IEval</CODE> 
+interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;eval&nbsp;(f:&nbsp;IEval&lt;_&gt;)&nbsp;=&nbsp;f.Eval;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;eval&nbsp;:&nbsp;IEval&lt;'a&gt;&nbsp;-&gt;&nbsp;'a</CODE></P>
+      <P>This provides a handy shortcut that avoids having to upcast to the 
+      <CODE>IEval</CODE> interface in order to call the <CODE>Eval</CODE> 
+      property.</P>
+      <P>The following <CODE>state</CODE> union type encapsulates the state of 
+      the state machine that processes input for the calculator:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number&nbsp;of&nbsp;sumOrProduct&nbsp;option&nbsp;*&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Operation&nbsp;of&nbsp;sumOrProduct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Result&nbsp;of&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IEval&lt;float&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;state.Eval&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Result&nbsp;x&nbsp;|&nbsp;Number(None,&nbsp;x)&nbsp;|&nbsp;Operation(Sum(x,&nbsp;_))&nbsp;|&nbsp;Operation(Product(None,&nbsp;x,&nbsp;_))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number(Some(Sum(x,&nbsp;op)),&nbsp;y)&nbsp;|&nbsp;Operation(Product(Some(x,&nbsp;op),&nbsp;y,&nbsp;_))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eval&nbsp;op&nbsp;x&nbsp;y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number(Some(Product(None,&nbsp;x,&nbsp;op)),&nbsp;y)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eval&nbsp;op&nbsp;x&nbsp;y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number(Some(Product(Some(x,&nbsp;op1),&nbsp;y,&nbsp;op2)),&nbsp;z)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eval&nbsp;op1&nbsp;x&nbsp;(eval&nbsp;op2&nbsp;y&nbsp;z);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number&nbsp;of&nbsp;sumOrProduct&nbsp;option&nbsp;*&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Operation&nbsp;of&nbsp;sumOrProduct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Result&nbsp;of&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IEval&lt;float&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Again, the <CODE>IEval</CODE> interface is implemented but this time 
+      the <CODE>Eval</CODE> property is used to return the numeric value 
+      resulting from the evaluation of a state rather than an operator's 
+      function.</P>
+      <P>An obvious representation of the state of the calculator might be an 
+      arbitrarily-long sequence of operators or numbers that are to be evaluated 
+      by reduction, applying the highest-precedence operators to their operands 
+      first. However, this representation can express an infinite variety of 
+      illegal states which is just begging for mistakes in the code that would 
+      manipulate such free-form values.</P>
+      <P>The term "typeful" programming is used to refer to the use of type 
+      systems to express more information about the problem at hand. 
+      Specifically, to design types that can represent only valid states. This 
+      way, programs can only create valid states and attempts to create invalid 
+      states are caught at compile time by the static type system. In this case, 
+      we know that only a single sum or pair of sum and product can ever be 
+      accumulated so we design the <CODE>sumOrProduct&nbsp;</CODE> type to be 
+      able to represent only these two cases. The <CODE>state</CODE> type is 
+      also careful to be able to express only the states that can arise. The 
+      <CODE>Result</CODE> state is the result of an evaluation, i.e. pressing 
+      the <CODE>=</CODE> button. The <CODE>Number</CODE> state represents a 
+      partially-entered number. The <CODE>Operation</CODE> state is entered 
+      whenever an operator is pressed.</P>
+      <P>The core of the calculator is the following <CODE>interpret</CODE> 
+      function that implements a state machine that acts upon an 
+      <CODE>input</CODE> to move from one <CODE>state</CODE> to another:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;interpret&nbsp;state&nbsp;input&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state,&nbsp;input&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Result&nbsp;_,&nbsp;(Digit&nbsp;_&nbsp;as&nbsp;input)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interpret&nbsp;(Number(None,&nbsp;0.0))&nbsp;input<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Result&nbsp;x,&nbsp;input&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interpret&nbsp;(Number(None,&nbsp;x))&nbsp;input<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number(op,&nbsp;x),&nbsp;Digit&nbsp;d&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Number(op,&nbsp;10.0&nbsp;*&nbsp;x&nbsp;+&nbsp;float&nbsp;d)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Operation&nbsp;op,&nbsp;Digit&nbsp;d&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Number(Some&nbsp;op,&nbsp;float&nbsp;d)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;state,&nbsp;SumOperator&nbsp;op&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Operation(Sum(eval&nbsp;state,&nbsp;op))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(Number(None,&nbsp;x)&nbsp;|&nbsp;Operation(Sum(x,&nbsp;_))),&nbsp;ProductOperator&nbsp;op&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Operation(Product(None,&nbsp;x,&nbsp;op))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number(Some(Sum(x,&nbsp;op1)),&nbsp;y),&nbsp;ProductOperator&nbsp;op2&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Operation(Product(Some(x,&nbsp;op1),&nbsp;y,&nbsp;op2))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number(Some(Product(sum,&nbsp;x,&nbsp;op1)),&nbsp;y),&nbsp;ProductOperator&nbsp;op2&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Operation(Product(sum,&nbsp;eval&nbsp;op1&nbsp;x&nbsp;y,&nbsp;op2))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Operation(Product(s,&nbsp;x,&nbsp;_)),&nbsp;ProductOperator&nbsp;op&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Operation(Product(s,&nbsp;x,&nbsp;op))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;state,&nbsp;Eq&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Result(eval&nbsp;state);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;interpret&nbsp;:&nbsp;state&nbsp;-&gt;&nbsp;input&nbsp;-&gt;&nbsp;state</CODE></P>
+      <P>Note the use of or-patterns to reduce the number of match cases.</P>
+      <P>This completes the part of the program responsible for the state 
+      machine behind the calculator. The remainder of the program is devoted to 
+      the user interface.</P>
+      <H2>User interface</H2>
+      <P>The following mutable global <CODE>state</CODE> represents the current 
+      state of the calculator:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mutable&nbsp;state&nbsp;=&nbsp;Number(None,&nbsp;0.0);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;state&nbsp;:&nbsp;state&nbsp;=&nbsp;Number&nbsp;(null,0.0)</CODE></P>
+      <P>The following <CODE>displayValue</CODE> function converts a state into 
+      a string for display in the GUI:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;displayValue&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Number(_,&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Operation(Sum(x,&nbsp;_)&nbsp;|&nbsp;Product(_,&nbsp;x,&nbsp;_))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Result&nbsp;x&nbsp;-&gt;&nbsp;string&nbsp;x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;displayValue&nbsp;:&nbsp;state&nbsp;-&gt;&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>Finally, the main program defines and runs the GUI as a 
+      <CODE>Label</CODE> control for the output and a <CODE>Grid</CODE> control 
+      for buttons providing input using the <CODE>interpret</CODE> function to 
+      update the state as the user supplies input:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;label&nbsp;=&nbsp;Controls.Label(Content="0")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.FontSize&nbsp;&lt;-&nbsp;64.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.HorizontalContentAlignment&nbsp;&lt;-&nbsp;HorizontalAlignment.Right<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Margin&nbsp;&lt;-&nbsp;Thickness&nbsp;11.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;3&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.RowDefinitions.Add(Controls.RowDefinition())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.ColumnDefinitions.Add(Controls.ColumnDefinition())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;3&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=0&nbsp;to&nbsp;3&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;button&nbsp;=&nbsp;Controls.Button()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;symbol&nbsp;=&nbsp;controls.[i].[j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.Content&nbsp;&lt;-&nbsp;symbol<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.FontSize&nbsp;&lt;-&nbsp;32.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.Click.Add(fun&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;state'&nbsp;=&nbsp;interpret&nbsp;state&nbsp;symbol<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state&nbsp;&lt;-&nbsp;state'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.Content&nbsp;&lt;-&nbsp;displayValue&nbsp;state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(button,&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(button,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;button&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;panel&nbsp;=&nbsp;Controls.DockPanel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(label,&nbsp;Controls.Dock.Top)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;panel.Children.Add&nbsp;label&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(grid,&nbsp;Controls.Dock.Bottom)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;panel.Children.Add&nbsp;grid&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Window(Content=panel,&nbsp;Title="Calculator",&nbsp;Width=512.0,&nbsp;Height=512.0)&nbsp;|&gt;&nbsp;Application().Run&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <P>Note how easily a callback is registered with the <CODE>Click</CODE> 
+      event of each <CODE>Button</CODE> in the GUI.</P>
+      <H2>Results</H2>
+      <P>When run, this program produces the following GUI application:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20calculator_files/calc.png"></P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a 
+      calculator that uses the powerful features of the F# type system to 
+      perform a great deal of checking at compile time in order to improve 
+      reliability. In particular, a hierarchy of union types are used to 
+      separate content according to its properties and these are treated 
+      separately in the remainder of the program but commonality is preserved 
+      through the use of an interface implemented by evaluatable types and the 
+      use of or-patterns to factor the pattern match that is responsible for 
+      updating the state machine.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of static type 
+      checking and pattern matching.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript src="F%23%20Journal%20calculator_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

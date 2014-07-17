@@ -1,0 +1,717 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0087)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/number_crunching2.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Numerical Libraries: linear algebra and spectral 
+methods</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Numerical Libraries: linear algebra and spectral 
+methods</TITLE>     <LINK href="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Numerical Libraries: linear algebra and spectral methods</H1>
+      <P>This article revisits the subject of numerical libraries for .NET, this 
+      time in the context of linear algebra and spectral methods. Specifically, 
+      the use and performance of various free and commercial numerical libraries 
+      are examined for the computation of eigenvalues and Fourier transforms. 
+      This includes a complete 1D FFT interface for F# to the excellent FFTW 
+      library.</P>
+      <H2>Introduction</H2>
+      <P>The F# programming language is rapidly moving toward the functionality 
+      of a fully-fledged technical computing environment like Mathematica. The 
+      availability of high-quality numerical libraries is a critical part of 
+      this and this article examines a variety of libraries from different 
+      backgrounds that can provide essential numerical methods to end users in a 
+      reliable form.</P>
+      <P>Interpolation, function plotting, spectral methods and linear algebra 
+      are the four most important aspects of a technical computing environment. 
+      Many other forms of analysis exist but these four dominate the vast 
+      majority of use that general technical computing environments see. This 
+      article focuses on those three numerical methods and places little 
+      emphasis on function plotting (although the IMSL library provides graph 
+      plotting). A future F#.NET Journal article will examine graphing and 
+      charting in more detail.</P>
+      <H2>Libraries covered in this article</H2>
+      <H3>Free</H3>
+      <H4>Math.NET</H4>
+      <P><A href="http://mathnet.opensourcedotnet.info/">Math.NET</A> is a 
+      freely-available open source library implementing a variety of numerical 
+      methods including linear algebra and a fast Fourier transform. This 
+      library was written by Christoph Rüegg, Joannès Vermorel, and various 
+      other contributors.           </P>
+      <H4>DotNetMatrix</H4>
+      <P><A 
+      href="http://www.codeproject.com/KB/recipes/psdotnetmatrix.aspx">DotNetMatrix</A> 
+      is a basic open source matrix library for .NET providing numerical methods 
+      for linear algebra. This library was written by Paul Selormey.           
+      </P>
+      <P>The linear algebra routines in this library are derived from            
+        <A href="http://www.netlib.org/eispack/">EISPACK</A> , the predecessor 
+      to LAPACK, with some modern tweaks.           </P>
+      <H4>FFTW</H4>
+      <P><A href="http://fftw.org/">FFTW</A> is a high-performance and 
+      feature-rich fast Fourier transform implementation written in              
+      <A href="http://www.ffconsultancy.com/products/ocaml_journal/">OCaml</A> 
+      (a close relative of F#) and C. Although this library is developed under 
+      Linux, a native-code Windows DLL for version 3.1 is available              
+      <A href="http://fftw.org/install/windows.html">here</A> . The FFTW package 
+      was developed at MIT by Matteo Frigo and Steven G. Johnson and is very 
+      widely used, most famously as the FFT implementation in              <A 
+      ref="http://www.mathworks.com/products/matlab/">MATLAB</A> .           
+</P>
+      <P>The design of this library is of particular interest because a 
+      high-level OCaml program is used to generate low-level FFT codelets 
+      written in C. The generated C code is compiled against a suite of standard 
+      functions that are hand-written in C to provide the final reusable 
+      library. This is an interesting way to achieve incredible performance (as 
+      we shall see) whilst still leveraging high-level programming languages but 
+      without requiring users to use or see any OCaml.</P>
+      <H3>Commercial</H3>
+      <H4>Bluebit NML</H4>
+      <P><A href="http://www.bluebit.gr/">Bluebit</A> provide the              
+      <A href="http://www.bluebit.gr/NET/buyit.htm">.NET Matrix Library</A> 
+      (NML) for linear algebra with prices starting from only $59 for a single 
+      user license.           </P>
+      <P>Like many of the commercial offerings, this library wraps Intel's Math 
+      Kernel Library in an attempt to provide the best possible performance.</P>
+      <H4>Signal Processing .NET</H4>
+      <P><A href="http://www.ffconsultancy.com/products/signal_processing_net/index.html">Signal 
+      Processing .NET</A>  is our own FFT implementation in C# with prices 
+      starting from £99. Unlike other commercial alternatives, this library is 
+      also available under a source code licence.           </P>
+      <P>The algorithm used in this library is the simple but asymptotically 
+      efficient and numerically robust radix 2 and Bluestein convolution 
+      described in the previous F#.NET Journal article              <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/fft.html">A 
+      Simple FFT Implementation</A> with some low-level performance 
+      improvements. This provides optimal O(n log n) efficiency for any length 
+      of input.           </P>
+      <H4>Windale Transform .NET</H4>
+      <P><A href="http://www.windale.com/transformnet.php">Transform .NET</A> is 
+      an FFT implementation and some associated spectral methods from            
+        <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/">Windale 
+      Technologies</A> with industrial prices starting from US$395.           
+      </P>
+      <P>This library appears to implement a sophisticated mixed radix 
+      implementation of the FFT but without methods to retain O(n log n) 
+      asymptotic complexity in the worst case.</P>
+      <H4>Extreme Optimization</H4>
+      <P><A href="http://www.extremeoptimization.com/">Extreme Optimization</A> 
+      provide a commercial library for high-performance numerics with prices 
+      starting from US$399. Extreme optimization were kind enough to give us a 
+      perpetual license for version 2.0 of their library. The Extreme 
+      Optimization library is written by Jeffrey Sax.           </P>
+      <P>Extreme Optimization were kind enough to grant us a licence for a trial 
+      version 2.1 of their library that provides complex numbers, equation 
+      solving, numerical integration and differentiation, special functions, 
+      curve fitting, function minimization, FFTs, matrices (including dense, 
+      symmetric, triangular, band and sparse), linear algebra, statistics and 
+      random numbers. This library is written in C# and encapsulates 
+      high-performance native-code libraries from CPU vendors for the best 
+      possible performance.</P>
+      <P>The design of the Extreme Optimization library is strongly geared 
+      toward idiomatic C#, with very heavy use of object oriented techniques 
+      including subtyping, inheritance and overloading. The quality of the 
+      implemented numerical methods is extremely high and a significant number 
+      of methods are implemented.</P>
+      <H4>Centerspace's NMath Core and Matrix</H4>
+      <P><A href="http://www.centerspace.net/">Centerspace</A> provide a 
+      commercial library for high-performance numerics that is split into four 
+      separate parts:            </P>
+      <P>
+      <UL>
+        <LI>The                  <B>Core</B> library provides vectors, matrices, 
+        complex numbers, random numbers and numerical integration and 
+        differentiation for $295.               </LI>
+        <LI>The                  <B>Matrix</B> library provides structured 
+        sparse matrices, factorizations, decompositions and least squares 
+        solvers for a further $495.               </LI>
+        <LI>The                  <B>Stats</B> library provides descriptive 
+        statistics, probability distributions, combinatorial functions, linear 
+        regression, hypothesis testing, variance and multivariate statistics for 
+        a further $495.               </LI>
+        <LI>The                  <B>Analysis</B> library provides function 
+        minimization, root finding and linear programming for a further $295.    
+                   </LI></UL>
+      <P></P>
+      <P>This article describes our findings using the trial versions 2.4 and 
+      2.4 the Core and Matrix libraries, respectively.</P>
+      <P>Like the Extreme Optimization library, the NMath libraries try to 
+      leverage the features of the C# programming language and, consequently, 
+      are slightly trickier to use from F# than necessary. However, one cannot 
+      help but get the feeling of wasting money when buying the NMath Core 
+      library because most of its functionality is already provided for free in 
+      the F# standard library. This is equally true of all of the other .NET 
+      libraries, of course, because they must reimplement basic mathematical 
+      types like complexes, vectors and matrices incompatibly with each other 
+      because the .NET framework lacks all of this functionality. However, other 
+      libraries do not make you pay for this basic functionality separately.</P>
+      <H4>Visual Numerics IMSL</H4>
+      <P><A href="http://www.vni.com/">Visual Numerics</A> provide the 
+      commercial              <A href="http://www.vni.com/products/imsl/cSharp/overview.php">IMSL</A> 
+      library for a variety of languages including C#, with prices starting from 
+      US$1,175. Visual Numerics were kind enough to give us a temporary license 
+      for version 5.0.           </P>
+      <P>This library provides complex numbers, vectors, matrices, linear 
+      algebra, interpolation and approximation, numerical integration and 
+      differentiation, real and complex FFTs, constrained and unconstrained 
+      function minimization, special functions, physical constants, statistics, 
+      random numbers, neural networks, financial calculations and 2D graphing 
+      and charting.</P>
+      <P>The FFT implementation in this library appears to be a sophisticated 
+      mixed radix algorithm but without methods to retain O(n log n) asymptotic 
+      complexity. The linear algebra routines in this library are derived from   
+                 <A href="http://www.netlib.org/eispack/">EISPACK</A> , the 
+      predecessor to LAPACK.           </P>
+      <P>Visual Numerics have been selling numerical libraries for C, Fortran, 
+      Java and C# for 37 years now. Their port of IMSL to C# provides 
+      high-quality numerical libraries but clearly has a simple interface and, 
+      in particular, does comparatively little to leverage features specific to 
+      the C# programming language. However, this turns out to be an advantage 
+      for us because the F# programming language is very different to C# and the 
+      IMSL library is made easier to use in F# by the absence of overloading and 
+      the light use of inheritance, both of which undermine F#'s type 
+      inference.</P>
+      <H2>Eigenvalues of a Random Matrix</H2>
+      <P>Random matrices have many interesting properties. One of these 
+      properties is Wigner's so-called "semi-circle law" which states that the 
+      distribution of eigenvalues of a random matrix from the Gaussian 
+      Orthogonal Ensemble (GOE) is semi-circular. This can be tested numerically 
+      by generating a large symmetric matrix with elements drawn randomly from a 
+      Gaussian distribution and computing its eigenvalues.</P>
+      <H4>IMSL</H4>
+      <P>The following function computes the eigenvalue distribution of a real 
+      symmetric matrix from its size              <CODE>n</CODE> and a 
+      generating function              <CODE>f</CODE> using the IMSL library:    
+             </P>
+<PRE>&gt; let eigenvalues n f =
+    let m = Array2.create n n 0.
+    for i=0 to n-1 do
+      for j=0 to i do
+        let x = f i j
+        m.[i, j] &lt;- x
+        m.[j, i] &lt;- x
+    Imsl.Math.SymEigen(m).GetValues()
+    |&gt; Seq.countBy (fun z -&gt; z + 0.5 |&gt; floor)
+    |&gt; Seq.map (fun (n, m) -&gt; n, float m);;
+val eigenvalues : int -&gt; (int -&gt; int -&gt; float) -&gt; seq&lt;float * float&gt;</PRE>
+      <P>Note the use of ordinary 2D arrays to represent matrices in the IMSL 
+      library and the ordinary 1D array used to return the result. This 
+      simplicity makes the IMSL library easy to use from F#. However, it 
+      requires twice as much memory as necessary to store a real symmetric 
+      matrix due to the redundancy.</P>
+      <P>The resulting eigenvalue distribution is easily visualizing using the 
+      IMSL bar chart plotter via our              <CODE>bar</CODE> wrapper 
+      function:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/random_matrix_extreme.gif"> 
+                  </P>
+      <P></P>
+      <P>All of the routines presented in this article produce qualitatively 
+      similar results to this. The results are not quantitatively identical for 
+      the same matrix because the libraries employ different numerical methods 
+      that have different properties.</P>
+      <H4>Extreme Optimization</H4>
+      <P>The following function uses the Extreme Optimization library to compute 
+      the eigenvalue distribution:</P>
+<PRE>&gt; open Extreme.Mathematics.LinearAlgebra;;
+&gt; let eigenvalues n f =
+    let m = SymmetricMatrix(n)
+    for i=0 to n-1 do
+      for j=i to n-1 do
+        m.Item(i,j) &lt;- f i j
+    SymmetricEigenvalueDecomposition(m).Eigenvalues
+    |&gt; Seq.countBy (fun z -&gt; z + 0.5 |&gt; floor)
+    |&gt; Seq.map (fun (n, m) -&gt; n, float m);;
+val eigenvalues : int -&gt; (int -&gt; int -&gt; float) -&gt; seq&lt;float * float&gt;</PRE>
+      <P>Rather than using a 2D .NET array, this library introduces its own 
+      incompatible              <CODE>SymmetricMatrix</CODE> class. However, 
+      this is more space efficient.           </P>
+      <P>Being designed from scratch for C#, the Extreme Optimization library 
+      makes heavy use of object orientation and related languages features. This 
+      can make it slightly harder to use from F# because an object oriented 
+      style (e.g. subtypes) undermines type inference and disambiguation is 
+      often required.</P>
+      <P>In this case, the overloaded              <CODE>Item</CODE> setter 
+      provided by the              <CODE>SymmetricMatrix</CODE> class must be 
+      disambiguated by hand in F# by setting the              <CODE>Item</CODE> 
+      property by name rather than using the more concise              
+      <CODE>a.[i] &lt;- x</CODE> syntax.           </P>
+      <P>Rather than returning an array, the              
+      <CODE>Eigenvalues</CODE> property returns an object of the custom          
+          <CODE>GeneralVector</CODE> class. Fortunately, this implements the     
+               <CODE>IEnumerable</CODE> interface and may therefore be 
+      manipulated directly using the              <CODE>Seq</CODE> module in F#. 
+                </P>
+      <H4>NMath</H4>
+      <P>The following function uses the NMath library from Centerspace:</P>
+<PRE>&gt; let eigenvalues (n : int) f =
+    let m = CenterSpace.NMath.Matrix.DoubleSymmetricMatrix n
+    for i=0 to n-1 do
+      for j=0 to i do
+        m.[i, j] &lt;- f i j
+    let d = CenterSpace.NMath.Matrix.DoubleSymEigDecomp m
+    let xs = d.EigenValues
+    { for i in 0 .. n-1 -&gt;
+        xs.Item(i) }
+    |&gt; Seq.countBy (fun z -&gt; z + 0.5 |&gt; floor)
+    |&gt; Seq.map (fun (n, m) -&gt; n, float m);;
+val eigenvalues : int -&gt; (int -&gt; int -&gt; float) -&gt; seq&lt;float * float&gt;</PRE>
+      <P>This library also provides both symmetric matrices and eigen solvers 
+      for the symmetric case. However, the              
+      <CODE>DoubleVector</CODE> class returned by the              
+      <CODE>EigenValues</CODE> property does not implement the              
+      <CODE>IEnumerable</CODE> interface and, therefore, cannot be manipulated 
+      using the              <CODE>Seq</CODE> module. Instead, we build a        
+            <CODE>Seq</CODE> from the              <CODE>DoubleVector</CODE> 
+      using a sequence comprehension.           </P>
+      <H4>Bluebit</H4>
+      <P>The following function uses the commercial Bluebit matrix library:</P>
+<PRE>&gt; let eigenvalues n f =
+    let m = new MatrixLibrary.Matrix(n, n)
+    for i=0 to n-1 do
+      for j=0 to i do
+        let x = f i j
+        m.[i,j] &lt;- x
+        m.[j,i] &lt;- x
+    let eigs = (new MatrixLibrary.SymEigen(m)).Eigenvalues
+    { for i in 0 .. eigs.Length - 1 -&gt;
+        eigs.[i] }
+    |&gt; Seq.countBy (fun z -&gt; z + 0.5 |&gt; floor)
+    |&gt; Seq.map (fun (n, m) -&gt; n, float m)
+val eigenvalues : int -&gt; (int -&gt; int -&gt; float) -&gt; seq&lt;float * float&gt;</PRE>
+      <P>This library does not provide a symmetric matrix class but it does 
+      provide a member to compute the eigenvalue decomposition of a symmetric 
+      matrix.</P>
+      <H4>DotNetMatrix</H4>
+      <P>The following function uses the free DotNetMatrix library:</P>
+<PRE>&gt; let eigenvalues n f =
+    let m = new DotNetMatrix.GeneralMatrix(n, n)
+    for i=0 to n-1 do
+      for j=0 to i do
+        let x = f i j
+        m.SetElement(i, j, x)
+        m.SetElement(j, i, x)
+    (DotNetMatrix.EigenvalueDecomposition m).RealEigenvalues
+    |&gt; Seq.countBy (fun z -&gt; z + 0.5 |&gt; floor) |&gt; Array.of_seq
+    |&gt; Seq.map (fun (n, m) -&gt; n, float m);;
+val eigenvalues : int -&gt; (int -&gt; int -&gt; float) -&gt; seq&lt;float * float&gt;</PRE>
+      <P>This library does not provide either a symmetric matrix class or, more 
+      importantly, a function for computing the eigenvalues of a real symmetric 
+      matrix. Consequently, this library resorts to a much less efficient 
+      general eigenvalue solver.</P>
+      <H4>Math.NET</H4>
+      <P>The following function uses the free Math.NET library:</P>
+<PRE>&gt; open MathNet.Numerics.LinearAlgebra;;
+&gt; let eigenvalues n f =
+    let m = Matrix(n, n)
+    for i=0 to n-1 do
+      for j=0 to i do
+        let x = f i j
+        m.[i,j] &lt;- x
+        m.[j,i] &lt;- x
+    (EigenvalueDecomposition m).EigenValues
+    |&gt; Seq.countBy (fun z -&gt; z.Real + 0.5 |&gt; floor) |&gt; Array.of_seq
+    |&gt; Seq.map (fun (n, m) -&gt; n, float m);;
+val eigenvalues : int -&gt; (int -&gt; int -&gt; float) -&gt; seq&lt;float * float&gt;</PRE>
+      <P>Again, this library does not provide special routines for solving 
+      symmetric problems.</P>
+      <H4>Performance</H4>
+      <P>The benchmark results for computing eigenvalue distributions are 
+      illustrated below:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/eigen_bench.gif"> 
+                  </P>
+      <P></P>
+      <P>The fact that the two free libraries are much slower is unsurprising, 
+      not least because they do not implement eigen solvers for real symmetric 
+      matrices.</P>
+      <P>What is perhaps surprising is the huge performance discrepancy between 
+      the fastest and slowest commercial offerings and, moreover, the fact that 
+      their performance is completely unrelated to their price:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/eigen_bench2.gif"> 
+                  </P>
+      <P></P>
+      <P>IMSL is the most expensive commercial library studied here and it is 9× 
+      slower than the Extreme Optimization library on this benchmark. Bluebit is 
+      by far the cheapest of the commercial libraries studied here yet it is the 
+      second fastest, only 2.2× slower than Extreme Optimization.</P>
+      <P>The difference in performance between different libraries is a 
+      combination of different algorithms and the use of managed vs native code. 
+      The Extreme Optimization library in particular emphasizes its extensive 
+      use of highly-optimized native code implementations of core numerical 
+      methods using third party libraries like Intel's              <A href="http://www.intel.com/cd/software/products/asmo-na/eng/307757.htm">Math 
+      Kernel Library</A> (MKL).           </P>
+      <H2>Fast Fourier Transform</H2>
+      <P>The Fast Fourier Transform (FFT) is the most important of the spectral 
+      methods. The availability of high-performance FFT implementation has led 
+      to many more sophisticated spectral methods being formulated in terms of 
+      the FFT, such as the Newland transform and the Continuous Wavelet 
+      Transform (CWT).</P>
+      <P>Many FFT implementations benefit significantly from precomputation and, 
+      in particular, precomputation for a particular length of input. In these 
+      benchmarks, we have endeavoured to include the time spent in 
+      precomputation as well as the time spent doing the actual transform. If 
+      many transforms of the same length are to be performed (e.g. for 
+      time-frequency analysis) then this precomputation is likely to become 
+      insignificant and the performance results may well be significantly 
+      different.</P>
+      <H4>IMSL</H4>
+      <P>The following              <CODE>fourier</CODE> function wraps the FFT 
+      routine in the IMSL library with an F# compatible implementation:          
+       </P>
+<PRE>&gt; let fourier (a : Math.Complex array) =
+    a
+    |&gt; Array.map (fun (z : Math.Complex) -&gt; Imsl.Math.Complex(z.r, z.i))
+    |&gt; Imsl.Math.ComplexFFT(a.Length).Forward
+    |&gt; Array.map (fun z -&gt; complex (z.Real()) (z.Imag()));;
+val fourier : Math.Complex array -&gt; Math.complex array</PRE>
+      <P>As the .NET library does not provide a standard complex number type, 
+      many vendors have implemented their own incompatible types. With IMSL, 
+      Visual Numerics have provided              <CODE>Imsl.Math.Complex</CODE> 
+      and our              <CODE>fourier</CODE> function converts to and from 
+      F#'s              <CODE>Math.Complex</CODE> type in order to provide a 
+      native F# interface.           </P>
+      <P>The              <CODE>ComplexFFT</CODE> constructor performs the 
+      necessary precomputation for the given length and the              
+      <CODE>Forward</CODE> member of the resulting object performs the actual 
+      transform.           </P>
+      <P>The following F# snippet computes the FFT of a 2             
+      <SUP>20</SUP> -element vector of complex numbers using this              
+      <CODE>fourier</CODE> function:           </P>
+<PRE>&gt; let rand = System.Random();;
+val rand : System.Random
+&gt; let r() = rand.NextDouble();;
+val r : unit -&gt; float
+&gt; do
+    Array.init (1 &lt;&lt;&lt; 20) (fun _ -&gt; complex (r()) (r()))
+    |&gt; time fourier
+    |&gt; ignore;;
+Took 1.37s
+val it : unit = ()</PRE>
+      <P>This approach can be used to compare the performance of various FFT 
+      libraries.</P>
+      <H4>Extreme Optimization</H4>
+      <P>Although the Extreme Optimization library is substantially smaller than 
+      the IMSL library the authors have chosen to use very long names for 
+      namespaces and very complicated class hierarchies, so these can be 
+      productively opened first:</P>
+<PRE>&gt; open Extreme.Mathematics;;
+&gt; open Extreme.Mathematics.LinearAlgebra.Complex;;
+&gt; open Extreme.Mathematics.SignalProcessing;;</PRE>
+      <P>The following              <CODE>fourier</CODE> implementation wraps 
+      the Extreme Optimization library:           </P>
+<PRE>&gt; let fourier (a : Math.Complex array) =
+    let a = a |&gt; Array.map (fun z -&gt; DoubleComplex(z.r, z.i))
+    let a =
+      ComplexGeneralVector(a)
+      |&gt; ComplexVector.FourierTransform
+    Array.init a.Length (fun i -&gt;
+      let z = a.Item(i)
+      complex z.Re z.Im);;
+val fourier : Math.Complex array -&gt; Math.complex array</PRE>
+      <P>This is substantially more complicated than the IMSL equivalent for 
+      several reasons:</P>
+      <P>
+      <UL>
+        <LI>Like the IMSL library, the Extreme Optimization library uses its own 
+        complex number type, in this case                  
+        <CODE>DoubleComplex</CODE> , which requires conversion.               
+        </LI>
+        <LI>Unlike the IMSL library, the Extreme Optimization library also uses 
+        its own incompatible type                  
+        <CODE>ComplexGeneralVector</CODE> for dense vectors of complex numbers.  
+                     </LI>
+        <LI>The                  <CODE>ComplexGeneralVector</CODE> class cannot 
+        be constructed from an                  <CODE>IEnumerable</CODE> so we 
+        build an array instead.               </LI>
+        <LI>The                  <CODE>Item</CODE> property of the               
+           <CODE>ComplexGeneralVector</CODE> class is overloaded so it must be 
+        referred to explicitly by name in order to disambiguate the overload.    
+                   </LI></UL>
+      <P></P>
+      <P>The above code is automatically dispatched to a custom native code 
+      implementation by the Extreme Optimization library when possible. However, 
+      this is not always possible and some users will end up using managed code 
+      instead. We can mimic the effects of this using the              
+      <CODE>ManagedFft</CODE> class:           </P>
+<PRE>&gt; let fourier (a : Math.Complex array) =
+    let a = a |&gt; Array.map (fun z -&gt; DoubleComplex(z.r, z.i))
+    let fft = new ManagedFft(FftDomain.Complex, a.Length)
+    let a =
+      ComplexGeneralVector(a)
+      |&gt; fft.ForwardTransform
+    Array.init a.Length (fun i -&gt;
+      let z = a.Item(i)
+      complex z.Re z.Im);;
+val fourier : Math.Complex array -&gt; Math.complex array
+&gt; for n in [2; 1009; 2003; 3001; 4001; 5003; 6007; 7001; 8009; 9001; 10007] do
+    Array.init n (fun _ -&gt; complex (r()) (r()))
+    |&gt; time fourier
+    |&gt; ignore;;
+Took 0.000000s
+Took 0.058000s
+Took 0.208000s
+Took 0.527000s
+Took 0.865000s
+Took 1.502000s
+Took 2.162000s
+Took 2.972000s
+Took 3.932000s
+Took 5.171000s
+Took 6.115000s
+val it : unit = ()</PRE>
+      <P>In this case we have chosen to transform some prime-length FFTs. As 
+      discussed previously in the F#.NET Journal on a simple FFT implementation, 
+      it is easy to handle all lengths (including prime lengths) in O(n log n) 
+      time using Bluestein convolution. The ability to handle all lengths 
+      efficiently is a critical part of a production-quality FFT implementation. 
+      Surprisingly, this example shows the managed code implementation of the 
+      FFT in the Extreme Optimization library scaling as O(n             
+      <SUP>2</SUP> ). This quadratic behaviour is extremely inefficient and the 
+      performance difference is huge for quite modest sizes: this routine is 
+      500× slower than the fastest implementation for the prime length 10007.    
+             </P>
+      <P>As we shall see later, the only FFT implementation in the IMSL library 
+      also suffers from this pathological performance problem.</P>
+      <H4>FFTW</H4>
+      <P>The FFTW library provides an awesome native code implementation of the 
+      FFT that is considered the world leader on its native Linux platform. 
+      Fortunately, this library has also been compiled for Windows and F#'s 
+      foreign function interface allows us to interface to this native code 
+      quickly and easily.</P>
+      <P>We begin by opening the namespace that contains definitions pertaining 
+      to the foreign function interface:</P>
+<PRE>&gt; open System.Runtime.InteropServices;;</PRE>
+      <P>The following definitions import native code functions from 
+      "libfftw3-3.dll":</P>
+<PRE>&gt; [&lt;DllImport(@"libfftw3-3.dll", EntryPoint="fftw_malloc")&gt;]
+  extern double *fftw_malloc(int size);;
+val fftw_malloc : int -&gt; double nativeptr
+&gt; [&lt;DllImport(@"libfftw3-3.dll", EntryPoint="fftw_free")&gt;]
+  extern void fftw_free(double *data);;
+val fftw_free : double nativeptr -&gt; unit
+&gt; [&lt;DllImport(@"libfftw3-3.dll", EntryPoint="fftw_plan_dft_1d")&gt;]
+  extern void *plan_dft_1d(int n, double *i, double *o, int sign, int flags);;
+val plan_dft_1d :
+  int * double nativeptr * double nativeptr * int * int -&gt; nativeint
+&gt; [&lt;DllImport(@"libfftw3-3.dll", EntryPoint="fftw_destroy_plan")&gt;]
+  extern void destroy_plan(void *plan);;
+val destroy_plan : nativeint -&gt; unit
+&gt; [&lt;DllImport(@"libfftw3-3.dll", EntryPoint="fftw_execute")&gt;]
+  extern void execute(void *plan);;
+val execute : nativeint -&gt; unit</PRE>
+      <P>Use of the foreign function interface will be described in detail in a 
+      future F#.NET Journal article.</P>
+      <P>The              <CODE>fftw_malloc</CODE> and              
+      <CODE>fftw_free</CODE> functions allocate and free aligned blocks of 
+      memory, respectively. The              <CODE>plan_dft_1d</CODE> and        
+            <CODE>destroy_plan</CODE> functions create and dispose of 
+      precomputations associated with a given length of transform, respectively. 
+      Finally, the              <CODE>execute</CODE> function computes the FFT.  
+               </P>
+      <P>The following shim function dresses up the FFTW library with a safe 
+      interface that allocates and deallocates a suitable aligned block and 
+      creates and destroys a plan for a given transform:</P>
+<PRE>&gt; let fourier (a : Math.Complex array) =
+    let n = Array.length a
+    if n=0 then [||] else
+    let ptr = fftw_malloc(16 * n)
+    let array = NativeInterop.NativeArray.FromPtr(ptr, n)
+    let plan = plan_dft_1d(n, ptr, ptr, -1, 65)
+    try
+      for i=0 to a.Length - 1 do
+        array.[2 * i] &lt;- a.[i].r
+        array.[2 * i + 1] &lt;- a.[i].i
+      execute plan
+      let s = 1.0 / sqrt(float n)
+      Array.init n (fun i -&gt; complex (s * array.[2 * i]) (s * array.[2 * i + 1]))
+    finally
+      destroy_plan plan
+      fftw_free ptr;;
+val fourier : Math.Complex array -&gt; Math.complex array</PRE>
+      <P>Remarkably, this is all that is required to use FFTW for 1D transforms 
+      from F#</P>
+      <H4>Signal Processing .NET</H4>
+      <P>Our commercial FFT implementation for .NET is written in C# code so it 
+      also does not leverage F#'s complex number and vector types. This library 
+      may be used as follows:</P>
+<PRE>&gt; #r @"C:\Program Files\FlyingFrog\FlyingFrog.FFT.dll";;
+&gt; let fourier a =
+    let a = Array.map (fun (z : Math.Complex) -&gt; FlyingFrog.Complex(z.r, z.i)) a
+    FlyingFrog.FFT.fourier a
+    a |&gt; Array.map (fun z -&gt; complex z.r z.i);;
+val fourier : Math.Complex array -&gt; Math.complex array</PRE>
+      <P>The same algorithm is also available in a native F# form as part of our 
+                   <A href="http://www.ffconsultancy.com/products/fsharp_for_numerics/?fsj">F# 
+      for Numerics</A> library.           </P>
+      <H4>Math.NET</H4>
+      <P>The free Math.NET library contains a very simple radix-2 FFT 
+      implementation that only works for integral power of two lengths up to 2   
+                <SUP>20</SUP> :           </P>
+<PRE>&gt; #I @"C:\Program Files\MathNet.Iridium-2008.2.10.364\Binaries\Release";;
+&gt; #r "MathNet.Iridium.dll";;
+&gt; open MathNet.Numerics;;
+&gt; let fourier a =
+    let a = a |&gt; Array.map (fun (z : Math.Complex) -&gt; Complex.FromRealImaginary(z.r, z.i))
+    Transformations.ComplexFourierTransformation().TransformForward a
+    a |&gt; Array.map (fun z -&gt; complex z.Real z.Imag);;
+val fourier : Math.Complex array -&gt; Math.complex array
+Took 2.406s</PRE>
+      <P>The creation of complex numbers is slightly more tedious than necessary 
+      with the Math.NET library but the main problem is that this FFT 
+      implementation can only handle a tiny number of sizes.</P>
+      <H4>Performance</H4>
+      <P>The performance of these implementations and the F# implementation 
+      described in a previous F#.NET Journal article when applied to power of 
+      two lengths is:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/fft_bench.gif"> 
+                  </P>
+      <P></P>
+      <P>Note that the Math.NET results stop at 2             <SUP>20</SUP> .    
+             </P>
+      <P>The relative performance is easier to see on a bar chart from the 2     
+              <SUP>20</SUP> -length results:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/fft_bench2.gif"> 
+                  </P>
+      <P></P>
+      <P>The fastest implementation (FFTW) is 8× faster than the slowest 
+      implementations.</P>
+      <P>However, power of two lengths are the easiest to implement and the 
+      performance characteristics for these libraries are completely different 
+      for all other lengths and, in particular, prime lengths because they give 
+      worst case performance for any naive mixed radix implementations without 
+      fast convolution  methods such as Bluestein and Rader. Measuring the 
+      performance for prime lengths gives a completely different picture:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/fft_bench3.gif"> 
+                  </P>
+      <P></P>
+      <P>The fastest implementation (FFTW) is 500× faster than the slowest 
+      implementations (Extreme Optimization managed code and Windale's 
+      Transform.NET).</P>
+      <P>Here we see that the native code implementation in the Extreme 
+      Optimization library, the FFTW library, our Signal Processing .NET library 
+      and our F# implementation from the previous F#.NET Journal article all 
+      provide consistent O(n log n) performance but the IMSL, Transform.NET and 
+      non-native Extreme Numerics libraries provide asymptotically worse 
+      performance.</P>
+      <P>This really highlights the predictive power of asymptotic complexity. 
+      Although these expensive commercial products have had a great many low 
+      level optimizations applied to them to squeeze the best possible 
+      performance out for highly composite lengths, their performance on other 
+      lengths has been completely neglected to the extent that the simple FFT 
+      algorithm described in our previous article is 30× faster for quite modest 
+      lengths.</P>
+      <H3>Structs</H3>
+      <P>There is no viable alternative to structs for the representation of 
+      complex numbers on the .NET platform. Lack of a complex number type in 
+      .NET has led all vendors (including Microsoft themselves for the F# 
+      standard library) to create their own incompatible implementations of this 
+      basic numeric type. However, Microsoft's current implementation of the CLR 
+      does not handle structs very efficiently. Consequently, there can be a 
+      significant performance degredation when calling native .NET libraries 
+      from F# that is not present when calling native-code libraries that do not 
+      use .NET structs (like FFTW).</P>
+      <P>In this case, further study showed that the native code FFT 
+      implementation of the Extreme Optimization library was actually 
+      outperforming the FFTW library but its overall performance was degraded by 
+      having to convert between the incompatible complex number types provided 
+      by the F# and Extreme Optimization libraries. In contrast, the FFTW 
+      library uses double-length              <CODE>float</CODE> arrays and, 
+      consequently, does not suffer the same performance degredation.           
+      </P>
+      <H2>Parallelism</H2>
+      <P>The test machine has two cores and numerical methods that leverage this 
+      can potentially double their speed. Amazingly, none of these libraries 
+      managed to make any use of parallelism on any of these benchmarks 
+      (including those from the previous article). This is particularly 
+      surprising because the .NET platform provides everything required and both 
+      the eigenvalue and FFT benchmarks can be parallelized to good effect.</P>
+      <P>No doubt the shift toward multicore and then manycore CPUs in the 
+      coming years will drive library implementors to make aggressive use of 
+      parallelism in the future but this has clearly not happened yet. The F# 
+      programming language is extremely well positioned for this transition and 
+      current C# libraries are not providing any competition.</P>
+      <P>A future F#.NET Journal article will cover the use of Microsoft's Task 
+      Parallel Library (TPL) from F#, which aims to make multicore programming 
+      easier for .NET programmers.</P>
+      <H2>Test machine</H2>
+      <P>The following machine was used for these benchmarks:</P>
+      <P>
+      <UL>
+        <LI>AMD Athlon64 X2 dual core 2.2GHz (4400+) Socket 939 CPU</LI>
+        <LI>Asustek A8N-SLI Premium S939 nForce4 SLI ATX motherboard</LI>
+        <LI>Gainward GeForce 7900GT 512MB DDR3 PCIE DUAL DVI graphics card</LI>
+        <LI>2x 1Gb Corsair Memory CMX1024 3200C2PT XMS3200 1GB 184DIMM CAS2 
+        RAM</LI>
+        <LI>Western Digital Caviar 250GB S300 16mb 7200rpm hard drive</LI>
+        <LI>HP LP2465 24" widescreen TFT monitor</LI></UL>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has examined two much more complicated subjects than those 
+      covered in the previous article on numerical libraries. Both linear 
+      algebra and spectral methods are huge branches of technical computing and 
+      the simple tests examined in this article only touch upon these subjects. 
+      However, we have uncovered a variety of interesting features of the 
+      components involved: the libraries, F# and even .NET itself.</P>
+      <P>Overall we have again found that the Extreme Optimization and IMSL 
+      libraries can both provide excellent performance, although this is not 
+      always the case. As one might expect, the open source libraries written 
+      for .NET are of much lower quality. However, open source libraries ported 
+      from Linux (like FFTW) can beat all others. Linux has a huge variety of 
+      very high quality numerical libraries so it may well be worth examining 
+      the task of porting a library from Linux to Windows in order to use it 
+      from F#.</P>
+      <P>In terms of ease of use, we discovered that the logically-improved 
+      structuring of code in .NET libraries can significantly degrade 
+      performance and the heavy use of C# idioms like overloading can impede a 
+      library's use from F#. Moreover, native code libraries can be called very 
+      easily and efficiently from F#. Along with the performance benefits of 
+      native code, this raises the question of whether or not it is worth using 
+      .NET libraries for high-performance computing in F#.</P>
+      <P>The embedding of native code libraries in some of these products has 
+      provided a significant speed boost in some cases but this is likely to 
+      make these libraries much harder to parallelize efficiently in the 
+      future.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Numerical%20Libraries%20linear%20algebra%20and%20spectral%20methods_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

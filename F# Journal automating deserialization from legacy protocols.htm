@@ -1,0 +1,241 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0095)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/AutomatingDeserialization.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20automating%20deserialization%20from%20legacy%20protocols_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20automating%20deserialization%20from%20legacy%20protocols_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20automating%20deserialization%20from%20legacy%20protocols_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20automating%20deserialization%20from%20legacy%20protocols_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20automating%20deserialization%20from%20legacy%20protocols_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Automating deserialization from legacy protocols</H1>
+      <P>Legacy enterprise applications that predate modern web services often 
+      communicate using ad-hoc protocols. Such protocols require a lot of 
+      tedious and error-prone maintainance due to the unnecessary duplication of 
+      essential information. Reflection and metaprogramming provide an 
+      opportunity to automate much of the work involved in using such forms of 
+      communication provided they are regular, dramatically reducing maintenance 
+      costs. This article examines a protocol that uses key-value pairs encoded 
+      as lines of text of the form "key=value" and automates deserialization to 
+      a more typeful representation, an F# record type.</P>
+      <H2>Serialization</H2>
+      <P>The task of serialization a value of a record type into a string with 
+      lines of the form "key=value" is relatively simple. The key names can be 
+      obtained from the type using reflection and the corresponding values can 
+      be obtained from the record value also using reflection. The F# 
+      <CODE>string</CODE> function may then be used to convert values of most 
+      types (including <CODE>int</CODE>, <CODE>float</CODE> and 
+      <CODE>string</CODE>) to strings.</P>
+      <P>The following <CODE>printMessage</CODE> function converts its argument 
+      into this legacy string-based representation using <CODE>sprintf</CODE> to 
+      print each key-value pair and <CODE>String.concat</CODE> to concatenate 
+      the lines together using a newline separator:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;printMessage&nbsp;(msg:&nbsp;'a)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fields&nbsp;=&nbsp;Reflection.FSharpType.GetRecordFields&nbsp;typeof&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;values&nbsp;=&nbsp;Reflection.FSharpValue.GetRecordFields(box&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;field,&nbsp;value&nbsp;in&nbsp;Seq.zip&nbsp;fields&nbsp;values&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sprintf&nbsp;"%s=%s"&nbsp;field.Name&nbsp;(string&nbsp;value)&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;String.concat&nbsp;"\n";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;printMessage&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;string</CODE></P>
+      <P>Note how we annotate the type of the argument as <CODE>'a</CODE> and 
+      then use <CODE>typeof&lt;'a&gt;</CODE> to obtain the 
+      <CODE>System.Type</CODE> object representing the run-time type information 
+      about the <CODE>'a</CODE> type in order to obtain the fields of the record 
+      type that are used to generate the key names.</P>
+      <P>For example, we can print a message of the following type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Message&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FOO:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BAR:&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BAZ:&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Message&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{FOO:&nbsp;int;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BAR:&nbsp;float;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BAZ:&nbsp;string;}</CODE></P>
+      <P>Note that we are able to define the message type after defining our 
+      <CODE>printMessage</CODE> function because it is completely generic with 
+      respect to the record type being printed.</P>
+      <P>The following prints an example value of this <CODE>Message</CODE> type 
+      using our <CODE>printMessage</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;printMessage&nbsp;{&nbsp;FOO&nbsp;=&nbsp;3;&nbsp;BAR&nbsp;=&nbsp;4.567;&nbsp;BAZ&nbsp;=&nbsp;"thing"&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;string&nbsp;=&nbsp;"FOO=3<BR>&nbsp;&nbsp;&nbsp;&nbsp;BAR=4.567<BR>&nbsp;&nbsp;&nbsp;&nbsp;BAZ=thing"</CODE></P>
+      <H2>Deserialization</H2>
+      <P>Whereas serialization can use the <CODE>string</CODE> function to 
+      convert values of most types (<CODE>byte</CODE>, <CODE>int16</CODE>, 
+      <CODE>int32</CODE>, <CODE>int64</CODE>, <CODE>sbyte</CODE>, 
+      <CODE>uint16</CODE>, <CODE>float</CODE>, <CODE>float32</CODE> etc.) to 
+      strings, the task of deserializing a value of a record type from a string 
+      encoding is trickier because there is no easy way to convert a 
+      <CODE>string</CODE> back to a value of a type that is determined at run 
+      time.</P>
+      <P>For example, the <CODE>int</CODE> function can be used to convert a 
+      <CODE>string</CODE> to an <CODE>int</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;int&nbsp;"123";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;123</CODE></P>
+      <P>but different functions must be used to convert strings to other 
+      types.</P>
+      <H3>Manual deserialization</H3>
+      <P>The following active pattern matches a string that can be parsed as an 
+      <CODE>int</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Int|_|)&nbsp;s&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;n&nbsp;=&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;System.Int32.TryParse(s,&nbsp;&amp;n)&nbsp;then&nbsp;Some&nbsp;n&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Int|_|&nbsp;)&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;int&nbsp;option</CODE></P>
+      <P>And this for a <CODE>float</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Float|_|)&nbsp;s&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;x&nbsp;=&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;System.Double.TryParse(s,&nbsp;&amp;x)&nbsp;then&nbsp;Some&nbsp;x&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Float|_|&nbsp;)&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;float&nbsp;option</CODE></P>
+      <P>This <CODE>Find</CODE> active pattern searches a <CODE>Map</CODE> for 
+      the given key <CODE>k</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Find|_|)&nbsp;k&nbsp;kvs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Map.tryFind&nbsp;k&nbsp;kvs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Find|_|&nbsp;)&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;Map&lt;'a,'b&gt;&nbsp;-&gt;&nbsp;'b&nbsp;option)&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>The following function converts a message encoded as a line-separated 
+      string of key-value pairs separated by the <CODE>=</CODE> character into a 
+      <CODE>Map</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;dictionaryOfString&nbsp;(msg:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;kvs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;msg.Split[|'\n'|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.choose&nbsp;(fun&nbsp;kv&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;kv.Split[|'='|]&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[|key;&nbsp;value|]&nbsp;-&gt;&nbsp;Some(key,&nbsp;value)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Map&nbsp;kvs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;dictionaryOfString&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;Map&lt;string,string&gt;</CODE></P>
+      <P>For example, our message may be decoded from a single string into a 
+      <CODE>Map</CODE> of key-value pairs each of which are strings as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;dictionaryOfString&nbsp;"FOO=3\nBAR=4.567\nBAZ=thing";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Map&lt;string,string&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;map&nbsp;[("BAR",&nbsp;"4.567");&nbsp;("BAZ",&nbsp;"thing");&nbsp;("FOO",&nbsp;"3")]</CODE></P>
+      <P>The following function converts a message from a string into a 
+      <CODE>Map</CODE> and then uses our active patterns to find the value 
+      associated with the key <CODE>FOO</CODE> and convert it to an 
+      <CODE>int</CODE> and so on until a value of the type <CODE>Message</CODE> 
+      can be constructed:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;tryParseMessage&nbsp;kvs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;dictionaryOfString&nbsp;kvs&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Find&nbsp;"FOO"&nbsp;(Int&nbsp;foo)&nbsp;&amp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Find&nbsp;"BAR"&nbsp;(Float&nbsp;bar)&nbsp;&amp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Find&nbsp;"BAZ"&nbsp;baz&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;{&nbsp;FOO=foo;&nbsp;BAR=bar;&nbsp;BAZ=baz&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;tryParseMessage&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;Message&nbsp;option</CODE></P>
+      <P>If anything fails then this function will return <CODE>None</CODE>. For 
+      example, if the key <CODE>FOO</CODE> does not exist or its corresponding 
+      value cannot be parsed as an <CODE>int</CODE> and so forth.</P>
+      <P>Note the use of an and-pattern here. In F#, or-patterns are commonly 
+      used when pattern matching over common types but these and-patterns are 
+      comparatively rare but very useful with active patterns. In this case, we 
+      use and-patterns to match all of our key-value pairs simultaneously and 
+      bind all of the corresponding values (<CODE>foo</CODE>, <CODE>bar</CODE> 
+      and <CODE>baz</CODE>) at the same time.</P>
+      <P>This function can be used to convert a string into a value of our 
+      <CODE>Message</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;tryParseMessage&nbsp;"FOO=3\nBAR=4.567\nBAZ=thing";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Message&nbsp;option&nbsp;=&nbsp;Some&nbsp;{FOO&nbsp;=&nbsp;3;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BAR&nbsp;=&nbsp;4.567;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BAZ&nbsp;=&nbsp;"thing";}</CODE></P>
+      <P>If the value corresponding to the key <CODE>FOO</CODE> cannot be parsed 
+      as an <CODE>int</CODE> then this function returns <CODE>None</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;tryParseMessage&nbsp;"FOO=3.5\nBAR=4.567\nBAZ=thing";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Message&nbsp;option&nbsp;=&nbsp;None</CODE></P>
+      <P>If no key with the name <CODE>FOO</CODE> exists (e.g. due to a typo) 
+      then, again, this function returns <CODE>None</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;tryParseMessage&nbsp;"FOOB=3\nBAR=4.567\nBAZ=thing";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Message&nbsp;option&nbsp;=&nbsp;None</CODE></P>
+      <P>This technique works well for simple message formats but it does not 
+      scale optimally as the number of key-value pairs increases. Specifically, 
+      the key name and type of its corresponding value is duplicated in both the 
+      definition of the <CODE>Message</CODE> type and the body of the 
+      <CODE>tryParseMessage</CODE> function.</P>
+      <H3>Automating deserialization</H3>
+      <P>The derivation of the body of the <CODE>tryParseMessage</CODE> function 
+      from the type definition of the message it handles can be automated. Once 
+      done, each change requires only a single update to the deserialization 
+      code (to the definition of the <CODE>Message</CODE> type).</P>
+      <P>The following <CODE>parseInt</CODE> function attempts to parse a 
+      <CODE>string</CODE> as an <CODE>int</CODE> and raises an exception if it 
+      fails:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parseInt&nbsp;s&nbsp;=&nbsp;System.Int32.Parse&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parseInt&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>For example, the <CODE>string</CODE> value <CODE>"123"</CODE> is parsed 
+      to the <CODE>int</CODE> value <CODE>123</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parseInt&nbsp;"123";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;123</CODE></P>
+      <P>This <CODE>Parse</CODE> method can be obtained programmatically using 
+      reflection by calling the <CODE>GetMethod</CODE> member of the 
+      <CODE>System.Int32</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parseIntMethod&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;typeof&lt;int&gt;.GetMethod("Parse",&nbsp;[|typeof&lt;string&gt;|]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parseIntMethod&nbsp;:&nbsp;System.Reflection.MethodInfo&nbsp;=&nbsp;Int32&nbsp;Parse(System.String)</CODE></P>
+      <P>Once obtained using reflection this method can be invoked dynamically 
+      like this:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parseIntDynamically&nbsp;s&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parseIntMethod.Invoke(null,&nbsp;[|s|]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parseIntDynamically&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;obj</CODE></P>
+      <P>Note that this is a static method so it is not associated with any 
+      particular object so we pass <CODE>null</CODE> as the <CODE>this</CODE> 
+      reference.</P>
+      <P>The previous example can now be done programmatically:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parseIntDynamically&nbsp;"123";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;obj&nbsp;=&nbsp;123</CODE></P>
+      <P>More generally, we find that most of the core data types in .NET 
+      implement their own <CODE>Parse</CODE> function with an equivalent 
+      signature. For example, the <CODE>System.Double</CODE> type (aka 
+      <CODE>float</CODE>) has a <CODE>Parse</CODE> function that returns a value 
+      of the type <CODE>float</CODE> and <CODE>System.DateTime.Parse</CODE> 
+      returns a <CODE>System.DateTime</CODE> and so on.</P>
+      <P>The following <CODE>getParseMethod</CODE> function returns the 
+      <CODE>Parse</CODE> method of a given type or <CODE>null</CODE> if no such 
+      function exists:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;getParseMethod&nbsp;(ty:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ty.GetMethod("Parse",&nbsp;[|typeof&lt;string&gt;|]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;getParseMethod&nbsp;:&nbsp;System.Type&nbsp;-&gt;&nbsp;System.Reflection.MethodInfo</CODE></P>
+      <P>The following <CODE>parse</CODE> function uses the 
+      <CODE>getParseMethod</CODE> function to obtain a parser of the given type 
+      and uses it to parse the given value:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parse&nbsp;ty&nbsp;s&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(getParseMethod&nbsp;ty).Invoke(null,&nbsp;[|s|]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parse&nbsp;:&nbsp;System.Type&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;obj</CODE></P>
+      <P>For example, we can parse an <CODE>int</CODE> like this:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;typeof&lt;int&gt;&nbsp;"123";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;obj&nbsp;=&nbsp;123</CODE></P>
+      <P>Or a <CODE>float</CODE> like this:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;typeof&lt;float&gt;&nbsp;"123.456";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;obj&nbsp;=&nbsp;123.456</CODE></P>
+      <P>Or even a <CODE>DateTime</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;typeof&lt;System.DateTime&gt;&nbsp;"12/3/1977";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;obj&nbsp;=&nbsp;12/03/1977&nbsp;00:00:00&nbsp;{Date&nbsp;=&nbsp;12/03/1977&nbsp;00:00:00;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Day&nbsp;=&nbsp;12;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DayOfWeek&nbsp;=&nbsp;Saturday;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DayOfYear&nbsp;=&nbsp;71;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Hour&nbsp;=&nbsp;0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Kind&nbsp;=&nbsp;Unspecified;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Millisecond&nbsp;=&nbsp;0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Minute&nbsp;=&nbsp;0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Month&nbsp;=&nbsp;3;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Second&nbsp;=&nbsp;0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ticks&nbsp;=&nbsp;623625696000000000L;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TimeOfDay&nbsp;=&nbsp;00:00:00;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Year&nbsp;=&nbsp;1977;}</CODE></P>
+      <P>However, attempting to parse a <CODE>string</CODE> fails because 
+      <CODE>System.String</CODE> does not provide a <CODE>Parse</CODE> 
+      method:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;typeof&lt;string&gt;&nbsp;"Foo";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;System.NullReferenceException:&nbsp;Object&nbsp;reference&nbsp;not&nbsp;set&nbsp;to&nbsp;an&nbsp;instance&nbsp;of&nbsp;an&nbsp;object.<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;FSI_0009.parse[a](Type&nbsp;ty,&nbsp;a&nbsp;s)&nbsp;in&nbsp;C:\Users\Jon\Documents\Visual&nbsp;Studio<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2010\Projects\F#&nbsp;Journal\Not&nbsp;yet&nbsp;published\DeserializeRecordFromText\<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DeserializeRecordFromText\Program.fs:line&nbsp;40<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;at&nbsp;&lt;StartupCode$FSI_0013&gt;.$FSI_0013.main@()<BR>&nbsp;&nbsp;&nbsp;&nbsp;Stopped&nbsp;due&nbsp;to&nbsp;error</CODE></P>
+      <P>So this will require a special case to handle strings using the 
+      identity function to parse a string.</P>
+      <P>In a production system it is useful to be able to log all unexpected 
+      failures so we introduce the following <CODE>log</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;log&nbsp;=&nbsp;printfn&nbsp;"%s";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;log&nbsp;:&nbsp;(string&nbsp;-&gt;&nbsp;unit)</CODE></P>
+      <P>Note that this shadows the mathematical <CODE>log</CODE> function but 
+      we have no use for that function in this particular program.</P>
+      <P>The following <CODE>parseValue</CODE> function attempts to parse a 
+      string as a value of the given type boxed as an <CODE>obj</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parseValue&nbsp;(s:&nbsp;string)&nbsp;ty&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ty&nbsp;=&nbsp;typeof&lt;string&gt;&nbsp;then&nbsp;box&nbsp;s&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m&nbsp;=&nbsp;ty.GetMethod("Parse",&nbsp;[|typeof&lt;string&gt;|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m.Invoke(null,&nbsp;[|s|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;exn&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log(sprintf&nbsp;"Failed&nbsp;to&nbsp;parse&nbsp;'%s'&nbsp;as&nbsp;a&nbsp;%s"&nbsp;s&nbsp;ty.Name)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise&nbsp;exn;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parseValue&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;System.Type&nbsp;-&gt;&nbsp;obj</CODE></P>
+      <P>In the event of a failure an exception is raised, we log the exception 
+      using our <CODE>log</CODE> function and reraise it.</P>
+      <P>The following <CODE>messageofKVs</CODE> function attempts to convert a 
+      <CODE>Map</CODE> to a record type by using the name and type of each field 
+      in the record type to search for a key with the same name in the message 
+      and parse it into a value of the type required by the field:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;messageOfKVs&nbsp;kvs&nbsp;:&nbsp;'a&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;args&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|for&nbsp;field&nbsp;in&nbsp;Reflection.FSharpType.GetRecordFields&nbsp;typeof&lt;'a&gt;&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;Map.tryFind&nbsp;field.Name&nbsp;kvs&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log(sprintf&nbsp;"Field&nbsp;'%s'&nbsp;not&nbsp;found&nbsp;in&nbsp;input&nbsp;message"&nbsp;field.Name)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise(new&nbsp;System.Collections.Generic.KeyNotFoundException())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;s&nbsp;-&gt;&nbsp;parseValue&nbsp;s&nbsp;field.PropertyType|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Reflection.FSharpValue.MakeRecord(typeof&lt;'a&gt;,&nbsp;args)&nbsp;:?&gt;&nbsp;'a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;messageOfKVs&nbsp;:&nbsp;Map&lt;string,string&gt;&nbsp;-&gt;&nbsp;'a</CODE></P>
+      <P>In the event of a failure, an exception is logged and raised.</P>
+      <P>Note how the return type <CODE>'a</CODE> of this 
+      <CODE>messageOfKVs</CODE> function is used.</P>
+      <P>The following <CODE>tryParse</CODE> function converts a single string 
+      into a <CODE>Map</CODE> and then uses the <CODE>messageOfKVs</CODE> 
+      function to parse each field of a record type but also catches any 
+      exception that might be raised in order to return an option type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;tryParse&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dictionaryOfString&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;messageOfKVs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Some<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;tryParse&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;'a&nbsp;option</CODE></P>
+      <P>Note how the return type is still being used to determine the 
+      fields.</P>
+      <P>The following <CODE>tryParseMessage</CODE> function is simply a 
+      specialization for our <CODE>Message</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;tryParseMessage&nbsp;msg&nbsp;:&nbsp;Message&nbsp;option&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tryParse&nbsp;msg;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;tryParseMessage&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;Message&nbsp;option</CODE></P>
+      <P>For example, we can parse our example string into a value of the 
+      <CODE>Message</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;tryParseMessage&nbsp;"FOO=3\nBAR=4.567\nBAZ=thing";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Message&nbsp;option&nbsp;=&nbsp;Some&nbsp;{FOO&nbsp;=&nbsp;3;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BAR&nbsp;=&nbsp;4.567;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BAZ&nbsp;=&nbsp;"thing";}</CODE></P>
+      <P>Note that the field name and type information is now encoded in a 
+      single place, the definition of the <CODE>Message</CODE> type itself, and 
+      is not duplicated in the parsing code.</P>
+      <P>Our failure cases now log useful messages, suitable for a production 
+      system:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;tryParseMessage&nbsp;"FOO=3.5\nBAR=4.567\nBAZ=thing";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Failed&nbsp;to&nbsp;parse&nbsp;'3.5'&nbsp;as&nbsp;a&nbsp;Int32<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Message&nbsp;option&nbsp;=&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;tryParseMessage&nbsp;"FOOB=3\nBAR=4.567\nBAZ=thing";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Field&nbsp;'FOO'&nbsp;not&nbsp;found&nbsp;in&nbsp;input&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Message&nbsp;option&nbsp;=&nbsp;None</CODE></P>
+      <P>Note that the resulting value is <CODE>None</CODE> in both cases.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a library 
+      that serializes and deserializes data from a record type to a string-based 
+      key-value pairs format that is often seen in legacy systems. Maintaining 
+      replicas is often a major maintenance cost with legacy systems because 
+      replicas can easily get out of sync with each other, resulting in costly 
+      and time consuming fixes. With an automated solution such as the one 
+      presented in this article there are no replicas to get out of sync. </P>
+      <P>Future F#.NET Journal articles will revisit the subjects of automation 
+      and metaprogramming in the context of enterprise 
+  computing.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20automating%20deserialization%20from%20legacy%20protocols_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

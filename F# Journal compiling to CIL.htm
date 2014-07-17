@@ -1,0 +1,206 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0084)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/CompilingToCIL.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20compiling%20to%20CIL_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20compiling%20to%20CIL_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20compiling%20to%20CIL_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20compiling%20to%20CIL_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20compiling%20to%20CIL_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Compiling to CIL</H1>
+      <P>One of the advantages of the Common-Language Runtime (CLR) is the 
+      ability to compile run-time generated code to CIL and have it JIT compiled 
+      to native code and evaluated. Regular expressions in .NET are perhaps the 
+      most obvious practical application where this capability can pay 
+      dividends. This article covers a tiny compiler written in F# that 
+      generates and compiles CIL code on-the-fly.</P>
+      <P>Our compiler we be able to compile and run a function equivalent to the 
+      following <CODE>fib</CODE> function that computes a Fibonacci number:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;fib&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&lt;2&nbsp;then&nbsp;n&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fib(n-1)&nbsp;+&nbsp;fib(n-2);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fib&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>For example, computing the 40th Fibonacci number using this function 
+      takes 4.4s:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;fib&nbsp;40;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:04.380,&nbsp;CPU:&nbsp;00:00:04.380,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;102334155</CODE></P>
+      <P>Let us create a compiler that can beat F#'s performance on this 
+      example.</P>
+      <H2>Basic compilation of expressions to CIL</H2>
+      <P>We begin by opening the following namespaces:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Reflection;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Reflection.Emit;;</CODE></P>
+      <P>Our language is composed of six different kinds of expressions that are 
+      augmented with a special <CODE>Return</CODE> expression and conveyed by 
+      the following union type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Return&nbsp;of&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Arg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Lt&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;If&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;of&nbsp;string&nbsp;*&nbsp;Expr;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Return&nbsp;of&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Arg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Lt&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;If&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;of&nbsp;string&nbsp;*&nbsp;Expr</CODE></P>
+      <P>When compiling the expression that is the body of one function we will 
+      need access to a map from function names to values representing the 
+      compiled forms of the functions that we can call and access to the IL 
+      generator currently responsible for emitting CIL instructions. The 
+      following <CODE>compileExpr</CODE> function accepts these values as 
+      arguments and forms the core of our compiler:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;compileExpr&nbsp;(methods:&nbsp;Map&lt;string,&nbsp;MethodInfo&gt;)&nbsp;(il:&nbsp;ILGenerator)&nbsp;expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;compileExpr&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;n&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Ldc_I4,&nbsp;n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Arg&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit&nbsp;OpCodes.Ldarg_0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(f,&nbsp;g)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;compileExpr&nbsp;[f;&nbsp;g]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit&nbsp;OpCodes.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Lt(f,&nbsp;g)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;compileExpr&nbsp;[f;&nbsp;g]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit&nbsp;OpCodes.Clt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply(f,&nbsp;x)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Call,&nbsp;methods.[f])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;If(p,&nbsp;t,&nbsp;f)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fLabel&nbsp;=&nbsp;il.DefineLabel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;kLabel&nbsp;=&nbsp;il.DefineLabel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;p<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Ldc_I4,&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Beq,&nbsp;fLabel)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Br,&nbsp;kLabel)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.MarkLabel&nbsp;fLabel<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.MarkLabel&nbsp;kLabel<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Return&nbsp;f&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit&nbsp;OpCodes.Ret<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;expr;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileExpr&nbsp;:&nbsp;Map&lt;string,MethodInfo&gt;&nbsp;-&gt;&nbsp;ILGenerator&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The match case for an <CODE>Int</CODE> expression emits a CIL 
+      instruction to push an <CODE>int</CODE> literal.</P>
+      <P>The match case for <CODE>Var</CODE> pushes the value of the function 
+      argument (we only support functions of the type 
+      <CODE>int&nbsp;-&gt;&nbsp;int</CODE>).</P>
+      <P>The <CODE>Add</CODE> and <CODE>Lt</CODE> operators compile their two 
+      arguments in order, leaving the two resulting values on the top of the 
+      stack, before emitting a CIL instruction to add or compare for less than. 
+      Compiling subexpressions before emitting an instruction to manipulate the 
+      results is the essence of how expressions are compiled to a stack-based 
+      language like CIL.</P>
+      <P>The <CODE>Apply</CODE> operator compiles the argument and then looks up 
+      the method from its name and invokes it, which will consume the argument 
+      that we pushed onto the stack and then push the return value on the 
+      stack.</P>
+      <P>An <CODE>if</CODE> expression is compiled by defining a label, 
+      compiling the predicate expression and testing its result for equality 
+      with <CODE>false</CODE> (represented by zero) and either continuing into 
+      the true branch or jumping to the false branch at the label and finally 
+      jumping to a continuation branch that recombines the code paths. The true 
+      branch is compiled immediately after the test and the false branch is 
+      compiled at the label.</P>
+      <P>Finally, the special <CODE>Return</CODE> expression compiles its 
+      argument and then emits the CIL <CODE>ret</CODE> instruction to return to 
+      the caller.</P>
+      <P>The following record type conveys a function definition:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;func&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Name:&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ArgumentType:&nbsp;System.Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ReturnType:&nbsp;System.Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Body:&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;func&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{Name:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ArgumentType:&nbsp;System.Type;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ReturnType:&nbsp;System.Type;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Body:&nbsp;Expr;}</CODE></P>
+      <P>A function may be compiled by creating a <CODE>DynamicMethod</CODE> and 
+      compiling the body of the function into it as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;compileFunction&nbsp;methods&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mthd&nbsp;=&nbsp;DynamicMethod(f.Name,&nbsp;f.ReturnType,&nbsp;[|f.ArgumentType|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;methods&nbsp;=&nbsp;Map.add&nbsp;f.Name&nbsp;(mthd&nbsp;:&gt;&nbsp;MethodInfo)&nbsp;methods<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;il&nbsp;=&nbsp;mthd.GetILGenerator()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Return&nbsp;f.Body&nbsp;|&gt;&nbsp;compileExpr&nbsp;methods&nbsp;il<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;methods;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileFunction&nbsp;:&nbsp;Map&lt;string,MethodInfo&gt;&nbsp;-&gt;&nbsp;func&nbsp;-&gt;&nbsp;Map&lt;string,MethodInfo&gt;</CODE></P>
+      <P>Finally, we can compile an entire program by folding the 
+      <CODE>compileFunction</CODE> function over the program's function 
+      definitions as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;compileProgram&nbsp;fs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.fold&nbsp;compileFunction&nbsp;Map.empty&nbsp;fs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileProgram&nbsp;:&nbsp;seq&lt;func&gt;&nbsp;-&gt;&nbsp;Map&lt;string,MethodInfo&gt;</CODE></P>
+      <P>Now we are ready to start compiling some functions.</P>
+      <H2>Example</H2>
+      <P>The following uses the <CODE>compileFunction</CODE> function to compile 
+      the Fibonacci function to CIL ready for run-time execution:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;methods&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Name&nbsp;=&nbsp;"fib"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ArgumentType&nbsp;=&nbsp;typeof&lt;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ReturnType&nbsp;=&nbsp;typeof&lt;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Body&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If(Lt(Arg,&nbsp;Int&nbsp;2),&nbsp;Arg,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Add(Apply("fib",&nbsp;Add(Arg,&nbsp;Int&nbsp;-1)),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Apply("fib",&nbsp;Add(Arg,&nbsp;Int&nbsp;-2))))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;compileFunction&nbsp;Map.empty;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;methods&nbsp;:&nbsp;Map&lt;string,Reflection.MethodInfo&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;map&nbsp;[("fib",&nbsp;Int32&nbsp;fib(Int32))]</CODE></P>
+      <P>For example, we can use the original F# <CODE>fib</CODE> function and 
+      our own compiled function in order to compare results for a variety of 
+      different inputs:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&nbsp;for&nbsp;n&nbsp;in&nbsp;1..20&nbsp;-&gt;&nbsp;methods.["fib"].Invoke(null,&nbsp;[|box&nbsp;n|]),&nbsp;fib&nbsp;n&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(obj&nbsp;*&nbsp;int)&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[(1,&nbsp;1);&nbsp;(1,&nbsp;1);&nbsp;(2,&nbsp;2);&nbsp;(3,&nbsp;3);&nbsp;(5,&nbsp;5);&nbsp;(8,&nbsp;8);&nbsp;(13,&nbsp;13);&nbsp;(21,&nbsp;21);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(34,&nbsp;34);&nbsp;(55,&nbsp;55);&nbsp;(89,&nbsp;89);&nbsp;(144,&nbsp;144);&nbsp;(233,&nbsp;233);&nbsp;(377,&nbsp;377);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(610,&nbsp;610);&nbsp;(987,&nbsp;987);&nbsp;(1597,&nbsp;1597);&nbsp;(2584,&nbsp;2584);&nbsp;(4181,&nbsp;4181);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(6765,&nbsp;6765)]</CODE></P>
+      <P>As expected, the results are identical in all cases.</P>
+      <P>Our version of this function has comparable performance to the original 
+      F#, taking 4.2s compared to 4.4s for the original:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;methods.["fib"].Invoke(null,&nbsp;[|box&nbsp;40|]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:04.202,&nbsp;CPU:&nbsp;00:00:04.202,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;obj&nbsp;=&nbsp;102334155</CODE></P>
+      <P>Interestingly, we can automate a variety of productive 
+      optimizations.</P>
+      <H2>Optimization passes</H2>
+      <P>Before writing any optimization passes it is useful to write some 
+      constructors that simplify symbolic expressions. The following 
+      <CODE>add</CODE> function is equivalent to the <CODE>Add</CODE> 
+      constructor but performs some rearrangements and simplifications:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;add&nbsp;(f,&nbsp;g)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;f,&nbsp;g&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;m,&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;Int(m+n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;Add(g,&nbsp;h)&nbsp;-&gt;&nbsp;add(add(f,&nbsp;g),&nbsp;h)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(f,&nbsp;g),&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;add(add(Int&nbsp;n,&nbsp;f),&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;add(Int&nbsp;n,&nbsp;f)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;g&nbsp;-&gt;&nbsp;Add(f,&nbsp;g);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;Expr&nbsp;*&nbsp;Expr&nbsp;-&gt;&nbsp;Expr</CODE></P>
+      <P>Similarly for the following <CODE>lt</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;lt&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;n,&nbsp;Add(Int&nbsp;m,&nbsp;f)&nbsp;-&gt;&nbsp;lt(Int(n-m),&nbsp;f)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(Int&nbsp;m,&nbsp;f),&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;lt(f,&nbsp;Int(n-m))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(Int&nbsp;m,&nbsp;f),&nbsp;Add(Int&nbsp;n,&nbsp;g)&nbsp;-&gt;&nbsp;lt(f,&nbsp;add(Int(n-m),&nbsp;g))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;g&nbsp;-&gt;&nbsp;Lt(f,&nbsp;g);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;lt&nbsp;:&nbsp;Expr&nbsp;*&nbsp;Expr&nbsp;-&gt;&nbsp;Expr</CODE></P>
+      <P>For example, we rearrange the comparison <CODE>m+f&lt;n+g</CODE> to 
+      <CODE>f&lt;n-m+g</CODE> for integers <CODE>m</CODE> and <CODE>n</CODE> and 
+      arbitrary expressions <CODE>f</CODE> and <CODE>g</CODE>.</P>
+      <P>The following <CODE>subst</CODE> function applies the given rule to 
+      every subexpression in an expression exactly once:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;subst&nbsp;rule&nbsp;expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;expr&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Return&nbsp;_<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;_<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Arg&nbsp;as&nbsp;f&nbsp;-&gt;&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(f,&nbsp;g)&nbsp;-&gt;&nbsp;add(subst&nbsp;rule&nbsp;f,&nbsp;subst&nbsp;rule&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Lt(f,&nbsp;g)&nbsp;-&gt;&nbsp;lt(subst&nbsp;rule&nbsp;f,&nbsp;subst&nbsp;rule&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;If(p,&nbsp;t,&nbsp;f)&nbsp;-&gt;&nbsp;If(subst&nbsp;rule&nbsp;p,&nbsp;subst&nbsp;rule&nbsp;t,&nbsp;subst&nbsp;rule&nbsp;f)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply(f,&nbsp;x)&nbsp;-&gt;&nbsp;Apply(f,&nbsp;subst&nbsp;rule&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;rule;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;subst&nbsp;:&nbsp;(Expr&nbsp;-&gt;&nbsp;Expr)&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;Expr</CODE></P>
+      <P>This will be used to inline the body of a function at recursive call 
+      sites in order to amortize the overhead of the function call.</P>
+      <P>The following <CODE>rewrite</CODE> function performs repeated 
+      substitutions until the result stops changing (aka fixed point):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;rewrite&nbsp;rule&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f'&nbsp;=&nbsp;subst&nbsp;rule&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;f=f'&nbsp;then&nbsp;f&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rewrite&nbsp;rule&nbsp;f';;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;rewrite&nbsp;:&nbsp;(Expr&nbsp;-&gt;&nbsp;Expr)&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;Expr</CODE></P>
+      <P>This will be used to apply symbolic rearrangements that optimize 
+      expressions:</P>
+      <P>The following <CODE>nest</CODE> combinator nests <CODE>n</CODE> 
+      applications of the function <CODE>f</CODE> around the value 
+      <CODE>x</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;nest&nbsp;n&nbsp;f&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n=0&nbsp;then&nbsp;x&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nest&nbsp;(n-1)&nbsp;f&nbsp;(f&nbsp;x);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;nest&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a</CODE></P>
+      <P>Our first optimization pass is the functional equivalent of loop 
+      unrolling in imperative programming languages. The following 
+      <CODE>unroll</CODE> combinator nests <CODE>n</CODE> applications of the 
+      inner <CODE>rule</CODE> function in order to unroll recursive calls 
+      <CODE>n</CODE> times:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;unroll&nbsp;n&nbsp;self&nbsp;body&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;rule&nbsp;self&nbsp;body&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply(f,&nbsp;x)&nbsp;when&nbsp;f=self&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subst&nbsp;(function&nbsp;Arg&nbsp;-&gt;&nbsp;x&nbsp;|&nbsp;f&nbsp;-&gt;&nbsp;f)&nbsp;body<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f&nbsp;-&gt;&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nest&nbsp;n&nbsp;(subst&nbsp;(rule&nbsp;self&nbsp;body))&nbsp;body;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;unroll&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;Expr</CODE></P>
+      <P>The inner <CODE>rule</CODE> function replaces recursive calls with the 
+      function body, substituting all occurrences of the function parameter in 
+      the body with the expression passed as the argument at the call site.</P>
+      <P>Consider unrolling the function <CODE>f</CODE> with body 
+      <CODE>if&nbsp;n&lt;1&nbsp;then&nbsp;0&nbsp;else&nbsp;1+f(n-1)</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;If(Lt(Arg,&nbsp;Int&nbsp;1),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Int&nbsp;0,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Add(Int&nbsp;1,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Apply("f",&nbsp;Add(Arg,&nbsp;Int&nbsp;-1))))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;unroll&nbsp;1&nbsp;"f";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Lt&nbsp;(Arg,Int&nbsp;1),Int&nbsp;0,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Int&nbsp;1,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If&nbsp;(Lt&nbsp;(Arg,Int&nbsp;2),Int&nbsp;0,Add&nbsp;(Int&nbsp;1,Apply&nbsp;("f",Add&nbsp;(Int&nbsp;-2,Arg))))))</CODE></P>
+      <P>The result may be written:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&lt;1&nbsp;then&nbsp;0&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1&nbsp;+&nbsp;if&nbsp;n&lt;2&nbsp;then&nbsp;0&nbsp;else&nbsp;1+f(n-2)</CODE></P>
+      <P>This unrolling has made the function body twice as big but the number 
+      of recursive calls has been halved because the function argument is now 
+      decremented by <CODE>2</CODE> at each "iteration".</P>
+      <P>Although our compiler has not handled the special case of an 
+      <CODE>if</CODE> expression where both branches return to the caller, the 
+      JIT compiler will handle this for us when it is rearranging instruction 
+      blocks. Therefore, it is productive to hoist <CODE>if</CODE> expressions 
+      in an attempt to put them in tail position. Our previous example would be 
+      rewritten:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&lt;1&nbsp;then&nbsp;0&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&lt;2&nbsp;then&nbsp;1&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2+f(n-2)</CODE></P>
+      <P>Note how the <CODE>1+...</CODE> has been pushed inside both branches of 
+      the <CODE>if</CODE> expression.</P>
+      <P>The following <CODE>hoistIf</CODE> function implements two 
+      rearrangements to push additions inside the branches of an <CODE>if</CODE> 
+      expression:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;hoistIf&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(If(p,&nbsp;t,&nbsp;f),&nbsp;g)&nbsp;-&gt;&nbsp;If(p,&nbsp;add(t,&nbsp;g),&nbsp;add(f,&nbsp;g))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(g,&nbsp;If(p,&nbsp;t,&nbsp;f))&nbsp;-&gt;&nbsp;If(p,&nbsp;add(g,&nbsp;t),&nbsp;add(g,&nbsp;f))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f&nbsp;-&gt;&nbsp;f;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;hoistIf&nbsp;:&nbsp;Expr&nbsp;-&gt;&nbsp;Expr</CODE></P>
+      <P>Sure enough, rewriting our function body using our <CODE>hoistIf</CODE> 
+      function has the desired effect of reproducing our hand-cranked 
+      example:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;If(Lt(Arg,&nbsp;Int&nbsp;1),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Int&nbsp;0,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Add(Int&nbsp;1,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Apply("f",&nbsp;Add(Arg,&nbsp;Int&nbsp;-1))))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;unroll&nbsp;1&nbsp;"f"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;rewrite&nbsp;hoistIf;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Lt&nbsp;(Arg,Int&nbsp;1),Int&nbsp;0,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If&nbsp;(Lt&nbsp;(Arg,Int&nbsp;2),Int&nbsp;1,Add&nbsp;(Int&nbsp;2,Apply&nbsp;("f",Add&nbsp;(Int&nbsp;-2,Arg)))))</CODE></P>
+      <P>Finally, we can add an optimization rule that spots redundancies in 
+      comparisons because one results already implies another:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;simplify&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;If(Lt(Arg,&nbsp;Int&nbsp;m)&nbsp;as&nbsp;p1,&nbsp;If(Lt(Arg,&nbsp;Int&nbsp;n),&nbsp;t2,&nbsp;f2),&nbsp;f1)&nbsp;when&nbsp;m&nbsp;&lt;&nbsp;n&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If(p1,&nbsp;t2,&nbsp;f1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f&nbsp;-&gt;&nbsp;f;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;simplify&nbsp;:&nbsp;Expr&nbsp;-&gt;&nbsp;Expr</CODE></P>
+      <P>If the test <CODE>arg&lt;m</CODE> has passed then we know that 
+      <CODE>arg&lt;n</CODE> when <CODE>m&lt;n</CODE> so we can eliminate the 
+      inner test and just take the <CODE>true</CODE> branch from the inner 
+      <CODE>if</CODE> expression. As we shall see, this optimization pays off in 
+      the case of our Fibonacci function.</P>
+      <H2>Optimized example</H2>
+      <P>The following definition applies our three optimization passes to our 
+      example Fibonacci function before compiling it:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;methods&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Name&nbsp;=&nbsp;"fib"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ArgumentType&nbsp;=&nbsp;typeof&lt;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ReturnType&nbsp;=&nbsp;typeof&lt;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Body&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If(Lt(Arg,&nbsp;Int&nbsp;2),&nbsp;Arg,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Add(Apply("fib",&nbsp;Add(Arg,&nbsp;Int&nbsp;-1)),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Apply("fib",&nbsp;Add(Arg,&nbsp;Int&nbsp;-2))))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;unroll&nbsp;2&nbsp;"fib"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;rewrite&nbsp;hoistIf<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;rewrite&nbsp;simplify<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;compileFunction&nbsp;Map.empty;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;methods&nbsp;:&nbsp;Map&lt;string,MethodInfo&gt;&nbsp;=&nbsp;map&nbsp;[("fib",&nbsp;Int32&nbsp;fib(Int32))]</CODE></P>
+      <P>The results of our optimization passes are impressive:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;methods.["fib"].Invoke(null,&nbsp;[|box&nbsp;40|]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:01.802,&nbsp;CPU:&nbsp;00:00:01.802,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;obj&nbsp;=&nbsp;102334155</CODE></P>
+      <P>Our compiler is now generating code that runs 2.4× faster than the F# 
+      code!</P>
+      <H2>Summary</H2>
+      <P>This article has taken a deeper dive into compilation to CIL than 
+      previous articles and has culminated in compiler that operates on 
+      high-level expressions and contains three separate optimization stages 
+      that produce substantially faster code on our example function than the F# 
+      compiler itself.</P>
+      <P>Future F#.NET Journal articles will investigate metaprogramming and 
+      compilation in more detail, including JIT compilation to x86 machine 
+      code.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2011</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20compiling%20to%20CIL_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

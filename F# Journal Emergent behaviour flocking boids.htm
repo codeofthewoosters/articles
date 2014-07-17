@@ -1,0 +1,327 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0075)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/boids.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Emergent behaviour: flocking boids</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Emergent behaviour: flocking boids</TITLE>     
+<LINK href="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Emergent behaviour: flocking boids</H1>
+      <P>Artificial life became a popular topic in the 1980s. In particular, 
+      with the discovery that simple rules defining the behaviour of individuals 
+      could give rise to sophisticated behaviour of groups of individuals. This 
+      unexpected result was described as "emergent behaviour" and one of the 
+      most famous examples was a computer program called "Boids" that used only 
+      three simple rules to govern the dynamics of individuals but produced 
+      remarkably realistic flocking behaviour of the population as a whole. This 
+      article describes an interactive boids simulator with a graphical user 
+      interface implemented using Windows Presentation Foundation.</P>
+      <H2>Introduction</H2>
+      <P>Artificial life is a term used to describe man-made constructions that 
+      try to replicate biological phenomena. In particular, soft articifial life 
+      is used to describe computer simulations that run in virtual worlds and 
+      use visualization to convey how realistically they can mimic the natural 
+      world. This goes a step beyond physical simulations like photorealistic 
+      rendering using ray tracers, to actually trying to recreate              
+      <I>behaviour</I> observed in real organisms.           </P>
+      <P>Flocking is a non-trivial behaviour observed in groups of many 
+      different kinds of organisms, including birds, fish, bacteria, and 
+      insects.</P>
+      <P>The boids simulation published by              <A href="http://www.red3d.com/cwr/boids/">Craig 
+      Reynolds</A> in 1986 used the following three simple steering behaviours 
+      to describe how each individual boid maneuvers based on the positions and 
+      velocities of its neighbors:           </P>
+      <P>
+      <UL>
+        <LI>Separation: steer to avoid crowding local flockmates.</LI>
+        <LI>Alignment: steer towards the average heading of local 
+        flockmates.</LI>
+        <LI>Cohesion: steer to move toward the average position of local 
+        flockmates.</LI></UL>
+      <P></P>
+      <P>Cohesion and separation are also seen in molecular dynamics. For 
+      example, the Lennard-Jones pair potential approximates the interactions of 
+      Argon atoms and includes a long-range attraction and a short-range 
+      repulsion, giving rise to an energy minimum at an equilibrium separation. 
+      In terms of boids, this might be considered as a long-range desire to hang 
+      about in a group of boids but a short-range repulsion to avoid crashing 
+      into neighboring boids.</P>
+      <P>Alignment turns out to be the key to getting emergent behaviour in 
+      boids and, in particular, is the difference between the swarming of bees, 
+      where the desire for alignment is weak:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/swarm_bees.jpg"> 
+                  </P>
+      <P></P>
+      <P>Whereas schools of fish can have very strong alignment:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/school_fish.jpg"> 
+                  </P>
+      <P></P>
+      <P>As we shall see, flocking of birds lies between these two extremes.</P>
+      <H2>Implementation</H2>
+      <P>An F# program to simulate the dynamics of a flock based upon the above 
+      rules may be written as follows:</P>
+<PRE>&gt; #light;;</PRE>
+      <P>We shall use the Windows Presentation Library from .NET 3.0 and beyond 
+      for visualization. So we begin by referencing the following DLLs when 
+      running the program interactively:</P>
+<PRE>&gt; #r "PresentationCore.dll";;
+&gt; #r "PresentationFramework.dll";;
+&gt; #r "WindowsBase.dll";;</PRE>
+      <P>Alternatively, these DLLs may be referenced from the Solution Explorer 
+      pane of Visual Studio when compiling an application.</P>
+      <P>We shall use the following three namespaces extensively:</P>
+<PRE>&gt; open System;;
+&gt; open System.Windows;;
+&gt; open System.Windows.Media;;</PRE>
+      <P>The program begins by defining a few global variables used to control 
+      the size of the population:</P>
+<PRE>&gt; let mutable n_boids = 100;;
+val mutable n_boids : int</PRE>
+      <P>the strength of the cohesion force that pulls boids together:</P>
+<PRE>&gt; let mutable cohesion = 1.0;;
+val mutable cohesion : float</PRE>
+      <P>the strength of the separation force that pushes them apart when they 
+      get very close:</P>
+<PRE>&gt; let mutable separation = 1000.0;;
+val mutable separation : float</PRE>
+      <P>and the strength of alignment that controls how strongly they desire to 
+      point in the same direction as their neighbors:</P>
+<PRE>&gt; let mutable alignment = 1000.0;;
+val mutable alignment : float</PRE>
+      <P>Finally, we shall also include a target location that the boids are 
+      attracted to:</P>
+<PRE>&gt; let mutable target = Point(0.0, 0.0);;
+val mutable target : Point</PRE>
+      <P>The flock is represented by the following array that contains the 
+      position and velocity vectors for every boid in the flock:</P>
+<PRE>&gt; let mutable boid =
+    let rand = System.Random()
+    [|for _ in 1 .. n_boids -&gt;
+        Point(1000. * rand.NextDouble(),
+        1000. * rand.NextDouble()), Vector(0.0, 0.0)|];;
+val mutable boid : (Point * Vector) array</PRE>
+      <P>In this case, we shall update the simulation from the visualization 
+      which will, in turn, be redrawn by the rendering loop. Consequently, we 
+      should perform each simulation step based upon the amount of real time 
+      that has passed, using the following timer:</P>
+<PRE>&gt; let time = System.Diagnostics.Stopwatch();;
+val time : Diagnostics.Stopwatch</PRE>
+      <P>The following              <CODE>update</CODE> function is responsible 
+      for updating the positions and velocities of each boid in the flock:       
+          </P>
+<PRE>&gt; let update() =
+    let dt = float time.ElapsedMilliseconds / 1e3
+    time.Reset()
+    time.Start()
+    for i=0 to n_boids-1 do
+      let p0, v0 = boid.[i]
+      let p0 = p0 + dt * v0
+      let home = target - p0
+      let v0 = v0 + 1. / (1. + home.Length) * home
+      boid.[i] &lt;- p0 + dt * v0, v0
+      for j=0 to i-1 do
+        let (p0, v0), (p1, v1) = boid.[i], boid.[j]
+        let dp = p1 - p0
+        let sep = 1. + dp.Length
+        let u (v: Vector) = 1. / v.Length * v
+        let dv =
+          cohesion / sep ** 2.0 * dp +
+            alignment * (u v1 - u v0) / sep ** 3.0 -
+            separation / sep ** 4.0 * dp
+        let dampen (v: Vector) =
+          let speed = max 10. (min 100. v.Length)
+          speed / v.Length * v
+        boid.[i] &lt;- p0, dampen(v0 + dt * dv)
+        boid.[j] &lt;- p1, dampen(v1 - dt * dv);;
+val update : unit -&gt; unit</PRE>
+      <P>This function begins by calculating the time elapsed since it was last 
+      invoked and then loops over each boid updating its dynamics. In this case, 
+      we have adopted the simplest possible O(n             <SUP>2</SUP> ) 
+      algorithm that considers every boid in the context of every other boid. 
+      Note that double counting is avoided by looping the inner loop over 
+      0..i-1.           </P>
+      <P>The outer loop begins by updating the position of each boid according 
+      to its velocity and adding the attraction to the              
+      <CODE>target</CODE> (that will be the mouse coordinate).           </P>
+      <P>The inner loop obtains the positions and velocities for both the        
+            <CODE>i</CODE> th and              <CODE>j</CODE> th boids and then 
+      calculates the displacement              <CODE>dp</CODE> between them and 
+      the separation              <CODE>sep</CODE> . The separation is 
+      incremented in order to prevent subsequent calculations from blowing up 
+      when a pair of boids are very close. A nested function              
+      <CODE>u</CODE> is defined that returns a normalized vector. The 
+      acceleration              <CODE>dv</CODE> is the sum of components due to 
+      cohesion, alignment and separation. The cohesion is a simple inverse 
+      square law that attracts boids to each other. The alignment adjust the 
+      current velocity vector to direct it toward that of the neighbor, using 
+      the normalized velocity vectors, and the effect decays with the cube of 
+      the separation. Finally, the separation force is similar to the cohesive 
+      force but with the opposite sign and using a fourth power. So the 
+      separation force falls off very quickly as the distance increases but is 
+      much larger for small separations, achieving a kind of hard core 
+      repulsion.           </P>
+      <P>The following              <CODE>View</CODE> class provides a WPF 
+      control that visualizes the current state of the simulation by drawing 
+      pointed lines representing the position and velocity of each boid:         
+        </P>
+<PRE>&gt; type View() as this =
+    inherit Controls.Control()</PRE>
+<PRE>    let update (this: FrameworkElement) _ _ =
+      update()
+      this.InvalidateVisual()
+    
+    do
+      CompositionTarget.add_Rendering(new EventHandler(update this))
+    
+    override this.OnRender dc =
+      let pen = Pen(Brushes.Black, 5.)
+      pen.EndLineCap &lt;- PenLineCap.Triangle
+      for i=0 to n_boids-1 do
+        let p, v = boid.[i]
+        dc.DrawLine(pen, p, p + 0.01 * v);;
+type View =
+  class
+    inherit Controls.Control
+    new : unit -&gt; View
+    override OnRender : dc:DrawingContext -&gt; unit
+  end</PRE>
+      <P>Note that the (implicit) constructor of this class also registers a 
+      nested             <CODE>update</CODE> function to be called at every 
+      render event. This function calls the outer              
+      <CODE>update</CODE> function before invalidating the control, causing 
+      repeated redraw.           </P>
+      <P>The following              <CODE>add</CODE> function is a helper 
+      function used to add controls to a panel:           </P>
+<PRE>&gt; let add (panel: Controls.Panel) control =
+    panel.Children.Add control |&gt; ignore
+    control;;
+val add : Controls.Panel -&gt; 'a -&gt; 'a when 'a :&gt; UIElement</PRE>
+      <P>Finally, the main program is run in single-threaded apartment mode and 
+      creates the GUI, defining the callbacks for the controls and runs the 
+      application:</P>
+<PRE>&gt; [&lt;STAThread&gt;]
+  do
+    let vbox = Controls.StackPanel()
+    vbox.Margin &lt;- Thickness 11.
+    Controls.Label( Content="Controls",
+                    FontWeight=FontWeights.Bold,
+                    HorizontalAlignment=HorizontalAlignment.Center )
+    |&gt; add vbox |&gt; ignore
+    let space = Thickness(0., 0., 0., 11.)
+    let slider text x0 x x1 f =
+      Controls.Label(Content=text) |&gt; add vbox |&gt; ignore
+      let control = Controls.Slider(Margin=space) |&gt; add vbox
+      control.Minimum &lt;- x0
+      control.Maximum &lt;- x1
+      control.ValueChanged.Add(fun x -&gt; f x.NewValue)
+      control.Value &lt;- x
+    slider "Population:" 1. (float n_boids) (float n_boids)
+      (fun x -&gt; n_boids &lt;- int x)
+    slider "Cohesion:" 0. cohesion 10. (fun x -&gt; cohesion &lt;- x)
+    slider "Separation:" 0. separation 1000. (fun x -&gt; separation &lt;- x)
+    slider "Alignment:" 0. alignment 1000. (fun x -&gt; alignment &lt;- x)
+    
+    let hbox = Controls.DockPanel()
+    Controls.DockPanel.SetDock(vbox, Controls.Dock.Right)
+    hbox.Children.Add vbox |&gt; ignore
+    hbox.Children.Add (View()) |&gt; ignore
+    
+    let window = Window(Title="Flocking boids")
+    window.Content &lt;- hbox
+    window.MouseMove.Add(fun e -&gt; target &lt;- e.GetPosition window)
+    
+    (Application()).Run window
+    |&gt; ignore;;</PRE>
+      <P>This section of code implements a more sophisticated GUI than we have 
+      seen before in The F#.NET Journal, creating a split window with several 
+      interactive slides, labels and a header. The amount of code required to 
+      define this GUI is remarkably small thanks to several features of the F# 
+      programming language.</P>
+      <P>Properties are set in calls to object contructors such as              
+      <CODE>Controls.Label</CODE> . This gives the illusion of declarative style 
+      even though WPF is heavily imperative by design.           </P>
+      <P>The              <CODE>add</CODE> helper function makes it easy to add 
+      controls into any given panel. In particular, currying this function 
+      allows the parent panel control to be partially applied and the resulting 
+      closure can be passed to the built-in              <CODE>|&gt;</CODE> 
+      operator in order to add a control to a panel and keep its value. This is 
+      used inside the              <CODE>slider</CODE> function to add the 
+      slider before setting several of its properties.           </P>
+      <P>Nested functions make it trivial to factor out functionality. In this 
+      case, the nested              <CODE>slider</CODE> function adds two 
+      controls, a label and then a slider, and initializes the relevant 
+      properties of the slider. This is used for four different sliders, saving 
+      code space. Moreover, nested relieves us from even having to consider that 
+      our              <CODE>slider</CODE> function silently captured variables 
+      from its environment.           </P>
+      <H2>Results</H2>
+      <P>This simple program allows us to simulate a variety of flocking 
+      behaviours. High cohesion but low separation and alignment can be used to 
+      simulate a swarm that resembles the behaviour of flying insects:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/swarm.gif"> 
+                  </P>
+      <P></P>
+      <P>Stronger alignment produces emergent behaviour similar to that of 
+      flocking birds, where different parts of a single flock may be moving in 
+      different directions:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/flock.gif"> 
+                  </P>
+      <P></P>
+      <P>Finally, strong alignment create behaviour closer to that of some 
+      schools of fish, with a much more uniform distribution of positions and 
+      very similar directions:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/school.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has demonstrate how F# makes it easy to construct simple 
+      programs that simulate and visualize complex dynamics.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of artificial 
+      life and emergent behaviour. For example, to implement the ant colony 
+      optimization algorithm.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Emergent%20behaviour%20flocking%20boids_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

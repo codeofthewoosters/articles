@@ -1,0 +1,505 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0080)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/ray_tracer.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Implementing a simple Ray Tracer</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Implementing a simple Ray Tracer</TITLE>     
+<LINK href="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Implementing a simple Ray Tracer</H1>
+      <P>Ray tracing is a simple but powerful approach to photorealistic 
+      rendering and implementing a ray tracer is an excellent way to learn a 
+      programming language and, in particular, to learn about graphics and 
+      optimization in the context of numerical algorithms. This article walks 
+      through the design and implementation of a basic ray tracer that ray 
+      traces a scene in a Windows Forms application that provides the user with 
+      rendering options via a menu and real-time incremental update.</P>
+      <H2>Introduction to Ray Tracing</H2>
+      <P>Ray tracing is a technique for image synthesis: creating a 2D picture 
+      of a 3D world. In the real world, lights emit photons that are reflected 
+      off surfaces and refracted through surfaces before reaching a viewer. 
+      Although this direct approach can be simulated on computer using a 
+      technique called "forward ray tracing", this is very ineffecient because 
+      only a tiny proportion of the photons reach the camera. Conventional ray 
+      tracing uses "backward ray tracing" instead. The involves tracing rays out 
+      from the camera and into the 3D world. For a pixellated display, an 
+      individual ray might be shot through each pixel in a pin-hole camera 
+      model. Each ray is then intersected with the scene and the closest 
+      intersection point incurs further computation. In the simplest case, the 
+      color of the object in the 3D world that the ray hit might be used to 
+      color the pixel that the ray went through.</P>
+      <P>The beauty of ray tracing is the ease with which this simple model can 
+      be extended to account for a wide variety of real effects. This example 
+      program adds four of the most basic effects:</P>
+      <P>
+      <OL>
+        <LI><B>Diffuse reflection</B> models photons from a light source that 
+        scatter when they strike a matt surface. The intensity is a function of 
+        the angle of incidence and is unrelated to view position.               
+        </LI>
+        <LI><B>Specular reflection</B> models photons from a light source that 
+        are reflected from a shiny surface into the camera. The intensity is a 
+        function of the view position.               </LI>
+        <LI><B>Shadows</B> are modelled most simply by tracing a shadow ray from 
+        a point of intersection toward each light source. If a shadow ray 
+        intersects any object in the scene before it reaches the light source 
+        then the point of intersection is in shadow and the diffuse and specular 
+        contributions are neglected.               </LI>
+        <LI><B>Reflections</B> are modelled by tracing the reflection of the 
+        incident ray from each point of intersection and adding the reflected 
+        constribution to the others for that intersection point. Reflections of 
+        reflections and so forth are easily handled by making this process 
+        recursive, truncating the contribution when its weight in the overall 
+        lighting equation is insignificant.               </LI></OL>
+      <P></P>
+      <P>For more information about ray tracing, we highly recommend the 
+      excellent book:</P>
+      <P>
+      <UL>
+        <LI>"An Introduction to Ray Tracing" by Andrew S. Glassner               
+           <I>et al.</I>               </LI></UL>
+      <P></P>
+      <P>The remainder of this article describes the design and implementation 
+      of a simple ray tracer with real-time GUI visualization implemented 
+      entirely in the F# programming language.</P>
+      <H2>Implementation</H2>
+      <P>This ray tracer is sufficiently simple that it can be encapsulated in a 
+      single compilation unit. The whole program may be coarsely decomposed into 
+      the numerical ray tracing algorithm and its associated definitions (such 
+      as rays, solids and scenes) and the GUI front-end of the ray tracer than 
+      renders incrementally into a Windows Forms Bitmap that can be blitted into 
+      the window efficiently.</P>
+      <P>The entire program will be written in the #light syntax option:</P>
+<PRE>#light</PRE>
+      <P>The rendering options are used by both the ray tracing back-end and the 
+      visualization front-end, so they appear first in their own              
+      <CODE>Options</CODE> module:           </P>
+<PRE>&gt; module Options =
+    let specular, shadows, reflect = ref false, ref false, ref false;;
+module Options : begin
+  val reflect : bool ref
+  val shadows : bool ref
+  val specular : bool ref
+end</PRE>
+      <P>The ray tracing portion of the program uses colors from the             
+       <CODE>System.Drawing</CODE> namespace and vectors of floats from the      
+              <CODE>Math.Vector</CODE> namespace:           </P>
+<PRE>&gt; open System.Drawing;;
+&gt; open Math.Vector;;</PRE>
+      <P>The code makes use of two auxiliary mathematical definitions. The value 
+      delta quantifies a small number in floating point arithmetic and the sqr 
+      function squares the given float value:</P>
+<PRE>&gt; let delta = sqrt epsilon_float;;
+val delta : float
+&gt; let sqr (x : float) = x * x;;
+val sqr : float -&gt; float  </PRE>
+      <P>The vectors implemented by the F# standard library have arbitrary 
+      dimensionality. This ray tracer uses only 3D vectors so we shall supercede 
+      the              <CODE>zero</CODE> function defined in the stdlib with the 
+      value of the zero 3D vector:           </P>
+<PRE>&gt; let zero = zero 3;;
+val zero : Math.vector</PRE>
+      <P>The following              <CODE>normalize</CODE> function scales a 
+      vector to have unit length:           </P>
+<PRE>&gt; let normalize r = 1. / norm r $* r;;
+val normalize : Math.vector -&gt; Math.vector</PRE>
+      <P>A ray is quantified by its origin and direction vectors:</P>
+<PRE>&gt; type ray = { orig: vector; dir: vector };;
+type ray = {orig: vector;
+            dir: vector;}</PRE>
+      <P>Intersection points will be quantified in terms of a ray as the 
+      parametric position along the ray.</P>
+      <P>This ray tracer will support two solid geometries: spheres and planes. 
+      The record types implementing these two geometries are most productively 
+      separated into separate modules              <CODE>Sphere</CODE> and       
+             <CODE>Plane</CODE> to avoid clashing field names:           </P>
+<PRE>&gt; module Sphere =
+    type t = { center: vector; radius: float };;
+module Sphere : begin
+  type t = {center: vector;
+            radius: float;}
+end</PRE>
+      <P>Note how little syntactic overhead is required to bury definitions in a 
+      module.</P>
+      <P>A plane is quantified by its normal vector and offset from the origin 
+      away from the normal:</P>
+<PRE>&gt; module Plane =
+    type t = { normal: vector; offset: float };;
+module Plane : begin
+  type t = {normal: vector;
+            offset: float;}
+end</PRE>
+      <P>A shape is a variant type containing either a sphere or a plane:</P>
+<PRE>&gt; type shape =
+    | Sphere of Sphere.t
+    | Plane of Plane.t;;
+type shape =
+  | Sphere of Sphere.t
+  | Plane of Plane.t</PRE>
+      <P>A solid object is a shape and its material properties, including its 
+      diffuse color, specular color and shininess, and the object's 
+      reflectivity:</P>
+<PRE>&gt; type solid =
+      { diffuse: vector;
+	specular: vector;
+	shininess: float;
+	reflectivity: float;
+	geometry: shape };;
+type solid = {diffuse: vector;
+              specular: vector;
+              shininess: float;
+              reflectivity: float;
+              geometry: shape;}</PRE>
+      <P>Note that we reuse the built-in              <CODE>vector</CODE> type 
+      to represent colors as well as spatial coordinates. This makes it easier 
+      to perform arithmetic operations on colors, such as compositing the 
+      contributions from different forms of lighting.           </P>
+<PRE>&gt; type scene = { light: vector; solids: solid array };;
+type scene = {light: vector;
+              solids: solid array;}  </PRE>
+      <P>The following              <CODE>normal</CODE> function computes the 
+      normal vector of the given shape at the intersection point on the ray      
+              <CODE>ray</CODE> at parameter              <CODE>lambda</CODE> :   
+              </P>
+<PRE>&gt; let normal ray lambda shape =
+    let point = ray.orig + lambda $* ray.dir
+    match shape with
+    | Sphere sphere -&gt; normalize(point - sphere.Sphere.center)
+    | Plane plane -&gt; plane.Plane.normal;;
+val normal : ray -&gt; float -&gt; shape -&gt; Math.vector</PRE>
+      <P>During ray tracing, a hit is quantified by the parameter along the ray 
+      and the surface of the solid that was intersected:</P>
+<PRE>&gt; type hit = { lambda: float; surface: solid option };;
+type hit = {lambda: float;
+            surface: solid option;}</PRE>
+      <P>An option type is used because a ray that intersects nothing has an 
+      infinite parameter              <CODE>lambda</CODE> and no surface.        
+         </P>
+      <P>The following              <CODE>intersect_aux</CODE> function tries to 
+      intersect the given              <CODE>ray</CODE> with the given           
+         <CODE>solid</CODE> , accumulating              <CODE>hit</CODE> (which 
+      is updated only if a new intersection point is found that it closer than 
+      the old intersection point given by the              <CODE>hit</CODE> 
+      argument):           </P>
+<PRE>&gt; let intersect_aux ray hit solid =
+    let lambda =
+      match solid.geometry with
+      | Sphere sphere -&gt;
+	  let v = sphere.Sphere.center - ray.orig
+	  let b = dot v ray.dir
+	  let disc = sqr b - dot v v + sqr sphere.Sphere.radius
+	  if disc &lt; 0. then infinity else
+	    let disc = sqrt disc
+	    let t2 = b + disc
+	    if t2 &lt; 0. then infinity else
+	      let t1 = b - disc
+	      if t1 &gt; 0. then t1 else t2
+      | Plane plane -&gt;
+	  let vd = dot plane.Plane.normal ray.dir
+	  let vo = -(dot plane.Plane.normal ray.orig + plane.Plane.offset)
+	  let lambda = vo / vd
+	  if lambda &lt;= 0. then infinity else lambda
+    if lambda &gt;= hit.lambda then hit else
+      { lambda = lambda; surface = Some solid };;
+val intersect_aux : ray -&gt; hit -&gt; solid -&gt; hit  </PRE>
+      <P>The ray tracer must intersect every ray with the scene, which is a 
+      sequence of solids, so an              <CODE>intersect</CODE> function 
+      acts upon an array of solids and provides the              
+      <CODE>intersect_aux</CODE> function with a base case for the              
+      <CODE>hit</CODE> value with an infinite parametric intersection point      
+              <CODE>lambda</CODE> that represents no intersection:           
+</P>
+<PRE>&gt; let intersect ray solids =
+    Array.fold_left (intersect_aux ray) { lambda = infinity; surface = None } solids;;
+val intersect : ray -&gt; solid array -&gt; hit</PRE>
+      <P>The following              <CODE>is_lit</CODE> function casts a shadow 
+      ray from the intersection point              <CODE>point</CODE> towards 
+      the light:           </P>
+<PRE>&gt; let is_lit point light solids =
+    let shadow_ray = { orig = point; dir = -light }
+    match intersect shadow_ray solids with
+    | { surface = Some _ } -&gt; false
+    | { surface = None } -&gt; true;;
+val is_lit : vector -&gt; vector -&gt; solid array -&gt; bool</PRE>
+      <P>If the shadow ray reaches the light then this function returns          
+          <CODE>true</CODE> , otherwise it returns              
+      <CODE>false</CODE> .           </P>
+      <P>The following              <CODE>trace</CODE> function is the core of 
+      the ray tracer and is responsible for determining the total color for a 
+      given ray as the sum of various contributions:           </P>
+<PRE>&gt; let rec trace weight ray scene =
+    match intersect ray scene.solids with
+    | { surface = None } -&gt; zero
+    | { lambda = lambda; surface = Some surface } -&gt;
+	let normal = normal ray lambda surface.geometry
+	let point = ray.orig + lambda $* ray.dir + delta $* normal
+	let lit = not !Options.shadows || is_lit point scene.light scene.solids
+	let diffuse = if lit then max 0. (-dot normal scene.light) else 0.
+	let specular =
+	  if not lit || not !Options.specular then 0. else
+	    let halfway = normalize(normalize(ray.orig - point) - scene.light)
+	    max 0. (dot normal halfway) ** surface.shininess
+	let reflected =
+	  let weight = weight * surface.reflectivity
+	  if not !Options.reflect || weight &lt; 0.1 then zero else
+	    let ray = { orig = point; dir = ray.dir - 2. * dot ray.dir normal $* normal }
+	    trace weight ray scene
+	diffuse $* surface.diffuse +
+	specular $* surface.specular +
+	surface.reflectivity $* reflected;;
+val trace : float -&gt; ray -&gt; scene -&gt; Math.vector  </PRE>
+      <P>The diffuse and specular contributions to the color are the results of 
+      simple calculations involving the surface, the light and the position of 
+      the viewer in the case of the specular contribution. The beautiful part of 
+      this              <CODE>trace</CODE> function is the way it invokes itself 
+      recursively with a reflected ray in order to add the contribution from 
+      reflections. To prevent infinite recursions, the weight of the current 
+      contribution is taken into account and recursive calls are only 
+      perpetuated if the weight is at least 0.1, providing a cut-off below which 
+      reflections are neglected.           </P>
+      <P>The following defines a simple example scene composed of a floor plane 
+      and a pyramid of four colored spheres with a suitable light:</P>
+<PRE>&gt; let scene =
+    let sphere center = Sphere { Sphere.center = center; radius = 1. }
+    { light = vector[-1.; -3.; 1.] |&gt; normalize;
+      solids =
+	[|
+	  vector[1.; 0.; 0.], 0.3, vector[-1.; -0.7; 0.] |&gt; sphere;
+	  vector[0.; 1.; 0.], 0.3, vector[1.; -0.7; 0.] |&gt; sphere;
+	  vector[0.; 0.; 1.], 0.3, vector[0.; -0.7; sqrt 3.] |&gt; sphere;
+	  vector[1.; 1.; 1.], 0.3, vector[0.; sqrt(8. / 3.) - 0.7; sqrt(1. / 3.)] |&gt; sphere;
+	  vector[0.3; 0.3; 0.3], 0.8, Plane{Plane.normal = vector[0.; 1.; 0.]; offset = 1.7};
+	|]
+	|&gt; Array.map
+	    (fun (diffuse, reflectivity, geometry) -&gt;
+	      { diffuse = diffuse; specular = vector[1.; 1.; 1.]; shininess = 30.;
+		reflectivity = reflectivity; geometry = geometry }) };;
+val scene : scene</PRE>
+      <P>The GUI part of the program uses Windows Forms:</P>
+<PRE>&gt; open System.Windows.Forms;;</PRE>
+      <P>A form is created that will be augmented with the necessary 
+      functionality by adding callbacks:</P>
+<PRE>&gt; let form =
+    { new Form(Text="Ray tracer", Width=512, Height=512, Visible=true) as this
+      with OnPaintBackground _ = ()
+      and OnKeyDown e = if e.KeyCode = Keys.Escape then this.Close() };;
+val form : Form</PRE>
+      <P>Note the use of an object expression to create an object value 
+      indirectly from a class, augmenting it with new functionality. In this 
+      case, the usual callback that paints the background gray is overridden to 
+      do nothing in order to avoid flicker when the updated bitmap is blitted 
+      onto the window and the              <CODE>KeyDown</CODE> event is handled 
+      to close the window if the Escape key is pressed.           </P>
+      <P>The incremental renderer uses a queue of remaining rasters to render a 
+      slice of the image before yielding control back to the GUI in order to 
+      keep it responsive:</P>
+<PRE>&gt; let queue : int list ref = ref [];;
+val queue : int list ref</PRE>
+      <P>The image is rendered into a Windows Form              
+      <CODE>Bitmap</CODE> that will be reallocated whenever the window is 
+      resized:           </P>
+<PRE>&gt; let mutable pixmap : Bitmap = null;;
+val mutable pixmap : Bitmap</PRE>
+      <P>The following function computes the resolution of our ray traced image 
+      from the size of the relevant area of the form:</P>
+<PRE>&gt; let size() =
+    let r = form.ClientRectangle
+    r.Width/2, r.Height/2;;
+val size : unit -&gt; int * int</PRE>
+      <P>Our of interest, we can time how long it takes to render a single frame 
+      using our ray tracer:</P>
+<PRE>&gt; let timer = new System.Diagnostics.Stopwatch();;
+val timer : System.Diagnostics.Stopwatch</PRE>
+      <P>The following              <CODE>invalidate</CODE> function clears the 
+      queue of any outstanding rasters, adds all of the new rasters for the 
+      current image size and allocates a new texture map (if one has never been 
+      allocated before) and a new pixmap of the rounded-up size:           </P>
+<PRE>&gt; let invalidate _ =
+    let w, h = size()
+    queue := [0 .. h-1]
+    let format = Imaging.PixelFormat.Format24bppRgb
+    pixmap &lt;- new Bitmap(w, h, format)
+    form.Invalidate()
+    timer.Reset()
+    timer.Start();;
+val invalidate : 'a -&gt; unit</PRE>
+      <P>This              <CODE>clamp</CODE> function constraints a value to 
+      lie within the given range and is used to ensure to saturate the colors 
+      that result from ray tracing:           </P>
+<PRE>&gt; let clamp l u x = max l (min u x);;
+val clamp : 'a -&gt; 'a -&gt; 'a -&gt; 'a</PRE>
+      <P>The              <CODE>invalidate</CODE> function is registered as a 
+      callback for the              <CODE>Resize</CODE> event, in order to 
+      resize the image and requeue its rendering whenever the form is resized:   
+              </P>
+<PRE>&gt; form.Resize.Add invalidate;;
+val it : unit = ()</PRE>
+      <P>The following              <CODE>slice</CODE> function performs an 
+      incremental slice of rendering if rendering has not yet completed:         
+        </P>
+<PRE>&gt; let slice() =
+    match !queue with
+    | [] -&gt; ()
+    | y::q -&gt;
+	queue := q
+	let width, height = pixmap.Width, pixmap.Height
+	for x=0 to width-1 do
+	  let f i n = float(2 * i - n) / float(min width height)
+	  let ray =
+	    { orig = vector[0.; 0.; -4.];
+	      dir = normalize(vector[f x width; f (height - y - 1) height; 1.]) }
+	  let color = trace 1. ray scene
+	  let f x = clamp 0 255 (int_of_float (256. * x + 0.5))
+	  let color = Color.FromArgb(255, f color.[0], f color.[1], f color.[2])
+	  pixmap.SetPixel(x, y, color)
+	form.Invalidate()
+	if y=height-1 then printf "Took %dms\n" timer.ElapsedMilliseconds;;
+val slice : unit -&gt; unit</PRE>
+      <P>This function takes the next raster from the queue of unrendered 
+      rasters and uses ray tracing to determine the color of each pixel from 
+      this raster in the bitmap. Finally, any update is followed by a call to 
+      the              <CODE>Invalidate()</CODE> method of the form to get it 
+      redrawn.           </P>
+      <P>The following adds a callback to the              <CODE>Paint</CODE> 
+      event that allocates the pixmap if one is not already available (i.e. if 
+      this is the first time) or draws the current bitmap and ray traces a slice 
+      of image:           </P>
+<PRE>&gt; form.Paint.Add
+    (fun e -&gt;
+      if pixmap=null then invalidate() else
+      let r = form.ClientRectangle
+      let dest = new Rectangle(0, 0, r.Width, r.Height)
+      let w, h = size()
+      let src = new Rectangle(0, 0, w, h)
+      e.Graphics.DrawImage(pixmap, dest, src, GraphicsUnit.Pixel)
+      slice());;
+val it : unit = ()</PRE>
+      <P>Note that ray tracing a slice of image by calling the              
+      <CODE>slice</CODE> function results in the invalidation of the form and, 
+      therefore, the subsequent invocation of this              
+      <CODE>Paint</CODE> callback until rendering is complete.           </P>
+      <P>A main menu called              <CODE>menu</CODE> is defined and an 
+      "Options" menu item is added to it:           </P>
+<PRE>&gt; let menu = new MainMenu();;
+val menu : MainMenu
+&gt; let options = menu.MenuItems.Add("Options");;
+val edit : MenuItem</PRE>
+      <P>The options menu is populated with three checked entries for the three 
+      rendering options:</P>
+<PRE>&gt; for item, opt in [options.MenuItems.Add("Specular"), Options.specular;
+		    options.MenuItems.Add("Shadows"), Options.shadows; 
+		    options.MenuItems.Add("Reflections"), Options.reflect] do
+    item.Click.Add
+      (fun _ -&gt;
+	opt := not !opt
+	item.Checked &lt;- !opt
+	invalidate());;
+val it : unit = ()</PRE>
+      <P>The              <CODE>Click</CODE> event for each checked entry has a 
+      callback registered that inverts the current state and reflects that in 
+      the relevant option type from the              <CODE>Options</CODE> 
+      module.           </P>
+      <P>This menu is be added to the form with:</P>
+<PRE>&gt; form.Menu &lt;- menu;;
+val it : unit = ()</PRE>
+      <P>These definitions cause a complete GUI application to be spawned from 
+      the F# interactive session.</P>
+      <H2>Screenshots</H2>
+      <P>Despite its simplicity, this program can generate and visualize some 
+      impressive images.</P>
+      <P>The initial rendering is quite boring, showing only the four spheres 
+      and plane with diffuse lighting:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/ray_tracer1.gif"> 
+                  </P>
+      <P></P>
+      <P>Using the drop down menu to enable different rendering options results 
+      in more interesting images.</P>
+      <P>Enabling specular reflection introduces sharp highlights where the 
+      light reflects off each of the spheres:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/ray_tracer2.gif"> 
+                  </P>
+      <P></P>
+      <P>Enabling shadows introduces sharp shadows cast perfectly from each of 
+      the spheres onto the other spheres and the planar floor:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/ray_tracer3.gif"> 
+                  </P>
+      <P></P>
+      <P>Finally, enabling reflections produces a much more compelling image 
+      that is very difficult to generate realistically using other rendering 
+      techniques:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/ray_tracer4.gif"> 
+                  </P>
+      <P></P>
+      <H2>Conclusion</H2>
+      <P>This program is an excellent starting point for many different avenues 
+      of study:</P>
+      <P>
+      <UL>
+        <LI>As a computationally-intensive program, this application is an ideal 
+        candidate for optimization.</LI>
+        <LI>As a non-trivial program, this program makes an excellent case study 
+        for profiling.</LI>
+        <LI>The current design is idiomatic functional programming but object 
+        orientation provides a competitive alternative for this particular 
+        application.</LI>
+        <LI>F#'s expressive static type system can be used to structure this 
+        code in various ways in order to exploit static checking and catch more 
+        bugs.</LI>
+        <LI>Although cooperative multitasking is adequate for this 
+        implementation, a more general approach is to use a worker thread to run 
+        the GUI and computation concurrently.</LI>
+        <LI>Performance could be improved via parallelism by exploiting multiple 
+        cores and CPUs using multiple worker threads with "work 
+      stealing".</LI></UL>
+      <P></P>
+      <P>These topics will all be covered in future F#.NET Journal articles.</P>
+      <P>A ZIP file containing the complete source code for this ray tracer as a 
+      Visual Studio 2005 project may be downloaded              <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/19/Ray%20Tracer.zip">here</A>
+       . An updated version for Visual Studio 2008 and the May 2009 CTP is 
+      available              <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/19/RayTracer.zip">here</A>
+       .           </P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Implementing%20a%20simple%20Ray%20Tracer_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

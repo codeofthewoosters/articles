@@ -1,0 +1,301 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0082)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/parallelnet4.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20parallelism_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20parallelism_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20parallelism_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20parallelism_files/title.gif"> 
+    </TD>
+    <TD><IMG src="F%23%20Journal%20parallelism_files/left.gif"> 
+</TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Parallelism in .NET 4 and Visual F# 2010</H1>
+      <P>The latest version of the .NET Framework provides a wealth of 
+      functionality for parallel programming aimed at multicores. This includes 
+      not only the Task Parallel Library, that was previously available in the 
+      form of CTP releases, but also Parallel LINQ (PLINQ) and the new 
+      concurrent collections. The F# standard library has also been augmented 
+      with parallelized functions. This article examines each of these in 
+      turn.</P>
+      <H2>Task Parallel Library</H2>
+      <P>The Task Parallel Library (TPL) is part of Microsoft's Parallel 
+      Extensions for the .NET framework that have now been integrated into .NET 
+      Framework version 4. The TPL provides a range of functionality to help 
+      with parallel programming ranging from simple higher-order functions to 
+      high-performance implementations of concurrent mutable data structures 
+      such as queues. In particular, the TPL automates the arduous task of 
+      handling threads. Instead, the programmer creates many tasks that may be 
+      run in parallel by the TPL.</P>
+      <P>Internally, the TPL uses sophisticated scheduling algorithms in order 
+      to distribute parallel tasks efficiently between the available processing 
+      cores. This complexity is hidden behind an elegant interface but, as we 
+      shall see, knowledge of the underlying architecture and its 
+      characteristics is essential in order to obtain the best possible 
+      performance. The interface makes extensive use of .NET delegates including 
+      the <CODE>Action</CODE> and <CODE>Func</CODE> classes from the System 
+      namespace that were introduced in .NET 3.0. However, the F# language 
+      transparently abstracts this incidental complexity and allows ordinary F# 
+      functions to be used everywhere instead, making parallelism easier in F# 
+      than in other .NET languages.</P>
+      <H3>Parallel.For</H3>
+      <P>The TPL provides basic "black box" constructs that can be used to 
+      blindly parallelize programs and often provides adequate performance 
+      improvements for the simplest applications. For example, the higher-order 
+      <CODE>Parallel.For</CODE> function is one of the most basic parallel 
+      constructs provided by the TPL and provides a drop-in replacement for the 
+      traditional for loop where the iterations of the loop may be performed in 
+      parallel:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Threading;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Tasks.Parallel.For(0,&nbsp;100,&nbsp;printf&nbsp;"%d&nbsp;");;<BR>&nbsp;&nbsp;&nbsp;&nbsp;0&nbsp;1&nbsp;2&nbsp;3&nbsp;4&nbsp;5&nbsp;6&nbsp;7&nbsp;17&nbsp;18&nbsp;19&nbsp;20&nbsp;21&nbsp;22&nbsp;23&nbsp;24&nbsp;16&nbsp;8&nbsp;31&nbsp;36&nbsp;37&nbsp;38&nbsp;39&nbsp;40&nbsp;41&nbsp;42&nbsp;43&nbsp;44&nbsp;45&nbsp;46&nbsp;47&nbsp;48&nbsp;49&nbsp;50<BR>&nbsp;&nbsp;&nbsp;&nbsp;51&nbsp;52&nbsp;53&nbsp;54&nbsp;55&nbsp;56&nbsp;57&nbsp;58&nbsp;59&nbsp;60&nbsp;61&nbsp;62&nbsp;63&nbsp;64&nbsp;65&nbsp;67&nbsp;68&nbsp;69&nbsp;70&nbsp;71&nbsp;72&nbsp;73&nbsp;74&nbsp;75&nbsp;76&nbsp;77&nbsp;78&nbsp;79&nbsp;80&nbsp;81<BR>&nbsp;&nbsp;&nbsp;&nbsp;82&nbsp;83&nbsp;84&nbsp;85&nbsp;86&nbsp;87&nbsp;88&nbsp;89&nbsp;90&nbsp;91&nbsp;92&nbsp;93&nbsp;94&nbsp;95&nbsp;96&nbsp;97&nbsp;98&nbsp;99&nbsp;32&nbsp;25&nbsp;26&nbsp;27&nbsp;28&nbsp;29&nbsp;30&nbsp;35&nbsp;9&nbsp;10&nbsp;11&nbsp;12&nbsp;13<BR>&nbsp;&nbsp;&nbsp;&nbsp;14&nbsp;15&nbsp;33&nbsp;34&nbsp;66<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Tasks.ParallelLoopResult&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Tasks.ParallelLoopResult&nbsp;{IsCompleted&nbsp;=&nbsp;true;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LowestBreakIteration&nbsp;=&nbsp;null;}</CODE></P>
+      <P>Note how the integers were printed out of order because the cycles of 
+      this loop are evaluated in parallel. In order to maintain determinism, it 
+      is therefore essential for the cycles of this loop to be independent and 
+      this requires programmer's discipline because it is not checked (not even 
+      at run-time).</P>
+      <P>The Task Parallel Library provides several variants in the form of 
+      overloads of the <CODE>Parallel.For</CODE> higher-order function. Options 
+      may be passed to the loop in the form of an object of the 
+      <CODE>ParallelOptions</CODE> class:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;opts&nbsp;=&nbsp;System.Threading.Tasks.ParallelOptions();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;opts&nbsp;:&nbsp;System.Threading.Tasks.ParallelOptions</CODE></P>
+      <P>For example, the maximum degree of parallelism may be used to constrain 
+      the number of cores that will partake in any given loop:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;opts.MaxDegreeOfParallelism&nbsp;&lt;-&nbsp;1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;opts&nbsp;:&nbsp;System.Threading.Tasks.ParallelOptions</CODE></P>
+      <P>Running the example loop again with a single degree of parallelism 
+      recovers the sequential result:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Tasks.Parallel.For(0,&nbsp;100,&nbsp;printf&nbsp;"%d&nbsp;");;<BR>&nbsp;&nbsp;&nbsp;&nbsp;0&nbsp;1&nbsp;2&nbsp;3&nbsp;4&nbsp;5&nbsp;6&nbsp;7&nbsp;8&nbsp;9&nbsp;10&nbsp;11&nbsp;12&nbsp;13&nbsp;14&nbsp;15&nbsp;16&nbsp;17&nbsp;18&nbsp;19&nbsp;20&nbsp;21&nbsp;22&nbsp;23&nbsp;24&nbsp;25&nbsp;26&nbsp;27&nbsp;28&nbsp;29&nbsp;30&nbsp;31&nbsp;32&nbsp;33<BR>&nbsp;&nbsp;&nbsp;&nbsp;34&nbsp;35&nbsp;36&nbsp;37&nbsp;38&nbsp;39&nbsp;40&nbsp;41&nbsp;42&nbsp;43&nbsp;44&nbsp;45&nbsp;46&nbsp;47&nbsp;48&nbsp;49&nbsp;50&nbsp;51&nbsp;52&nbsp;53&nbsp;54&nbsp;55&nbsp;56&nbsp;57&nbsp;58&nbsp;59&nbsp;60&nbsp;61&nbsp;62&nbsp;63&nbsp;64<BR>&nbsp;&nbsp;&nbsp;&nbsp;65&nbsp;66&nbsp;67&nbsp;68&nbsp;69&nbsp;70&nbsp;71&nbsp;72&nbsp;73&nbsp;74&nbsp;75&nbsp;76&nbsp;77&nbsp;78&nbsp;79&nbsp;80&nbsp;81&nbsp;82&nbsp;83&nbsp;84&nbsp;85&nbsp;86&nbsp;87&nbsp;88&nbsp;89&nbsp;90&nbsp;91&nbsp;92&nbsp;93&nbsp;94&nbsp;95<BR>&nbsp;&nbsp;&nbsp;&nbsp;96&nbsp;97&nbsp;98&nbsp;99<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Tasks.ParallelLoopResult&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Tasks.ParallelLoopResult&nbsp;{IsCompleted&nbsp;=&nbsp;true;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LowestBreakIteration&nbsp;=&nbsp;null;}</CODE></P>
+      <P>The ability to set the maximum degree of parallelism is useful when 
+      examining the scalability of a parallel program as the performance 
+      improvement obtained by increasing the degree of parallelism.</P>
+      <P>Another useful variant of the <CODE>Parallel.For</CODE> loop allows 
+      each of the threads involved to accumulate its own result independently, 
+      as a thread-local value, before combining the few thread-local results 
+      into the final result at the end. This overload of the higher-order 
+      <CODE>Parallel.For</CODE> function takes the form:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;Parallel.For(i0,&nbsp;i1,&nbsp;(fun&nbsp;()&nbsp;-&gt;&nbsp;a),&nbsp;(fun&nbsp;i&nbsp;_&nbsp;a&nbsp;-&gt;&nbsp;a),&nbsp;(fun&nbsp;a&nbsp;-&gt;&nbsp;()))</CODE></P>
+      <P>where the first function initializes the thread-local state 
+      <CODE>a</CODE>, the second function updates it for a given index 
+      <CODE>i</CODE> and the third function acts upon the final value of the 
+      thread-local state when the loop has completed.</P>
+      <P>For example, a function to compute the minimum value from the elements 
+      of an array may be written:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Array&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Parallel&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;inline&nbsp;min&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m&nbsp;=&nbsp;ref&nbsp;xs.[0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Tasks.Parallel.For(1,&nbsp;xs.Length,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fun&nbsp;()&nbsp;-&gt;&nbsp;!m),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fun&nbsp;i&nbsp;_&nbsp;a&nbsp;-&gt;&nbsp;min&nbsp;xs.[i]&nbsp;a),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fun&nbsp;a&nbsp;-&gt;&nbsp;lock&nbsp;m&nbsp;(fun&nbsp;()&nbsp;-&gt;&nbsp;m&nbsp;:=&nbsp;min&nbsp;!m&nbsp;a)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;!m;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Array&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Parallel&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;min&nbsp;:&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Note how the thread-local accumulators <CODE>a</CODE> are initialized 
+      to the first element of the array in the first function argument and their 
+      final results are used to mutate the thread-global variable <CODE>m</CODE> 
+      in the final function argument.</P>
+      <P>An array of 100,000,000 random numbers may be generated as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Array.init&nbsp;100000000&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;rand.Next());;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs&nbsp;:&nbsp;int&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|1500428492;&nbsp;1363583103;&nbsp;1403811618;&nbsp;856913136;&nbsp;174335346;&nbsp;952779607;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1225552689;&nbsp;565902044;&nbsp;1201612333;&nbsp;446450111;&nbsp;353150088;&nbsp;1225523668;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;250360763;&nbsp;1823340758;&nbsp;1295600755;&nbsp;2029480148;&nbsp;497168403;&nbsp;...</CODE></P>
+      <P>The new <CODE>Array.Parallel.min</CODE> function defined above offers a 
+      slight performance improvement over the ordinary sequential 
+      <CODE>Array.min</CODE> function provided by F#:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#time;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Timing&nbsp;now&nbsp;on<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Array.min&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.465,&nbsp;CPU:&nbsp;00:00:00.452,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;7<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Array.Parallel.min&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.292,&nbsp;CPU:&nbsp;00:00:02.262,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;7</CODE></P>
+      <P>Specifically, the time taken to find the minimum from 100,000,000 
+      elements is 0.465s for the sequential version and 0.292s for the parallel 
+      version running on 8 cores.</P>
+      <P>The ordinary <CODE>Parallel.For</CODE> loop and its variants have a 
+      wide variety of applications and can often be used to obtain performance 
+      improvements with little effort, thanks to the robust foundation of the 
+      Task Parallel Library.</P>
+      <H3>Parallel.ForEach</H3>
+      <P>The variants of the <CODE>Parallel.For</CODE> loop are fine when 
+      iterating over the elements of an indexed data structure such as an array 
+      but an increasing number of data structures are presented only in the form 
+      of enumerable sequences. The <CODE>Parallel.For</CODE> loop is inadequate 
+      for iterating over an arbitrary sequence so the Task Parallel Library 
+      provides a <CODE>Parallel.ForEach</CODE> function that performs the 
+      equivalent action on any enumerable sequence.</P>
+      <P>For example, the following creates an enumerable sequence of the 
+      numbers from 0 to 99 and enumerates over them in parallel using the 
+      higher-order <CODE>Parallel.ForEach</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Tasks.Parallel.ForEach({0..99},&nbsp;printf&nbsp;"%d&nbsp;");;<BR>&nbsp;&nbsp;&nbsp;&nbsp;3&nbsp;8&nbsp;9&nbsp;10&nbsp;11&nbsp;12&nbsp;13&nbsp;1&nbsp;16&nbsp;17&nbsp;18&nbsp;19&nbsp;5&nbsp;14&nbsp;23&nbsp;24&nbsp;15&nbsp;27&nbsp;28&nbsp;29&nbsp;30&nbsp;31&nbsp;32&nbsp;20&nbsp;6&nbsp;36&nbsp;37&nbsp;38&nbsp;39&nbsp;40&nbsp;42&nbsp;43&nbsp;44<BR>&nbsp;&nbsp;&nbsp;&nbsp;45&nbsp;46&nbsp;47&nbsp;48&nbsp;49&nbsp;25&nbsp;26&nbsp;51&nbsp;52&nbsp;53&nbsp;54&nbsp;55&nbsp;56&nbsp;57&nbsp;33&nbsp;34&nbsp;59&nbsp;60&nbsp;61&nbsp;62&nbsp;63&nbsp;64&nbsp;65&nbsp;66&nbsp;67&nbsp;68&nbsp;69&nbsp;70&nbsp;71&nbsp;72&nbsp;73<BR>&nbsp;&nbsp;&nbsp;&nbsp;74&nbsp;75&nbsp;76&nbsp;77&nbsp;78&nbsp;79&nbsp;8058&nbsp;87&nbsp;88&nbsp;89&nbsp;90&nbsp;91&nbsp;92&nbsp;93&nbsp;94&nbsp;95&nbsp;96&nbsp;97&nbsp;98&nbsp;99&nbsp;7&nbsp;35&nbsp;81&nbsp;82&nbsp;83&nbsp;84&nbsp;85&nbsp;86&nbsp;2&nbsp;50&nbsp;41<BR>&nbsp;&nbsp;&nbsp;&nbsp;4&nbsp;21&nbsp;22<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Tasks.ParallelLoopResult&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Tasks.ParallelLoopResult&nbsp;{IsCompleted&nbsp;=&nbsp;true;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LowestBreakIteration&nbsp;=&nbsp;null;}</CODE></P>
+      <P>The <CODE>Parallel.ForEach</CODE> loop is more generic because it 
+      applies to arbitrary sequences and not just ranges of integers but 
+      generally much slower than the <CODE>Parallel.For</CODE> loop.</P>
+      <H2>Concurrent collections</H2>
+      <P>In addition to functions such as the <CODE>Parallel.For</CODE> and 
+      <CODE>Parallel.ForEach</CODE> loops, .NET 4 also provides thread-safe data 
+      structures that allow operations such as insertion to be performed 
+      concurrently from multiple threads.</P>
+      <H3>Bag</H3>
+      <P>The new <CODE>ConcurrentBag</CODE> collection is a thread-safe, 
+      unordered collection of objects. In particular, a 
+      <CODE>ConcurrentBag</CODE> is implemented internally using thread-local 
+      double-ended queues (deques), the importance of which in the context of 
+      multicore programming will be covered in a future F#.NET Journal article. 
+      This data structure allows elements to be added to the thread-local deque 
+      efficiently and removed from it efficiently with contention between 
+      threads only occurring when the thread-local deque is exhausted and an 
+      element must be extracted from another thread's deque. This relaxed 
+      approach to ordering makes the <CODE>ConcurrentBag</CODE> one of the most 
+      useful </P>
+      <P>Although this behaviour can be extremely efficient, there are 
+      situations where this will incur substantial overhead. The classic 
+      producer-consumer scenario has one thread producing results for 
+      consumption by another thread. If a <CODE>ConcurrentBag</CODE> is used 
+      then contention will always occur as elements must be passed from the 
+      producer's thread-local deque to the consumer's deque. Indeed, contention 
+      is inevitable in that scenario.</P>
+      <P>Like all concurrent collections, a <CODE>ConcurrentBag</CODE> still 
+      incurs a substantial overhead. For example, adding and then removing 
+      10,000,000 elements from a thread-unsafe <CODE>ResizeArray</CODE> takes 
+      0.3s:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;n&nbsp;=&nbsp;10000000;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;n&nbsp;:&nbsp;int&nbsp;=&nbsp;10000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;ResizeArray()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.Add&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;xs.Count&nbsp;&gt;&nbsp;0&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.RemoveAt(xs.Count-1);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.308,&nbsp;CPU:&nbsp;00:00:00.296,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0</CODE></P>
+      <P>Performing the same operations on a <CODE>ConcurrentBag</CODE> takes 
+      4.5s:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;System.Collections.Concurrent.ConcurrentBag()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.Add&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;r&nbsp;=&nbsp;ref&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;xs.TryTake&nbsp;r&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:04.527,&nbsp;CPU:&nbsp;00:00:05.413,&nbsp;GC&nbsp;gen0:&nbsp;33,&nbsp;gen1:&nbsp;31,&nbsp;gen2:&nbsp;1</CODE></P>
+      <P>In this case, the thread-safe concurrent collection is 15× slower than 
+      the ordinary collection.</P>
+      <P>The <CODE>ConcurrentBag</CODE> collection is ideal for use in 
+      combination with the <CODE>Parallel.For</CODE> loop that uses a 
+      thread-local accumulator because it allows the few thread-local results to 
+      be accumulated into a single collection for final processing. Moreover, 
+      the final accumulators passed as the last function argument to the 
+      higher-order <CODE>Parallel.For</CODE> function are invoked in a random 
+      order so an orderless container such as <CODE>ConcurrentBag</CODE> is 
+      ideal for accumulating those results.</P>
+      <P>For example, the <CODE>Array.Parallel.min</CODE> function defined above 
+      may be rewritten more simply using a <CODE>ConcurrentBag</CODE> as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Array&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Parallel&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;inline&nbsp;min&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;bag&nbsp;=&nbsp;System.Collections.Concurrent.ConcurrentBag()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Tasks.Parallel.For(0,&nbsp;xs.Length,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fun&nbsp;()&nbsp;-&gt;&nbsp;xs.[0]),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fun&nbsp;i&nbsp;_&nbsp;a&nbsp;-&gt;&nbsp;min&nbsp;xs.[i]&nbsp;a),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fun&nbsp;a&nbsp;-&gt;&nbsp;bag.Add&nbsp;a))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.min&nbsp;bag;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Array&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Parallel&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;min&nbsp;:&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The use of an inherently thread-safe collection obviates the need to 
+      use any explicit locking, simplifying the solution.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Array.Parallel.min&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.191,&nbsp;CPU:&nbsp;00:00:01.575,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;7</CODE></P>
+      <P>The <CODE>ConcurrentBag</CODE> collection has many such applications 
+      due to its ability to add and remove elements with minimal contention 
+      between threads.</P>
+      <H3>Dictionary</H3>
+      <P>The <CODE>ConcurrentDictionary</CODE> data structure provides a 
+      thread-safe hash table as an alternative to the ordinary 
+      <CODE>Dictionary</CODE> data structure.</P>
+      <P>For example, the following program inserts 1,000,000 bindings into a 
+      <CODE>ConcurrentDictionary</CODE> in parallel:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;1000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;System.Collections.Concurrent.ConcurrentDictionary(8,&nbsp;n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Tasks.Parallel.For(0,&nbsp;n,&nbsp;fun&nbsp;i&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[i]&nbsp;&lt;-&nbsp;1.0&nbsp;/&nbsp;float&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"%g&nbsp;%d\n"&nbsp;xs.[100]&nbsp;xs.Count;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;0.01&nbsp;1000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.472,&nbsp;CPU:&nbsp;00:00:02.246,&nbsp;GC&nbsp;gen0:&nbsp;4,&nbsp;gen1:&nbsp;4,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>Note that a concurrency level of 8 was hardcoded in this case.</P>
+      <P>As with the other concurrent collections, this is slower than the:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;System.Collections.Generic.Dictionary()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[i]&nbsp;&lt;-&nbsp;1.0&nbsp;/&nbsp;float&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"%g\n"&nbsp;xs.[100];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;0.01&nbsp;1000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.113,&nbsp;CPU:&nbsp;00:00:00.124,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>In order to work around the problem of concurrently replacing bindings, 
+      the <CODE>ConcurrentDictionary</CODE> collection also provides an 
+      additional <CODE>AddOrUpdate</CODE> member that adds a new key-value 
+      binding if the key is not already bound or replaces an existing binding if 
+      the key is already present.</P>
+      <H3>Queue</H3>
+      <P>The <CODE>ConcurrentQueue</CODE> class provides a first-in-first-out 
+      (FIFO) data structure, i.e. a thread-safe queue, that is currently lock 
+      free. The implementation is built upon a linked list and is centered 
+      around <CODE>Enqueue</CODE> and <CODE>TryDequeue</CODE> members for adding 
+      and removing items, respectively.</P>
+      <P>For example, the following creates a new <CODE>ConcurrentQueue</CODE> 
+      object and enqueues ten ints:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;xs&nbsp;=&nbsp;System.Collections.Concurrent.ConcurrentQueue&lt;int&gt;();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs&nbsp;:&nbsp;System.Collections.Concurrent.ConcurrentQueue&lt;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..10&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.Enqueue&nbsp;i;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;System.Collections.Concurrent.ConcurrentQueue&lt;int&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;[1;&nbsp;2;&nbsp;3;&nbsp;4;&nbsp;...]</CODE></P>
+      <P>Note that the result is visualized as an ordinary enumerable 
+      sequence.</P>
+      <P>The <CODE>ConcurrentQueue</CODE> class also provides an O(n) 
+      <CODE>Count</CODE> member and an O(1) <CODE>IsEmpty</CODE> property.</P>
+      <H3>Stack</H3>
+      <P>The <CODE>ConcurrentStack</CODE> class provides a last-in-first-out 
+      (LIFO) data structure, i.e. a thread-safe stack, that is currently lock 
+      free. The implementation is built upon a linked list and is centered 
+      around <CODE>Push</CODE> and <CODE>TryPop</CODE> members for adding and 
+      removing items, respectively.</P>
+      <P>For example, the following creates a new <CODE>ConcurrentStack</CODE> 
+      object and pushes ten ints:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;xs&nbsp;=&nbsp;System.Collections.Concurrent.ConcurrentStack&lt;int&gt;();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs&nbsp;:&nbsp;System.Collections.Concurrent.ConcurrentStack&lt;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..10&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.Push&nbsp;i;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;System.Collections.Concurrent.ConcurrentStack&lt;int&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;[10;&nbsp;9;&nbsp;8;&nbsp;7;&nbsp;...]</CODE></P>
+      <P>Note that the result is visualized as an ordinary enumerable 
+      sequence.</P>
+      <P>The <CODE>ConcurrentStack</CODE> class also provides an O(1) 
+      <CODE>Clear</CODE> property.</P>
+      <H3>PSeq</H3>
+      <P>The <CODE>PSeq</CODE> module provided by 
+      FSharp.PowerPack.Parallel.Seq.dll from the F# PowerPack provides a wealth 
+      of operations for manipulating sequences in parallel using the new 
+      Parallel LINQ infrastructure.</P>
+      <P>This module may be referenced as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"FSharp.PowerPack.Parallel.Seq.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\FSharpPowerPack-1.9.9.9\bin\FSharp.PowerPack.Parallel.Seq.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;Microsoft.FSharp.Collections;;</CODE></P>
+      <P>The definitions provided by the <CODE>PSeq</CODE> module make it easy 
+      to operate on enumerable sequences. For example, elements that match a 
+      predicate function may be filtered out using the <CODE>PSeq.filter</CODE> 
+      function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;PSeq.filter&nbsp;(fun&nbsp;x&nbsp;-&gt;&nbsp;x&nbsp;&gt;&nbsp;3)&nbsp;[1..10];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;pseq&lt;int&gt;&nbsp;=&nbsp;seq&nbsp;[5;&nbsp;7;&nbsp;8;&nbsp;4;&nbsp;...]</CODE></P>
+      <P>Note that the <CODE>PSeq</CODE> functions often do not preserve 
+      order.</P>
+      <P>The functions from the <CODE>PSeq</CODE> module may be used to 
+      construct pipelines of operations on sequences.</P>
+      <P>Although the <CODE>PSeq</CODE> module provides many familiar and useful 
+      functional constructs such as map and reduce functions, these functions 
+      are inherently limited by the fact that they must act upon sequences and 
+      not divisible ranges. Consequently, the functions provided by the 
+      <CODE>Array.Parallel</CODE> module from the F# standard library typically 
+      scale much more efficiently with the number of cores in the machine.</P>
+      <H3>Array.Parallel</H3>
+      <P>The new <CODE>Array.Parallel</CODE> module provides versions of many 
+      ordinary higher-order array functions that have been parallelized using 
+      the <CODE>Parallel.For</CODE> loops described in section 
+      [sub:Parallel.For]:</P>
+      <P><CODE>Array.Parallel.choose</CODE> applies its function argument 
+      <CODE>f:&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;option</CODE> to each element in 
+      parallel and collects the results that are of the form Some b in a new 
+      array.</P>
+      <P><CODE>Array.Parallel.collect</CODE> applies its function argument 
+      <CODE>f:&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;[]</CODE> to each element and 
+      concatenates the results into a single array.</P>
+      <P><CODE>Array.Parallel.map</CODE> applies its function argument 
+      <CODE>f:&nbsp;'a&nbsp;-&gt;&nbsp;'b</CODE> to each element, returning a 
+      new array.</P>
+      <P><CODE>Array.Parallel.mapi</CODE> applies its function argument 
+      <CODE>f:&nbsp;'a&nbsp;-&gt;&nbsp;'b</CODE> to each element, returning a 
+      new array.</P>
+      <P><CODE>Array.Parallel.iter</CODE> applies its function argument 
+      <CODE>f:&nbsp;'a&nbsp;-&gt;&nbsp;unit</CODE> to each element in 
+      parallel.</P>
+      <P><CODE>Array.Parallel.iteri</CODE> applies its function argument 
+      <CODE>f:&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;unit</CODE> to each 
+      element in parallel.</P>
+      <P><CODE>Array.Parallel.init</CODE> creates a new array using its function 
+      argument <CODE>f:&nbsp;int&nbsp;-&gt;&nbsp;'a</CODE> to create the 
+      elements in parallel.</P>
+      <P><CODE>Array.Parallel.partition</CODE> applies its function argument 
+      <CODE>f:&nbsp;'a&nbsp;-&gt;&nbsp;bool</CODE> and returns two arrays 
+      containing the elements for which the result was true and those for which 
+      it was false.</P>
+      <P>These functions are generally much more efficient than their 
+      <CODE>PSeq</CODE> equivalents because they operate on divisible sequences 
+      (contiguous ranges of array indices) rather than linear sequences. The 
+      importance of divisible containers will be discussed in future F#.NET 
+      Journal articles.</P>
+      <H2>Summary</H2>
+      <P>This article has examined the <CODE>Parallel.For</CODE> and 
+      <CODE>Parallel.ForEach</CODE> loops, concurrent collections, 
+      <CODE>PSeq</CODE> module and <CODE>Array.Parallel</CODE> modules new in 
+      .NET 4 and Visual F# 2010.</P>
+      <P>Future F#.NET Journal articles will use these constructs to build 
+      scalable parallel programs.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript src="F%23%20Journal%20parallelism_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

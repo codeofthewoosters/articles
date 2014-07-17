@@ -1,0 +1,167 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0094)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/AsynchronousBoundedQueue.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20asynchronous%20bounded%20queues_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20asynchronous%20bounded%20queues_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20asynchronous%20bounded%20queues_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20asynchronous%20bounded%20queues_files/title.gif"> 
+</TD>
+    <TD><IMG 
+      src="F%23%20Journal%20asynchronous%20bounded%20queues_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Asynchronous bounded queues</H1>
+      <P>The <CODE>MailboxProcessor</CODE> in the F# standard library uses 
+      unbounded queues that can grow to be arbitrarily long. Consequently, the 
+      queue in a consumer can grow without limit if its producers overwhelm it 
+      with data. This article examines an elegant solution to this problem in 
+      the form of a bounded queue with asynchronous enqueue and dequeue 
+      operations that cause both producers and consumers to cooperatively 
+      suspend themselves until capacity or data are available to satisfy their 
+      request. Furthermore, this simpler architecture neatly decouples the 
+      sequential processes from the concurrent queues they use to 
+      communicate.</P>
+      <H2>Introduction</H2>
+      <P>Asychronous workflows and the <CODE>MailboxProcessor</CODE> make it 
+      easy to construct networks of communicating sequential processes. Such 
+      networks often contain pipelines where data is processed in stages such as 
+      deserialization, processing and serialization in a server application. 
+      However, there is nothing in this basic design to throttle producers in 
+      the pipeline when their consumers are struggling to keep up. Without such 
+      throttling it is possible for the queues between sequential processes to 
+      grow unbounded until memory is exhausted. Moreover, generational garbage 
+      collectors exhibit pathological performance behaviour with long queues so 
+      the system will slow down.</P>
+      <P>A data structure known as a bounded queue is an elegant solution to the 
+      problem of overloading. This kind of queue allows values to be enqueued as 
+      long as there is remaining capacity for them. When the capacity of the 
+      queue has filled (because the consumer(s) have not been dequeuing values 
+      as quickly as the producers have been enqueuing them) subsequent attempts 
+      to enqueue fail. Producers are normally expected to handle this saturation 
+      by throttling themselves.</P>
+      <P>Asynchronous workflows provide us with an interesting opportunity. 
+      Rather than having the enqueue operation fail when the bounded queue is 
+      full, and relying upon the producers to cooperatively handle this 
+      situation, we can make the enqueue operation asynchronous. This way, any 
+      producer that fails to enqueue immediately will be suspended until there 
+      is room in the queue whereupon it can be resumed. This pushes the burden 
+      of correctness off the producers and onto the implementation of this new 
+      asynchronous blocking queue collection.</P>
+      <P>This approach does make two assumptions about the system using this new 
+      collection. Firstly, this collection should not be used in a cyclic 
+      concurrent system where a producer could be blocked waiting for itself to 
+      consume data from the queue because this would be a deadlock. Secondly, 
+      the system should have a bounded number of agents.</P>
+      <H2>Implementation</H2>
+      <P>Concurrent collections are notoriously difficult to implement 
+      correctly. In this article we shall implement our concurrent collection 
+      very simply by passing messages to an asynchronous agent that maintains 
+      the state of the bounded queue. This makes it particularly easy to 
+      implement asynchronous enqueue and dequeue operation as we can use the 
+      <CODE>PostAndAsyncReply</CODE> method provided by the 
+      <CODE>MailboxProcessor</CODE> class.</P>
+      <P>Our bounded queue is composed of three constituent queues. The first is 
+      a queue of <CODE>reply</CODE> functions for each consumer waiting to 
+      dequeue an element. The second is the current queue of elements. The third 
+      is a queue of elements and <CODE>reply</CODE> functions for each producer 
+      waiting to enqueue an element.</P>
+      <P>We begin by opening the namespace containing the built-in .NET 
+      collections:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Collections.Generic;;</CODE></P>
+      <P>The components of a concurrent program are often expressed as a union 
+      type for the messages sent to an agent that is wrapped inside a class. Our 
+      program is no exception and the following <CODE>Instruction</CODE> union 
+      type is used to represent a queue operation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Instruction&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Enqueue&nbsp;of&nbsp;'T&nbsp;*&nbsp;(unit&nbsp;-&gt;&nbsp;unit)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Dequeue&nbsp;of&nbsp;('T&nbsp;-&gt;&nbsp;unit);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Instruction&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Enqueue&nbsp;of&nbsp;'T&nbsp;*&nbsp;(unit&nbsp;-&gt;&nbsp;unit)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Dequeue&nbsp;of&nbsp;('T&nbsp;-&gt;&nbsp;unit)</CODE></P>
+      <P>The implementation of our asynchronous bounded queue begins with a 
+      class that has an implicit constructor accepting the (maximum) capacity of 
+      the bounded queue:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;AsyncBoundedQueue&lt;'T&gt;(capacity:&nbsp;int)&nbsp;=</CODE></P>
+      <P>The three queues are defined as local variables within the class:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;waitingConsumers,&nbsp;elts,&nbsp;waitingProducers&nbsp;=&nbsp;Queue(),&nbsp;Queue&lt;'T&gt;(),&nbsp;Queue()</CODE></P>
+      <P>The following <CODE>balance</CODE> function shuffles as many elements 
+      through the queue as possible by dequeuing if there are elements queued 
+      and consumers waiting for them and enqueuing if there is capacity spare 
+      and producers waiting:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;balance()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;elts.Count&nbsp;&gt;&nbsp;0&nbsp;&amp;&amp;&nbsp;waitingConsumers.Count&nbsp;&gt;&nbsp;0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elts.Dequeue()&nbsp;|&gt;&nbsp;waitingConsumers.Dequeue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;balance()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;elts.Count&nbsp;&lt;&nbsp;capacity&nbsp;&amp;&amp;&nbsp;waitingProducers.Count&nbsp;&gt;&nbsp;0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x,&nbsp;reply&nbsp;=&nbsp;waitingProducers.Dequeue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reply()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elts.Enqueue&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;balance()</CODE></P>
+      <P>The asynchronous agent at the core of this concurrent collection is 
+      defined as another local called <CODE>agent</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;</CODE></P>
+      <P>This agent sits in an infinite loop waiting to receive enqueue and 
+      dequeue instructions, each of which are queued internally before the 
+      internal queues are rebalanced:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Enqueue(x,&nbsp;reply)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;waitingProducers.Enqueue&nbsp;(x,&nbsp;reply)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Dequeue&nbsp;reply&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;waitingConsumers.Enqueue&nbsp;reply<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;balance()&nbsp;})</CODE></P>
+      <P>The two operations supported by this agent are exposed as member 
+      functions on the <CODE>AsyncBoundedQueue</CODE> class. The 
+      <CODE>AsyncEnqueue</CODE> member calls the <CODE>PostAndAsyncReply</CODE> 
+      member of the agent with the appropriate message:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.AsyncEnqueue&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.PostAndAsyncReply(fun&nbsp;reply&nbsp;-&gt;&nbsp;Enqueue(x,&nbsp;reply.Reply))</CODE></P>
+      <P>Similarly for the <CODE>AsyncDequeue</CODE> member:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.AsyncDequeue()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.PostAndAsyncReply(fun&nbsp;reply&nbsp;-&gt;&nbsp;Dequeue&nbsp;reply.Reply)</CODE></P>
+      <P>Note how the use of an F# <CODE>MailboxProcessor</CODE> makes it easy 
+      for us to provide an asynchronous interface.</P>
+      <P>Finally, the <CODE>MailboxProcessor</CODE> implements 
+      <CODE>IDisposable</CODE> so we also implement it and call the 
+      <CODE>Dispose</CODE> member of our agent:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Dispose()&nbsp;=&nbsp;(agent&nbsp;:&gt;&nbsp;System.IDisposable).Dispose();;</CODE></P>
+      <P>The type of our class is given by F# interactive as:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;AsyncBoundedQueue&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;capacity:int&nbsp;-&gt;&nbsp;AsyncBoundedQueue&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;AsyncDequeue&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Async&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;AsyncEnqueue&nbsp;:&nbsp;x:'T&nbsp;-&gt;&nbsp;Async&lt;unit&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <H2>Results</H2>
+      <P>The following program tests our bounded queue by executing a pair of 
+      asynchronous agents in parallel with one enqueuing elements as quickly as 
+      possible and the other dequeuing them at around 1,000 elements per 
+      second:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;3000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;queue&nbsp;=&nbsp;new&nbsp;AsyncBoundedQueue&lt;_&gt;(10)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;async&nbsp;{&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;queue.AsyncEnqueue&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ts.Add&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;"Producing",&nbsp;float&nbsp;n&nbsp;/&nbsp;timer.Elapsed.TotalSeconds&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;_&nbsp;=&nbsp;queue.AsyncDequeue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;timer.Elapsed.TotalMilliseconds&nbsp;&lt;&nbsp;float&nbsp;i&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;Async.Sleep&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;"Consuming",&nbsp;float&nbsp;n&nbsp;/&nbsp;timer.Elapsed.TotalSeconds&nbsp;}&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Async.Parallel<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Async.RunSynchronously<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.iter&nbsp;(fun&nbsp;(s,&nbsp;t)&nbsp;-&gt;&nbsp;printfn&nbsp;"%s&nbsp;at&nbsp;%0.0f&nbsp;msgs/s"&nbsp;s&nbsp;t);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Producing&nbsp;at&nbsp;992&nbsp;msgs/s<BR>&nbsp;&nbsp;&nbsp;&nbsp;Consuming&nbsp;at&nbsp;998&nbsp;msgs/s<BR>&nbsp;&nbsp;&nbsp;&nbsp;...</CODE></P>
+      <P>The output demonstrates that our bounded queue is doing its job: 
+      although the producer is sitting in the asynchronous equivalent of a busy 
+      loop it is speed limited by the bounded queue to the speed of the 
+      consumer.</P>
+      <P>The architecture of this little example program is also interesting. 
+      Our use of a predefined <CODE>AsyncBoundedQueue</CODE> in two workflows 
+      permits a new style of asynchronous code in F# where workflows run outside 
+      of agents. Whereas <CODE>MailboxProcessor</CODE> tightly couples its 
+      internal asynchronous workflow (the "sequential process") to the unbounded 
+      queue used to hold its incoming messages, this new style neatly decouples 
+      the message queues from the sequential processes that move data between 
+      them.</P>
+      <H2>Summary</H2>
+      <P>This article has covered the design and implementation of an 
+      asynchronous bounded queue and demonstrated how it can be used to decouple 
+      communicating sequential processes from their message queues.</P>
+      <P>Future F#.NET Journal articles will revisit concurrent programming 
+      including performance profiling and an architecture that allows clients to 
+      connect to compressed feeds.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20asynchronous%20bounded%20queues_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

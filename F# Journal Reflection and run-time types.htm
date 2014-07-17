@@ -1,0 +1,447 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0080)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/reflection.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Reflection and run-time types</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Reflection%20and%20run-time%20types_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Reflection%20and%20run-time%20types_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Reflection%20and%20run-time%20types_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Reflection and run-time types</TITLE>     <LINK 
+href="F%23%20Journal%20Reflection%20and%20run-time%20types_files/style.css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20Reflection%20and%20run-time%20types_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Reflection%20and%20run-time%20types_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Reflection%20and%20run-time%20types_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Reflection%20and%20run-time%20types_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Reflection and run-time types</H1>
+      <P>The common language run-time (CLR) provides functionality known as      
+              <I>reflection</I> that allows programs to create instances of 
+      types dynamically, bind types to existing objects and lookup the type of a 
+      given object. The F# programming language maps conventional ML type system 
+      constructs (tuples, records and variants) onto .NET classes and augments 
+      the reflection capabilities of .NET with functions to interrogate F# 
+      types. This article describes the reflection capabilities of F# and 
+      provides several example applications demonstrating the use of reflection 
+      in F# programs.           </P>
+      <H2>Introduction</H2>
+      <P>The ubiquity of run-time type information on the .NET framework is a 
+      hallmark of modern virtual machines (VMs). Reflection can be used to 
+      create and manipulate values of different types programmatically while a 
+      program is running and this capability has many different applications, 
+      from serialization to unit testing.</P>
+      <P>The .NET framework provides core reflection capabilities that allow any 
+      objects and class types to be examined and manipulated. Definitions 
+      relating to class types are in the              <CODE>System.Type</CODE> 
+      class and functions for manipulating them are in the              
+      <CODE>System.Reflection</CODE> namespace.           </P>
+      <P>Invoking the              <CODE>GetType()</CODE> member of any value 
+      gives a value of a subtype of              <CODE>System.Type</CODE> that 
+      represents the type of the original value. For example, invoking this 
+      member on an              <CODE>int</CODE> value gives the              
+      <CODE>System.Int32</CODE> type:           </P>
+<PRE>&gt; (42).GetType();;
+val it : System.Type
+= System.Int32
+    {Assembly = mscorlib, Version=2.0.0.0, Culture=neutral,
+     PublicKeyToken=b77a5c561934e089;
+     AssemblyQualifiedName = "System.Int32, mscorlib, Version=2.0.0.0,
+       Culture=neutral, PublicKeyToken=b77a5c561934e089";
+     Attributes = AutoLayout, AnsiClass, Class, Public, SequentialLayout, 
+       Sealed, Serializable, BeforeFieldInit;
+     BaseType = System.ValueType;
+     ContainsGenericParameters = false;
+     ...
+     UnderlyingSystemType = ...;}</PRE>
+      <P>As this output illustrates, the values that represent types convey a 
+      huge amount of information. For example, we can easily determine that the  
+                  <CODE>int</CODE> type is a value type and, therefore, values 
+      of this type are stored unboxed:           </P>
+<PRE>&gt; ((42).GetType()).IsValueType;;
+val it : bool = true</PRE>
+      <P>F# augments these core reflection capabilities with extra functionality 
+      in the              <CODE>Microsoft.FSharp.Reflection</CODE> namespace.    
+             </P>
+      <H2>Accessing Attributes With Reflection</H2>
+      <P>Reflection allows a program to obtain a value representing a type. That 
+      value reflects all of the available information about the type including 
+      the attributes held in its metadata. Attributes are represented by class 
+      types derived from the              <CODE>System.Attribute</CODE> base 
+      class.           </P>
+      <P>For example, the following defines a new              
+      <CODE>DocumentationAttribute</CODE> that we might use to provide 
+      documentation that persists through compilation (ordinary doc comments are 
+      not handled in this way):           </P>
+<PRE>&gt; type DocumentationAttribute(doc: string) =
+    inherit System.Attribute()
+    member x.Documentation = doc;;
+type DocumentationAttribute =
+  class
+    inherit System.Attribute
+    new : doc:string -&gt; DocumentationAttribute
+    member Documentation : string
+  end</PRE>
+      <P>Definitions may be augmented with attributes by preceding them with the 
+                   <CODE>[&lt;...&gt;]</CODE>  construct. We have seen this 
+      before in the form of a              
+      <CODE>[&lt;System.STAThread&gt;]</CODE> preceding the main              
+      <CODE>do</CODE> of a GUI program to ensure that the main thread is run in 
+      single-threaded apartment mode.           </P>
+      <P>The following defines a class              <CODE>Example</CODE> with a 
+      static member              <CODE>Succ</CODE> that carries our              
+      <CODE>DocumentationAttribute</CODE> with the given string:           </P>
+<PRE>&gt; type Example =
+    [&lt;Documentation("Find the next integer")&gt;]
+    static member Succ n = n + 1;;
+type Example =
+  class
+    static member Succ : n:int -&gt; int
+  end</PRE>
+      <P>The type of the              <CODE>Example</CODE> class may be obtained 
+      as a value at run-time using the              
+      <CODE>typeof&lt;..&gt;</CODE> construct and that value may be used to 
+      extract an attribute and its constituent data. The following extracts the 
+      string value embedded in our              
+      <CODE>DocumentationAttribute</CODE> from the              
+      <CODE>Example</CODE> class:           </P>
+<PRE>&gt; begin
+    let mi = typeof&lt;Example&gt;.GetMethod("Succ")
+    let ty = typeof&lt;DocumentationAttribute&gt;
+    (mi.GetCustomAttributes(ty, false).[0] :?&gt;
+      DocumentationAttribute).Documentation
+  end;;
+val it : string = "Find the next integer"</PRE>
+      <P>Thus we have correctly extracted the data carried by the attribute 
+      associated with a method.</P>
+      <H2>Examining and instantiating types in an assembly</H2>
+      <P>Definitions from              <CODE>System.Reflection.Assembly</CODE> 
+      may be used to create and manipulate assemblies. This section describes a 
+      small program that accumulates some simple statistics about the hierarchy 
+      of definitions in an assembly.           </P>
+      <P>The following              <CODE>count</CODE> function accumulates the 
+      number of types nested inside the given types and the maximum depth of the 
+      type hierarchy recursively, printing the fully-qualified name of each type 
+      as it is encountered:           </P>
+<PRE>&gt; let rec count (tys: System.Type array) =
+    let mutable n = 0
+    let mutable d = 0
+    for ty in tys do
+      printf "Type: %s\n" ty.FullName
+      let n', d' = count(ty.GetNestedTypes())
+      n &lt;- n + 1 + n'
+      d &lt;- max d (1 + d')
+    n, d;;
+val count : System.Type array -&gt; int * int</PRE>
+      <P>The following              <CODE>count2</CODE> function accumulates the 
+      same statistics over a sequence of modules:           </P>
+<PRE>&gt; let rec count2 (ms: System.Reflection.Module array) =
+    let mutable n = 0
+    let mutable d = 0
+    for m in ms do
+      printf "Module: %s\n" m.Name
+      let n', d' = count(m.GetTypes())
+      n &lt;- n + 1 + n'
+      d &lt;- max d (1 + d')
+    n, d;;
+val count2 : System.Reflection.Module array -&gt; int * int</PRE>
+      <P>Finally, the following main program uses the              
+      <CODE>count2</CODE> function to compute the number of types and depth of 
+      the type hierarchy in the              <CODE>System.Web.dll</CODE> 
+      assembly:           </P>
+<PRE>&gt; do
+    let dll = @"C:\WINDOWS\Microsoft.NET\Framework\v2.0.50727\System.Web.dll"
+    let asm = System.Reflection.Assembly.LoadFile dll
+    let n, d = count2(asm.GetModules())
+    printf "%d types in hierarchy %d deep\n" n d;;
+...
+1954 types in hierarchy 3 deep</PRE>
+      <P>The ability to interrogate assemblies has a variety of practical 
+      applications such as spellchecking the names of definitions.</P>
+      <H2>Accessing methods at run-time</H2>
+      <P>Reusing our              <CODE>Example</CODE> class, we can use 
+      reflection to refer to the              <CODE>Succ</CODE> method of the 
+      class and invoke it as follows:           </P>
+<PRE>&gt; let succ (n: int) =
+    (typeof&lt;Example&gt;.GetMethod("Succ").Invoke(null, [|(n :&gt; obj)|]) :?&gt; int);;
+val succ : int -&gt; int
+&gt; succ 3;;
+val it : int = 4</PRE>
+      <P>The              <CODE>GetMethod</CODE> method returns an object of the 
+      class              <CODE>System.Reflection.MethodInfo</CODE> that 
+      represents a run-time handle to a compiled method. The              
+      <CODE>Invoke</CODE> method of that object may be used to invoke that 
+      method of our original object. In this case, the              
+      <CODE>Succ</CODE> method of the              <CODE>Example</CODE> class is 
+      static, so the reference to the object for which the method is invoked is 
+      left              <CODE>null</CODE> . The arguments to the method are 
+      specified as an              <CODE>obj array</CODE> and the return value 
+      is also of the type              <CODE>obj</CODE> . This use of the        
+            <CODE>obj</CODE> type is effectively dynamic typing and requires us 
+      to either upcast to the              <CODE>obj</CODE> type using the       
+             <CODE>:&gt;</CODE> operator or use F#'s              
+      <CODE>box</CODE> function to achieve the same effect. Upcasting is safe 
+      but the result must be downcast using the              <CODE>:?&gt;</CODE> 
+      operator to the appropriate type, in this case the              
+      <CODE>int</CODE> type. This downcast involves a run-time type check and, 
+      consequently, it a potential source of run-time errors.           </P>
+      <P>Note that we are careful to ensure that the              
+      <CODE>succ</CODE> function encapsulates all of the necessary casts and 
+      exposes only a statically-typed function signature (i.e. its type          
+          <CODE>int -&gt; int</CODE> does not involve the              
+      <CODE>obj</CODE> type). Minimizing the exposure to dynamic typing in this 
+      way ensures that as many type errors as possible will be caught by the 
+      static type system.           </P>
+      <H2>Examining F#-specific types</H2>
+      <P>The              <CODE>Microsoft.FSharp.Reflection</CODE> namespace 
+      contains a variety of functions that are designed to provide a simple and 
+      future-proof way to apply reflection to native F# types such as tuples, 
+      records, variants and first-class functions. This is important because the 
+      underlying .NET representation of these types may well change as the F# 
+      compiler evolves.           </P>
+      <P>In this section we describe how the objects representing F# types may 
+      be decomposed in order to </P>
+      <P>The following F# variant type is a representation of the F# type system 
+      that includes the F#-specific types (tuples, records, functions and 
+      variants) as well as a catch-all type              <CODE>Abbrev</CODE> 
+      that can be used to represent either existing types like              
+      <CODE>System.Int32</CODE> or to handle references to self in recursive F# 
+      type definitions:           </P>
+<PRE>&gt; type 'a ty =
+    | Abbrev of 'a list * string
+    | Function of 'a ty * 'a ty
+    | Record of string * (string * 'a) list
+    | Tuple of 'a ty list
+    | Union of string * (string * 'a list) list;;
+type 'a ty =
+  | Abbrev of 'a list * string
+  | Function of 'a ty * 'a ty
+  | Record of string * (string * 'a) list
+  | Tuple of 'a ty list
+  | Union of string * (string * 'a list) list</PRE>
+      <P>Note that the anonymous structural types, tuples and functions, are 
+      recursive in this definition.</P>
+      <P>The following              <CODE>type_of</CODE> function uses the 
+      reflection capabilities provided by F# in the              
+      <CODE>Microsoft.FSharp.Reflection.FSharpType</CODE> namespace to translate 
+      a given              <CODE>System.Type</CODE> object into a value of the   
+                 <CODE>'a ty</CODE> variant type defined above:           </P>
+<PRE>&gt; let rec type_of f = function
+    | ty when Reflection.FSharpType.IsFunction ty -&gt;
+        let ty_arg, ty_ret = Reflection.FSharpType.GetFunctionElements ty
+        Function(type_of f ty_arg, type_of f ty_ret)
+    | ty when Reflection.FSharpType.IsTuple ty -&gt;
+        Tuple
+          [ for ty in Reflection.FSharpType.GetTupleElements ty do
+              yield type_of f ty ]
+    | ty when Reflection.FSharpType.IsRecord ty -&gt;
+        Record( ty.Name,
+                [ for pi in Reflection.FSharpType.GetRecordFields ty do
+                    for acc in pi.GetAccessors() do
+                      yield pi.Name, f acc.ReturnType ] )
+    | ty when Reflection.FSharpType.IsUnion ty -&gt;
+        Union(ty.Name,
+              [ for uc in Reflection.FSharpType.GetUnionCases ty do
+                  let args =
+                    [ for field in uc.GetFields() -&gt;
+                        f field.PropertyType ]
+                  yield uc.Name, args ])
+    | ty -&gt;
+        Abbrev( [ for ty in ty.GetGenericArguments() -&gt; f ty ],
+                ty.FullName );;
+val type_of : (System.Type -&gt; 'a) -&gt; System.Type -&gt; 'a ty</PRE>
+      <P>Note that a bug in F# 1.9.6.2 requires us to test for a tuple before 
+      testing for a record because the              
+      <CODE>Reflection.FSharpType.IsRecord</CODE> function incorrectly 
+      identifies tuples as records.           </P>
+      <P>The first match case detects and handles function types. In this case, 
+      the              <CODE>type_of</CODE> function calls itself recursively to 
+      handle nested function types, i.e. currying.           </P>
+      <P>The second match case handles tuples and, similarly, recurses to handle 
+      nested tuple types.</P>
+      <P>The third match case handles record types, extracting the name of the 
+      record type and the name and type of each field in the record type. 
+      Instead of recursing, the function argument              <CODE>f</CODE> 
+      that was given to the              <CODE>type_of</CODE> function is 
+      applied to the type in order to allow the caller to coerce types into a 
+      more amenable form, such as a concise string instead of the huge type 
+      definitions we saw earlier in this article. This was facilitated by the 
+      inclusion of the polymorphic type variable              <CODE>'a</CODE> in 
+      the definition of the              <CODE>'a ty</CODE> variant type.        
+         </P>
+      <P>The fourth match case handles variant types, the most complicated and 
+      expressive of F#'s types. The name of the variant type is extracted along 
+      with name and arguments of each type constructor.</P>
+      <P>The final catch-all match case clause handles any remaining types, such 
+      as .NET's own types, and generates a named abbreviation that lists any 
+      generic type arguments.</P>
+      <P>The following minimal example translates the              
+      <CODE>int</CODE> type:           </P>
+<PRE>&gt; typeof&lt;int&gt; |&gt; type_of (fun (ty: System.Type) -&gt; ty.Name);;
+val it : string ty = Abbrev ([],"System.Int32")</PRE>
+      <P>Tuple types of any arity are extracted as follows:</P>
+<PRE>&gt; typeof&lt;int * float&gt; |&gt; type_of (fun (ty: System.Type) -&gt; ty.Name);;
+val it : string ty
+= Tuple [Abbrev ([],"System.Int32"); Abbrev ([],"System.Double")]</PRE>
+      <P>Function types may be extracted in the same way:</P>
+<PRE>&gt; typeof&lt;(int -&gt; float)&gt; |&gt; type_of (fun (ty: System.Type) -&gt; ty.Name);;
+val it : string ty
+= Function (Abbrev ([],"System.Int32"),Abbrev ([],"System.Double"))</PRE>
+      <P>Note that F# automatically handles the equivalence of the various 
+      underlying function types including delegates.</P>
+      <P>The following example illustrates the importance of recursion in the 
+      definition of our              <CODE>type_of</CODE> function by 
+      translating the type              <CODE>int -&gt; (float -&gt; 
+      unit)</CODE> of a curried function that is a function type nested as the 
+      return type of another function type:           </P>
+<PRE>&gt; typeof&lt;(int -&gt; float -&gt; unit)&gt; |&gt; type_of (fun (ty: System.Type) -&gt; ty.Name);;
+val it : string ty
+= Function
+    (Abbrev ([],"System.Int32"),
+     Function
+       (Abbrev ([],"System.Double"),Abbrev ([],"Microsoft.FSharp.Core.Unit")))</PRE>
+      <P>F#'s own              <CODE>'a option</CODE> type is one of the 
+      simplest possible variant types:           </P>
+<PRE>&gt; typeof&lt;int option&gt; |&gt; type_of (fun (ty: System.Type) -&gt; ty.Name);;
+val it : string ty = Union ("Option`1",[("None", []); ("Some", ["Int32"])])</PRE>
+      <P>The              <CODE>'a list</CODE> type is slightly more complex 
+      because the              <CODE>Cons</CODE> type constructor contains a 
+      list itself:           </P>
+<PRE>&gt; typeof&lt;int list&gt; |&gt; type_of (fun (ty: System.Type) -&gt; ty.Name);;
+val it : string ty
+= Union ("List`1",[("Empty", []); ("Cons", ["Int32"; "List`1"])])</PRE>
+      <P>Note that we have been quite lax with respect to type variables and, 
+      consequently, it is not clear that the recursive reference to the          
+          <CODE>List`1</CODE> type from within its own              
+      <CODE>Cons</CODE> constructor is actually referring to itself with the 
+      same type variable (in this case              <CODE>'a = int</CODE> ).     
+            </P>
+      <P>Finally, we may get the type of an object, such as the object 
+      representing the              <CODE>List.fold_left</CODE> function:        
+         </P>
+<PRE>&gt; List.fold_left.GetType() |&gt; type_of (fun (ty: System.Type) -&gt; ty.Name);;
+val it : string ty
+= Function
+    (Function
+       (Abbrev ([],"System.Object"),
+        Function (Abbrev ([],"System.Object"),Abbrev ([],"System.Object"))),
+     Function
+       (Abbrev ([],"System.Object"),
+        Function
+          (Union ("List`1",[("Empty", []); ("Cons", ["Object"; "List`1"])]),
+           Abbrev ([],"System.Object"))))</PRE>
+      <P>This last example demonstrates that the types of relatively-simple F# 
+      functions can be surprisingly complicated when considered in full. Type 
+      inference often leads to heavily generic code with many type variables. In 
+      such cases, the ability to automate the analysis of such types using 
+      reflection has obvious benefits.</P>
+      <H2>Using reflection to build GUIs with PropertyGrid</H2>
+      <P>One of the more interesting applications of reflection that is already 
+      implemented by part of .NET is the ability to get and set the values of 
+      the properties of an object. The Windows Forms              
+      <CODE>PropertyGrid</CODE> control does precisely this in order to present 
+      a GUI representation of the properties of an object. This control is 
+      already familiar to users of Visual Studio as the control responsible for 
+      the Properties pane.           </P>
+      <P>The following program demonstrates the Windows Forms              
+      <CODE>PropertyGrid</CODE> control by creating an object with several 
+      properties and reflecting them in the GUI:           </P>
+<PRE>#light</PRE>
+<PRE>open System.Windows.Forms
+open System.ComponentModel</PRE>
+<PRE>type Demo() =
+  let mutable bool = false
+  let mutable int = 0
+  let mutable float = 0.0</PRE>
+<PRE>  [&lt;Category("DemoCategory")&gt;]
+  member x.Bool
+    with get() = bool
+    and set(b) = bool &lt;- b</PRE>
+<PRE>  [&lt;Category("DemoCategory")&gt;]
+  member x.Int
+    with get() = int
+    and set(n) = int &lt;- n</PRE>
+<PRE>  [&lt;Category("DemoCategory")&gt;]
+  member x.Float
+    with get() = float
+    and set(n) = float &lt;- n</PRE>
+<PRE>[&lt;System.STAThread&gt;]
+do
+  let demo = Demo()
+  
+  let grid = new PropertyGrid()
+  grid.Dock &lt;- DockStyle.Fill
+  grid.SelectedObject &lt;- demo
+  let attrib = (CategoryAttribute("DemoCategory") :&gt; System.Attribute)
+  grid.BrowsableAttributes &lt;- AttributeCollection([|attrib|])</PRE>
+<PRE>  let form = new Form(Visible=true, Text="PropertyGrid Demo")
+  form.Controls.Add grid</PRE>
+<PRE>  Application.Run form</PRE>
+      <P>The              <CODE>Demo</CODE> class exposes three internal 
+      variables called              <CODE>bool</CODE> ,              
+      <CODE>int</CODE> and              <CODE>float</CODE> as the properties     
+               <CODE>Bool</CODE> ,              <CODE>Int</CODE> and             
+       <CODE>Float</CODE> , respectively. Each property has the attribute        
+            <CODE>System.ComponentModel.CategoryAttribute</CODE> applied to it 
+      with the same category string              <CODE>"DemoCategory"</CODE> 
+      that will be used to instruct the property grid which properties to expose 
+      graphically. The main program simply creates a window filled with a single 
+      control              <CODE>grid</CODE> that is a property grid. The        
+            <CODE>SelectedObject</CODE> property of the property grid is used to 
+      dictate which object is being reflected. The              
+      <CODE>BrowsableAttributes</CODE> property is used to enumerate the 
+      category names that are to be reflected in the property grid; just         
+           <CODE>"DemoCategory"</CODE> in this case. That is all that is 
+      required to create a Windows Forms control reflecting the properties of an 
+      object.           </P>
+      <P>When run, this program produces the following GUI editor for our 
+      object:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Reflection%20and%20run-time%20types_files/PropertyGrid.gif"> 
+                  </P>
+      <P></P>
+      <P>This is a quick and easy way for developers to generate GUIs and is 
+      particularly well suited to development situations where it would be a 
+      waste of time to keep a custom GUI maintained with respect to a changing 
+      code base. However, this is clearly not a viable substitute for a GUI 
+      architect!</P>
+      <H2>Summary</H2>
+      <P>This article has described the basic capabilities of .NET reflection as 
+      well as the functionality provided by F# itself for interrogating F# 
+      types. Such capabilities have a wide range of applications and one such 
+      application has been presented here in the form of the              
+      <CODE>PropertyGrid</CODE> Windows Forms control.           </P>
+      <P>Future F#.NET Journal articles will revisit the topic of reflection in 
+      the context of metaprogramming and F# quotations.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Reflection%20and%20run-time%20types_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

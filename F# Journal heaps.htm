@@ -1,0 +1,162 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0075)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/heaps.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css href="F%23%20Journal%20heaps_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20heaps_files/style(1).css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20heaps_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20heaps_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20heaps_files/left.gif"> </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Data structures: Heaps</H1>
+      <P>A min-heap is a tree-based data structure that satisfies the constraint 
+      that the children at any given branch are always larger than their parent 
+      and, consequently, the minimum element is at the root. Heaps are most 
+      notable as an efficient way to implement priority queues which, in turn, 
+      underpin a variety of algorithms including some seen in previous F#.NET 
+      Journal articles. This article examines skew heaps, leftist heaps, pairing 
+      heaps and binomial heaps.</P>
+      <H2>Introduction</H2>
+      <P>Heaps are trees designed to make access to extremal elements efficient. 
+      Min-heaps allow access to the minimum element efficiently whereas 
+      max-heaps allow efficient access to the maximum element. There are many 
+      different ways to accomplish this.</P>
+      <P>This makes heaps the ideal concrete data structure to provide the 
+      abstract priority queue data structure. Priority queues have a variety of 
+      applications and, in fact, the previous F#.NET Journal article about the 
+      A* algorithm used the built-in <CODE>Set</CODE> collection as a simple 
+      priority queue. The performance of that algorithm can be improved 
+      significantly by using more sophisticated heap data structures such as 
+      those described here. In fact, priority queues have several applications 
+      in graph theory including Prim's minimum spanning tree algorithm and 
+      Dijkstra's shortest path algorithm.</P>
+      <H2>Skew heaps</H2>
+      <P>The simplest heap implementation is known as a skew heap and it simply 
+      uses swaps to balance out the tree. A skew heap may be implemented as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'a&nbsp;SkewHeap&nbsp;=&nbsp;E&nbsp;|&nbsp;T&nbsp;of&nbsp;'a&nbsp;*&nbsp;'a&nbsp;SkewHeap&nbsp;*&nbsp;'a&nbsp;SkewHeap<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;empty&nbsp;=&nbsp;E<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;isEmpty&nbsp;=&nbsp;function&nbsp;E&nbsp;-&gt;&nbsp;true&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;singleton&nbsp;x&nbsp;=&nbsp;T(x,&nbsp;E,&nbsp;E)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;union&nbsp;t1&nbsp;t2&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;t1,&nbsp;t2&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E,&nbsp;t&nbsp;|&nbsp;t,&nbsp;E&nbsp;-&gt;&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T(x,&nbsp;l1,&nbsp;r1),&nbsp;T(y,&nbsp;l2,&nbsp;r2)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&nbsp;&lt;=&nbsp;y&nbsp;then&nbsp;T(x,&nbsp;union&nbsp;t2&nbsp;r1,&nbsp;l1)&nbsp;else&nbsp;T(y,&nbsp;union&nbsp;t1&nbsp;r2,&nbsp;l2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;insert&nbsp;x&nbsp;h&nbsp;=&nbsp;union&nbsp;(singleton&nbsp;x)&nbsp;h<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;removeMin&nbsp;h&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;h&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;raise&nbsp;Empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T(x,&nbsp;l,&nbsp;r)&nbsp;-&gt;&nbsp;x,&nbsp;union&nbsp;l&nbsp;r</CODE></P>
+      <P>Note that we are careful to add an attribute to the 
+      <CODE>SkewHeap</CODE> type in order to allow F# to represent the 
+      <CODE>E</CODE> value as <CODE>null</CODE>. This reduces the amount of 
+      allocation.</P>
+      <P>The <CODE>union</CODE> function is the essence of this data 
+      structure.</P>
+      <P>Although skew heaps provide all operations in amortized logarithmic 
+      time, they make no guarantees about the structure of the tree and, 
+      consequently, can take linear time for any given operation.</P>
+      <H2>Leftist heaps</H2>
+      <P>Logarithmic time can be guaranteed by maintaining balance. Leftist 
+      heaps do this by augmenting the branches of the tree with "rank" 
+      information:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;LeftistHeap&lt;'a&gt;&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;of&nbsp;int&nbsp;*&nbsp;'a&nbsp;*&nbsp;LeftistHeap&lt;'a&gt;&nbsp;*&nbsp;LeftistHeap&lt;'a&gt;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;empty&nbsp;=&nbsp;E<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;isEmpty&nbsp;h&nbsp;=&nbsp;match&nbsp;h&nbsp;with&nbsp;E&nbsp;-&gt;&nbsp;true&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rank&nbsp;t&nbsp;=&nbsp;match&nbsp;t&nbsp;with&nbsp;E&nbsp;-&gt;&nbsp;0&nbsp;|&nbsp;T&nbsp;(r,&nbsp;_,&nbsp;_,&nbsp;_)&nbsp;-&gt;&nbsp;r&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;T(x,&nbsp;a,&nbsp;b)&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rank&nbsp;a&nbsp;&gt;&nbsp;rank&nbsp;b&nbsp;then&nbsp;T(rank&nbsp;b,&nbsp;x,&nbsp;a,&nbsp;b)&nbsp;else&nbsp;T(rank&nbsp;a,&nbsp;x,&nbsp;b,&nbsp;a)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;merge&nbsp;h1&nbsp;h2&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;h1,&nbsp;h2&nbsp;with&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;h,&nbsp;E&nbsp;|&nbsp;E,&nbsp;h&nbsp;-&gt;&nbsp;h<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T(_,&nbsp;x,&nbsp;a1,&nbsp;b1),&nbsp;T(_,&nbsp;y,&nbsp;a2,&nbsp;b2)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&lt;y&nbsp;then&nbsp;T(x,&nbsp;a1,&nbsp;merge&nbsp;b1&nbsp;h2)&nbsp;else&nbsp;T(y,&nbsp;a2,&nbsp;merge&nbsp;h1&nbsp;b2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;removeMin&nbsp;h&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;h&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;failwith&nbsp;"Empty"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T(_,&nbsp;x,&nbsp;a,&nbsp;b)&nbsp;-&gt;&nbsp;x,&nbsp;merge&nbsp;a&nbsp;b<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;insert&nbsp;x&nbsp;h&nbsp;=&nbsp;merge&nbsp;(T(x,&nbsp;E,&nbsp;E))&nbsp;h</CODE></P>
+      <P>This leftist heap implementation is slightly slower than the skew heap 
+      but it guarantees logarithmic worst-case time complexity so it is better 
+      suited to situations where low pause times are desirable.</P>
+      <H2>Pairing heaps</H2>
+      <P>Another kind of heap uses an n-ary tree, where each branch contains a 
+      list of children, with a different approach to removing the smallest 
+      element:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'a&nbsp;PairingHeap&nbsp;=&nbsp;E&nbsp;|&nbsp;T&nbsp;of&nbsp;'a&nbsp;*&nbsp;'a&nbsp;PairingHeap&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;empty&nbsp;=&nbsp;E<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;isEmpty&nbsp;h&nbsp;=&nbsp;match&nbsp;h&nbsp;with&nbsp;E&nbsp;-&gt;&nbsp;true&nbsp;|&nbsp;T_&nbsp;-&gt;&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;merge&nbsp;h1&nbsp;h2&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;h1,&nbsp;h2&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E,&nbsp;h&nbsp;|&nbsp;h,&nbsp;E&nbsp;-&gt;&nbsp;h<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T(x,&nbsp;hs1),&nbsp;T(y,&nbsp;hs2)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&nbsp;&lt;=&nbsp;y&nbsp;then&nbsp;T(x,&nbsp;h2::hs1)&nbsp;else&nbsp;T(y,&nbsp;h1::hs2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;insert&nbsp;x&nbsp;h&nbsp;=&nbsp;merge&nbsp;(T(x,&nbsp;[]))&nbsp;h<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mergePairs&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;mergePairs&nbsp;xs&nbsp;k&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;xs&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;k&nbsp;E<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[h]&nbsp;-&gt;&nbsp;k&nbsp;h<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;h1::h2::hs&nbsp;-&gt;&nbsp;mergePairs&nbsp;hs&nbsp;(fun&nbsp;hs&nbsp;-&gt;&nbsp;k(merge&nbsp;(merge&nbsp;h1&nbsp;h2)&nbsp;hs))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mergePairs&nbsp;xs&nbsp;id<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;removeMin&nbsp;h&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;h&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;failwith&nbsp;"Empty"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T(x,&nbsp;hs)&nbsp;-&gt;&nbsp;x,&nbsp;mergePairs&nbsp;hs</CODE></P>
+      <P>The <CODE>removeMin</CODE> function that removes the smallest element, 
+      returning the element and remaining tree, uses the <CODE>mergePairs</CODE> 
+      function to merge the children in two passes. The first pass merges pairs 
+      of children at a time from left to right. The second pass merges the 
+      resulting trees from right to left.</P>
+      <P>However, these operations are not naturally tail recursive and the 
+      pedagogical implementations are, consequently, prone to stack overflows 
+      (e.g. Okasaki's). Thus, we have been careful to write this function in 
+      continuation passing style to ensure that the recursive call within the 
+      <CODE>mergePairs</CODE> function is in tail position. Note that this 
+      requires genuine tail call elimination as found on .NET and not on 
+      Mono.</P>
+      <H2>Splay heaps</H2>
+      <P>Another solution to keeping the tree balanced is to rotate whenever a 
+      left-left or right-right branches are taken. This class of data structures 
+      are known as Splay trees and, again, have only amortized complexity. The 
+      following implements a Splay heap:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'a&nbsp;SplayHeap&nbsp;=&nbsp;E&nbsp;|&nbsp;T&nbsp;of&nbsp;'a&nbsp;SplayHeap&nbsp;*&nbsp;'a&nbsp;*&nbsp;'a&nbsp;SplayHeap<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;empty&nbsp;=&nbsp;E<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;isEmpty&nbsp;h&nbsp;=&nbsp;match&nbsp;h&nbsp;with&nbsp;E&nbsp;-&gt;&nbsp;true&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;partition&nbsp;pivot&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;E,&nbsp;E<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(a,&nbsp;x,&nbsp;b)&nbsp;as&nbsp;t&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&nbsp;&lt;=&nbsp;pivot&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;b&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;t,&nbsp;E<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(b1,&nbsp;y,&nbsp;b2)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;y&nbsp;&lt;=&nbsp;pivot&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;small,&nbsp;big&nbsp;=&nbsp;partition&nbsp;pivot&nbsp;b2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;T&nbsp;(T&nbsp;(a,&nbsp;x,&nbsp;b1),&nbsp;y,&nbsp;small),&nbsp;big<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;small,&nbsp;big&nbsp;=&nbsp;partition&nbsp;pivot&nbsp;b1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;T&nbsp;(a,&nbsp;x,&nbsp;small),&nbsp;T&nbsp;(big,&nbsp;y,&nbsp;b2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;a&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;E,&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(a1,&nbsp;y,&nbsp;a2)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;y&nbsp;&lt;=&nbsp;pivot&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;small,&nbsp;big&nbsp;=&nbsp;partition&nbsp;pivot&nbsp;a2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;T&nbsp;(a1,&nbsp;y,&nbsp;small),&nbsp;T&nbsp;(big,&nbsp;x,&nbsp;b)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;small,&nbsp;big&nbsp;=&nbsp;partition&nbsp;pivot&nbsp;a1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;small,&nbsp;T&nbsp;(big,&nbsp;y,&nbsp;T&nbsp;(a2,&nbsp;x,&nbsp;b))<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;insert&nbsp;x&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;a,&nbsp;b&nbsp;=&nbsp;partition&nbsp;x&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;T&nbsp;(a,&nbsp;x,&nbsp;b)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;merge&nbsp;s&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;s,&nbsp;t&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E,&nbsp;_&nbsp;-&gt;&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(a,&nbsp;x,&nbsp;b),&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ta,&nbsp;tb&nbsp;=&nbsp;partition&nbsp;x&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;T&nbsp;(merge&nbsp;ta&nbsp;a,&nbsp;x,&nbsp;merge&nbsp;tb&nbsp;b)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;find_min&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;raise&nbsp;Empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(E,&nbsp;x,&nbsp;_)&nbsp;-&gt;&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(a,&nbsp;x,&nbsp;_)&nbsp;-&gt;&nbsp;find_min&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;delete_min&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;raise&nbsp;Empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(E,&nbsp;_,&nbsp;b)&nbsp;-&gt;&nbsp;b<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(T&nbsp;(E,&nbsp;_,&nbsp;b),&nbsp;y,&nbsp;c)&nbsp;-&gt;&nbsp;T&nbsp;(b,&nbsp;y,&nbsp;c)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(T&nbsp;(a,&nbsp;x,&nbsp;b),&nbsp;y,&nbsp;c)&nbsp;-&gt;&nbsp;T&nbsp;(delete_min&nbsp;a,&nbsp;x,&nbsp;T&nbsp;(b,&nbsp;y,&nbsp;c))<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;removeMin&nbsp;h&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;removeMin&nbsp;h&nbsp;k&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;h&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;E&nbsp;-&gt;&nbsp;raise&nbsp;Empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(E,&nbsp;x,&nbsp;b)&nbsp;-&gt;&nbsp;k(x,&nbsp;b)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(T&nbsp;(E,&nbsp;x,&nbsp;b),&nbsp;y,&nbsp;c)&nbsp;-&gt;&nbsp;k(x,&nbsp;T&nbsp;(b,&nbsp;y,&nbsp;c))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;(T&nbsp;(a,&nbsp;x,&nbsp;b),&nbsp;y,&nbsp;c)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;removeMin&nbsp;a&nbsp;(fun&nbsp;(z,&nbsp;a)&nbsp;-&gt;&nbsp;k(z,&nbsp;T&nbsp;(a,&nbsp;x,&nbsp;T&nbsp;(b,&nbsp;y,&nbsp;c))))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;removeMin&nbsp;h&nbsp;id</CODE></P>
+      <P>In this case, the <CODE>partition</CODE> function implements the core 
+      of the algorithm. This function first compares <CODE>x</CODE> with a pivot 
+      and then includes another nested recursion into the tree that compared 
+      <CODE>y</CODE> with a pivot. When the outcomes both fall in the same 
+      direction, the tree is rotated into a zig-zag in order to preserve balance 
+      on average.</P>
+      <P>Again, there is a danger from functions that are not naturally tail 
+      recursive. In this case, the <CODE>removeMin</CODE> is the main culprit so 
+      we have transformed it into continuation passing style in order to ensure 
+      that the recursive call appears in tail position. However, the 
+      <CODE>partition</CODE> and <CODE>merge</CODE> functions are also not tail 
+      recursive, although this does not appear to cause stack overflows in 
+      practice, probably because they recurse only to logarithmic depth.</P>
+      <H2>Results</H2>
+      <P>Perhaps the most obvious test for a heap is the heap sort algorithm 
+      that inserts elements unordered and reads them back out from the heap 
+      in-order by repeatedly extracing the smallest element. This may be 
+      implemented as follows, including a test to check that the result of the 
+      heapsort is identical to the result given by the built-in 
+      <CODE>Array.sort</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;1000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;rand.NextDouble())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;heap&nbsp;=&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;insert&nbsp;xs.[i]&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ys&nbsp;=&nbsp;Array.zeroCreate&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x,&nbsp;heap'&nbsp;=&nbsp;removeMin&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;heap'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ys.[i]&nbsp;&lt;-&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"A:&nbsp;%gs\n"&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"Correct&nbsp;%A\n"&nbsp;(ys&nbsp;=&nbsp;Array.sort&nbsp;xs)</CODE></P>
+      <P>In addition to this benchmark, we can construct a variety of other 
+      benchmarks designed to stress different use-cases of heaps.</P>
+      <P>The following measures the time taken to insert 10,000,000 numbers in 
+      increasing order and then remove the smallest repeatedly until none 
+      remain:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;heap&nbsp;=&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;insert&nbsp;(float&nbsp;i)&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;not&nbsp;&lt;|&nbsp;isEmpty&nbsp;heap&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_,&nbsp;heap'&nbsp;=&nbsp;removeMin&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;heap'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"B:&nbsp;%gs\n"&nbsp;timer.Elapsed.TotalSeconds</CODE></P>
+      <P>The following does the same for decreasing order:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;heap&nbsp;=&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;insert&nbsp;(-float&nbsp;i)&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;not&nbsp;&lt;|&nbsp;isEmpty&nbsp;heap&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_,&nbsp;heap'&nbsp;=&nbsp;removeMin&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;heap'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"C:&nbsp;%gs\n"&nbsp;timer.Elapsed.TotalSeconds</CODE></P>
+      <P>The following inserts 1,000 elements and then repeatedly inserts a 
+      random element and removes the smallest element, ten million times:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;heap&nbsp;=&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;insert&nbsp;(rand.NextDouble())&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;10000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;insert&nbsp;(rand.NextDouble())&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_,&nbsp;heap'&nbsp;=&nbsp;removeMin&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;heap'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"D:&nbsp;%gs\n"&nbsp;timer.Elapsed.TotalSeconds</CODE></P>
+      <P>This benchmark is perhaps the most realistic for many applications such 
+      as the A* algorithm where the number of elements in the priority queue 
+      remains roughly constant as the smallest elements are removed and new 
+      elements are inserted.</P>
+      <P>Finally, the following benchmark builds a heap by repeatedly inserting 
+      two random elements and deleting the smallest element in the heap, a 
+      million times:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;heap&nbsp;=&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;insert&nbsp;(rand.NextDouble())&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;insert&nbsp;(rand.NextDouble())&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_,&nbsp;heap'&nbsp;=&nbsp;removeMin&nbsp;heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap&nbsp;&lt;-&nbsp;heap'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"E:&nbsp;%gs\n"&nbsp;timer.Elapsed.TotalSeconds</CODE></P>
+      <P>The skew, leftist, pairing and splay heaps produced the following 
+      performance results on these five benchmarks:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20heaps_files/perf.png"></P>
+      <H2>Summary</H2>
+      <P>This article has examined several of the most popular heap 
+      implementations. The simplest implementation is just 14 lines of code. The 
+      largest performance gap appeared when inserting elements in increasing 
+      order, where a splay heap ran 10.8× faster than a leftist heap. 
+      Conversely, when building a heap by inserting two elements at a time and 
+      deleting one, a splay heap was 5× slower than a pairing heap. Overall, the 
+      pairing heap appears to be the strongest contender in terms of performance 
+      and, at only 20 lines of F# code, is one of the simplest 
+      implementations.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of data 
+      structures and algorithms.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript src="F%23%20Journal%20heaps_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

@@ -1,0 +1,392 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/pure_fun1.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Purely functional data structures: streams and batched 
+queues</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Purely functional data structures: streams and 
+batched queues</TITLE>     <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Purely functional data structures: streams and batched queues</H1>
+      <P>This article is the first in a series describing the design and 
+      implementation of some very useful purely functional data structures. Lazy 
+      evaluation, lazy streams and batched queues are described in detail. In 
+      particular, new .NET interfaces, classes and objects are used factor the 
+      implementations of the data structure and various built-in interfaces are 
+      implemented in order to support equality, comparison and hashing of these 
+      new data structures.</P>
+      <H2>Introduction</H2>
+      <P><I>Purely functional data structures</I> is the term used to describe 
+      data structures that use a variety of ingenious techniques to provide 
+      efficiency without mutation. The immutability of these data structures 
+      makes it much easier to reason about programs that use them. However,  
+      this ease-of-use is typically offset by substantial performance 
+      degradation compared to traditional imperative data structures.           
+      </P>
+      <P>At the time of writing, the best resource about purely functional data 
+      structures by far is Chris Okasaki's book              <A href="http://www.amazon.com/Purely-Functional-Structures-Chris-Okasaki/dp/0521663504">Purely 
+      Functional Data Structures</A> . This book presents source code written in 
+      SML with an appendix containing implementations written in Haskell. 
+      However, those implementations make extensive use of language features 
+      that F# does not have and, consequently, the reimplementation of those 
+      data structures in F# is a considerable undertaking. This series of 
+      articles will elucidate the techniques required to translate idiomatic 
+      functional data structures from other languages into F# using .NET's 
+      object system.           </P>
+      <P>The most important lesson taught by the book Purely Functional Data 
+      Structures is that amortization is the key to efficiency. In other words, 
+      deferring computations and performing them in batches is essential if the 
+      performance characteristics of imperative data structures are to be 
+      regained. Moreover, lazy evaluation allows computations to be amortized 
+      efficiently without undermining beneficial properties of purely functional 
+      data structures such as persistence.</P>
+      <H2>Lazy values</H2>
+      <P>Lazy              <I>thunks</I> are created using the              
+      <CODE>lazy</CODE> keyword as follows:           </P>
+<PRE>&gt; lazy(1+2*3);;
+val it : Lazy&lt;int&gt;
+= Microsoft.FSharp.Control.Lazy`1[System.Int32] {IsDelayed = true;
+                                                 IsException = false;
+                                                 IsForced = false;
+                                                 Value = 7;}</PRE>
+      <P>A thunk is initially a computation that has been deferred, i.e. an 
+      unevaluated expression.</P>
+      <P>The              <CODE>Value</CODE> member is used to force the 
+      evaluation of a lazy value:           </P>
+<PRE>&gt; let n = lazy(1+2*3);;
+val n : Lazy&lt;int&gt;</PRE>
+<PRE>&gt; n.Value;;
+val it : int = 7</PRE>
+      <P>Note that the F# standard library automatically enforces mutual 
+      exclusion so that purely functional code is thread safe when forcing the 
+      same lazy value from separate threads simultaneously.</P>
+      <P>This also has the effect of replacing the expression with the value 
+      that it evaluated to, i.e. thunks use mutation internally. This effect is 
+      easily seen in F# by putting impure code in the thunk:</P>
+<PRE>&gt; let t = lazy(printfn "Evaluated");;
+val t : Lazy&lt;unit&gt;</PRE>
+<PRE>&gt; t.Value;;
+Evaluated
+val it : unit = ()</PRE>
+<PRE>&gt; t.Value;;
+val it : unit = ()</PRE>
+<PRE>&gt; t.Value;;
+val it : unit = ()</PRE>
+      <P>Note that the expression in the thunk was only evaluated once.</P>
+      <H2>Lazy streams</H2>
+      <P>The following              <CODE>Stream</CODE> type defines a generic 
+      lazy stream implementation:           </P>
+<PRE>&gt; type Stream&lt;'a&gt; = Nil | Cons of 'a * 'a Stream Lazy with
+    member private s.getEnumerator =
+      let decap = function
+        | Nil -&gt; None
+        | Cons(h, t) -&gt; Some(h, t.Value)
+      (Seq.unfold decap s).GetEnumerator()
+    
+    interface IEnumerable&lt;'a&gt; with
+      member s.GetEnumerator() = s.getEnumerator
+    
+    interface IEnumerable with
+      member s.GetEnumerator() = (s.getEnumerator :&gt; IEnumerator)</PRE>
+<PRE>    interface System.IEquatable&lt;Stream&lt;'a&gt;&gt; with
+      member stream1.Equals(stream2: Stream&lt;'a&gt;) =
+        List.of_seq stream1 = List.of_seq stream2</PRE>
+<PRE>    override stream1.Equals stream2 =
+      List.of_seq stream1 = List.of_seq (unbox stream2)</PRE>
+<PRE>    interface System.IComparable&lt;Stream&lt;'a&gt;&gt; with
+      member stream1.CompareTo(stream2: Stream&lt;'a&gt;) =
+        Seq.compare compare stream1 stream2</PRE>
+<PRE>    interface System.IComparable with
+      member stream1.CompareTo(stream2: obj) =
+        Seq.compare compare stream1 (unbox stream2)
+    
+    interface IComparer&lt;Stream&lt;'a&gt;&gt; with
+      member stream.Compare(stream1, stream2) =
+        Seq.compare compare stream1 stream2
+    
+    override stream.GetHashCode() =
+      (List.of_seq stream).GetHashCode()</PRE>
+<PRE>    interface IStructuralHash with
+      member stream.GetStructuralHashCode n =
+        hash(List.of_seq stream);;
+type Stream&lt;'a&gt; =
+  | Nil
+  | Cons of 'a * Lazy&lt;Stream&lt;'a&gt;&gt;
+  with
+    interface IStructuralHash
+    interface IComparer&lt;Stream&lt;'a&gt;&gt;
+    interface System.IComparable
+    interface System.IComparable&lt;Stream&lt;'a&gt;&gt;
+    interface System.IEquatable&lt;Stream&lt;'a&gt;&gt;
+    interface IEnumerable
+    interface IEnumerable&lt;'a&gt;
+    override Equals : stream2:obj -&gt; bool
+    override GetHashCode : unit -&gt; int
+    member private getEnumerator : IEnumerator&lt;'a&gt;
+  end</PRE>
+      <P>There are some notable points about this implementation:</P>
+      <P>
+      <UL>
+        <LI>Rather than make every lazy stream a thunk, we shift the laziness 
+        into the tail of the                  <CODE>Cons</CODE> constructor. 
+        This makes it more efficient to handle empty lazy streams and improves 
+        performance for the subsequent data structures.               </LI>
+        <LI>The data structure used to represent the stream is an F# variant 
+        type with augmentations implementing various .NET and F# interfaces and 
+        overriding the                  <CODE>Equals</CODE> and                  
+        <CODE>GetHashCode</CODE> members of the                  
+        <CODE>Object</CODE> class.               </LI>
+        <LI>The                  <CODE>Stream.t</CODE> type is public because 
+        this allows lazy streams to be deconstructed using pattern matching 
+        outside the                  <CODE>Stream</CODE> module.               
+        </LI></UL>
+      <P></P>
+      <P>The interfaces implemented by the              <CODE>Stream.t</CODE> 
+      type are of particular importance.           </P>
+      <P>The              <CODE>IStructuralHash</CODE> interface is defined by 
+      F# and used by its              <CODE>Hashtable</CODE> and              
+      <CODE>HashSet</CODE> implementations. If this interface is not implemented 
+      then hashing uses the .NET              <CODE>GetHashCode</CODE> member 
+      from the              <CODE>Object</CODE> class that is not structural, 
+      i.e. lazy streams with the same elements can produce different results 
+      with              <CODE>GetHashCode</CODE> and that would produce 
+      unexpected results if a user tried to use a              
+      <CODE>HashSet</CODE> of our lazy streams or a              
+      <CODE>Hashtable</CODE> with our lazy streams as keys.           </P>
+      <P>The non-generic              <CODE>IComparable</CODE> interface is 
+      defined by .NET and used by ordered data structures such as the            
+        <CODE>Set</CODE> data structure in F#. If this interface is not 
+      implemented then code that relies upon structural untyped comparison will 
+      fail, e.g. a user building a              <CODE>Set</CODE> of our lazy 
+      streams would see unexpected results.           </P>
+      <P>The generic              <CODE>IComparable&lt;_&gt;</CODE> interface is 
+      defined by .NET and is used by the F#              <CODE>compare</CODE> 
+      function.           </P>
+      <P>The              <CODE>Equals</CODE> member inherited from the base     
+               <CODE>Object</CODE> class is used by the              
+      <CODE>=</CODE> operator in F#.           </P>
+      <P>The              <CODE>IEquatable&lt;_&gt;.Equals</CODE> interface 
+      member is used by              <CODE>HashSet</CODE> .           </P>
+      <P>Note that the generic              <CODE>IComparer&lt;_&gt;</CODE> ,    
+                <CODE>IComparable&lt;_&gt;</CODE> and              
+      <CODE>IEquatable&lt;_&gt;</CODE> interfaces are all parameterized over the 
+                   <CODE>Stream&lt;'a&gt;</CODE> class and not over the element 
+      type              <CODE>'a</CODE> .           </P>
+      <P>We may now implement any ML-style functions over the              
+      <CODE>Stream</CODE> type by creating a module with the same name:          
+       </P>
+<PRE>&gt; module Stream =
+    let empty = Nil
+    
+    let rec range i j =
+      if i=j then Cons(i, lazy empty) else
+        Cons(i, lazy(range (i+1) j));;
+module Stream = begin
+  val empty : Stream&lt;'a&gt;
+  val range : int -&gt; int -&gt; Stream&lt;int&gt;
+end</PRE>
+      <P>This lazy stream implementation will be used extensively by the data 
+      structure implementations in the remainder of this article.</P>
+      <H2>Queues</H2>
+      <P>We shall present two different purely functional queue implementations 
+      as classes that adhere to the following              <CODE>IQueue</CODE> 
+      interface:           </P>
+<PRE>&gt; type IQueue&lt;'a&gt; =
+    inherit IEnumerable&lt;'a&gt;
+    inherit IEnumerable
+    inherit System.IEquatable&lt;IQueue&lt;'a&gt;&gt;
+    inherit System.IComparable&lt;IQueue&lt;'a&gt;&gt;
+    inherit IComparer&lt;IQueue&lt;'a&gt;&gt;
+    inherit IStructuralHash
+    abstract IsEmpty : bool
+    abstract PushBack : 'a -&gt; IQueue&lt;'a&gt;
+    abstract PopFront : unit -&gt; 'a * IQueue&lt;'a&gt;;;
+type IQueue&lt;'a&gt; =
+  interface
+    inherit IStructuralHash
+    inherit IComparer&lt;IQueue&lt;'a&gt;&gt;
+    inherit System.IComparable&lt;IQueue&lt;'a&gt;&gt;
+    inherit System.IEquatable&lt;IQueue&lt;'a&gt;&gt;
+    inherit IEnumerable
+    inherit IEnumerable&lt;'a&gt;
+    abstract member PopFront : unit -&gt; 'a * IQueue&lt;'a&gt;
+    abstract member PushBack : 'a -&gt; IQueue&lt;'a&gt;
+    abstract member IsEmpty : bool
+  end</PRE>
+      <P>This is our first major diversion from the techniques used in the 
+      solutions presented by Okasaki. Specifically, Okasaki made heavy use of a 
+      feature of the ML family of languages known as higher-order modules. That 
+      feature essentially allows classes to be parameterized over other classes 
+      and, in particular, this is resolved entirely at compile time and, 
+      consequently, is completely statically type checkes and does not incur any 
+      run-time performance penalties. F# does not have this language feature so 
+      we must find a workaround.</P>
+      <P>The most obvious alternative is to replace the compile-time constructs 
+      from Okasaki's original work with run-time constructs in F#, namely 
+      objects. Thus we create a new type, the abstract interface              
+      <CODE>IQueue</CODE> that refers to itself. For example, pushing an element 
+      onto the back of the queue using the              <CODE>PushBack</CODE> 
+      member now returns a value of the abstract              
+      <CODE>IQueue</CODE> type rather than the concrete type as Okasaki's code 
+      did. This provides the same amount of code reuse that Okasaki benefitted 
+      from but incurs substantial performance overheads as all static functions 
+      have been replaced with members that must use virtual dispatch to the 
+      appropriate concrete implementation.           </P>
+      <H3>Batched queues</H3>
+      <P>The simplest queue implementation is known as a              <I>batched 
+      queue</I> because it batches computations in order to provide good 
+      amortized asymptotic O(1) complexity for its core operations. This data 
+      structure may be implemented using front and back lists where the back 
+      list is stored in reverse:           </P>
+<PRE>&gt; type private BatchedQueue&lt;'a&gt;(f, r) =
+    let mk = function
+      | [], r -&gt; BatchedQueue(List.rev r, [])
+      | f, r -&gt; BatchedQueue(f, r)
+    
+    interface IQueue&lt;'a&gt; with
+      override q.IsEmpty =
+        match f with
+        | [] -&gt; true
+        | _ -&gt; false
+      
+      override q.PushBack x =
+        (mk(f, x::r) :&gt; IQueue&lt;'a&gt;)
+      
+      override q.PopFront() =
+        match f with
+        | x::f -&gt; x, (mk(f, r) :&gt; IQueue&lt;'a&gt;)
+        | [] -&gt; raise Empty</PRE>
+<PRE>    interface IEnumerable&lt;'a&gt; with
+      member q.GetEnumerator() : IEnumerator&lt;'a&gt; =
+        let decap (q: IQueue&lt;_&gt;) = if q.IsEmpty then None else Some(q.PopFront())
+        (Seq.unfold decap (q :&gt; IQueue&lt;'a&gt;)).GetEnumerator()</PRE>
+<PRE>    interface IEnumerable with
+      member q.GetEnumerator() =
+        ((q :&gt; seq&lt;'a&gt;).GetEnumerator() :&gt; IEnumerator)</PRE>
+<PRE>    interface System.IEquatable&lt;IQueue&lt;'a&gt;&gt; with
+      member q1.Equals(q2: IQueue&lt;'a&gt;) =
+        List.of_seq q1 = List.of_seq q2</PRE>
+<PRE>    override q1.Equals q2 =
+      (q1 :&gt; IQueue&lt;'a&gt;).Equals ((unbox q2) :&gt; IQueue&lt;'a&gt;)</PRE>
+<PRE>    interface System.IComparable&lt;IQueue&lt;'a&gt;&gt; with
+      member q1.CompareTo(q2: IQueue&lt;'a&gt;) =
+        Seq.compare compare q1 q2</PRE>
+<PRE>    interface System.IComparable with
+      member q1.CompareTo(q2: obj) =
+        Seq.compare compare q1 (unbox q2)
+    
+    interface IComparer&lt;IQueue&lt;'a&gt;&gt; with
+      member q.Compare(q1, q2) =
+        q1.CompareTo q2</PRE>
+<PRE>    override q.GetHashCode() =
+      hash(List.of_seq q)</PRE>
+<PRE>    interface IStructuralHash with
+      member q.GetStructuralHashCode n =
+        (List.of_seq q).GetHashCode();;
+type private BatchedQueue&lt;'a&gt; =
+  private class
+            interface IStructuralHash
+            interface IComparer&lt;IQueue&lt;'a&gt;&gt;
+            interface System.IComparable
+            interface System.IComparable&lt;IQueue&lt;'a&gt;&gt;
+            interface System.IEquatable&lt;IQueue&lt;'a&gt;&gt;
+            interface IEnumerable
+            interface IEnumerable&lt;'a&gt;
+            interface IQueue&lt;'a&gt;
+            private new : f:'a list * r:'a list -&gt; BatchedQueue&lt;'a&gt;
+            override private Equals : q2:obj -&gt; bool
+            override private GetHashCode : unit -&gt; int
+          end</PRE>
+      <P>There are several points of interest in this definition as well:</P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>BatchedQueue</CODE> class has been made   
+                       <CODE>private</CODE> because it uses an implicit 
+        constructor that exposes the internal workings of the class by accepting 
+        a pair of lists. The public interface will be a static member that 
+        returns the empty batched queue defined in a separate module.            
+           </LI>
+        <LI>Use of an implicit constructor allows us to define a local           
+               <CODE>mk</CODE> function that is used to construct new batched 
+        queues.               </LI>
+        <LI>The                  <CODE>BatchedQueue</CODE> class implements the  
+                        <CODE>IQueue</CODE>               </LI> interface along 
+        with all of the other interfaces required by it.               
+        <LI>Members such as                  <CODE>IsEmpty</CODE> access the 
+        parameters                  <CODE>f</CODE> and                  
+        <CODE>r</CODE> used to construct the                  
+        <CODE>BatchedQueue</CODE> rather than using the parameter                
+          <CODE>q</CODE> that represents the object being invoked.               
+        </LI>
+        <LI>The                  <CODE>PushBack</CODE> and                  
+        <CODE>PopFront</CODE> members coerce queues of the concrete              
+            <CODE>BatchedQueue</CODE> class up to the abstract                  
+        <CODE>IQueue</CODE> interface type before returning them.               
+        </LI></UL>
+      <P></P>
+      <P>The front list is always kept non-empty if possible. Taking elements 
+      from the queue typically decapitates the head element of the front list 
+      but, if that empties the front list, the back list is reversed and used to 
+      replace the front list. Consequently, taking an element from the queue is 
+      typically O(1) but can be O(n).</P>
+      <P>Moreover, persistence is an important characteristic of purely 
+      functional data structures. For example, the same queue may have its front 
+      element taken many times. With this queue implementation, the expensive 
+      list reversal will be performed repeatedly because the result was not 
+      remembered from one use of persistence to the next.</P>
+      <P>These performance issues can be addressed by the use of a more 
+      sophisticated              <I>real-time</I> queue.           </P>
+      <H2>Summary</H2>
+      <P>This article has described the concept of purely functional data 
+      structures and the importance of lazy evaluation in that context before 
+      giving concrete implementations of two purely functional data structures, 
+      streams and queues, and an interface that can be used to handle queues 
+      abstractly.</P>
+      <P>The next article in this series will describe the design and 
+      implementation of a real-time queue that provides worst case              
+      <I>O(1)</I> complexity for all operations even when used persistently and 
+      from multiple threads. Performance measurements will be used to 
+      demonstrate the improved characteristics of the real time queue over the 
+      batched queue described in this article.           
+</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Purely%20functional%20data%20structures%20streams%20and%20batched%20queues_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

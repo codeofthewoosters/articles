@@ -1,0 +1,427 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/optimization2.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Low-level optimization tips and tricks: part 2</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Low-level optimization tips and tricks: part 
+2</TITLE>     <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Low-level optimization tips and tricks: part 2</H1>
+      <P>The F# programming language is a fantastic tool for technical computing 
+      because it combines easy interactive high-level programming with excellent 
+      performance and multicore capability. This makes it feasible to solve a 
+      wide variety of problems without having to drop to low-level languages 
+      like C for performance. This article describes garbage collection 
+      friendliness, data structure specialization, efficient loops and the use 
+      of structs to avoid boxing.</P>
+      <H2>Garbage collection</H2>
+      <P>The garbage collector is an integral part of the Common Language 
+      Infrastructure (CLI). Garbage collections are run transparently as a 
+      program is run and perform more work when the program generates more 
+      garbage. Programs that make heavy use of purely functional data structures 
+      often generate many short-lived values and that places stress upon the 
+      garbage collector which will, in turn, take more time to run and will 
+      consume a larger proportion of the total running time of the system. The 
+      time spent doing garbage collections can be a large part of the entire 
+      time taken to solve a problem and is often 30% of the total time for a 
+      functional program. Consequently, optimizations that make the garbage 
+      collector run more efficiently can benefit an entire program 
+      significantly.</P>
+      <H3>Choosing the collector</H3>
+      <P>The .NET platform provides three different garbage collectors that may 
+      be invoked by creating a              <CODE>.config</CODE> file for a      
+              <CODE>.exe</CODE> file, such as              
+      <CODE>foo.exe.config</CODE> , that contains XML such as the following:     
+            </P>
+<PRE>&lt;configuration&gt;
+  &lt;runtime&gt;
+    &lt;gcServer enabled="false" /&gt;
+    &lt;gcConcurrent enabled="true" /&gt;
+  &lt;/runtime&gt;
+&lt;/configuration&gt;</PRE>
+      <P>In this case, we have chosen the default settings of a concurrent 
+      non-server garbage collector. The different garbage collectors have the 
+      following properties:</P>
+      <P>
+      <UL>
+        <LI>Sequential: a workstation GC with gcServer and gcConcurrent set to   
+                       <CODE>false</CODE> runs the garbage collector in the 
+        thread that invoked a garbage collection and is designed for single 
+        processors.               </LI>
+        <LI>Concurrent: the default workstation GC with gcServer set to          
+                <CODE>false</CODE> and gcConcurrent set to                  
+        <CODE>true</CODE> runs the garbage collector in a separate thread 
+        concurrently with the main thread (the mutator).               </LI>
+        <LI>Server: the server GC has gcServer set to                  
+        <CODE>true</CODE> and runs the garbage collector in parallel with one 
+        thread for each processor.               </LI></UL>
+      <P></P>
+      <P>The concurrent workstation and server GCs are by far the most common. 
+      The former is the default for general .NET applications whereas the latter 
+      is reserved for applications performing batch computations such as web 
+      servers.</P>
+      <P>The following program measures the distribution of pauses caused by the 
+      GC for a program that cycles through the elements of an array, replacing 
+      them with new elements:</P>
+<PRE>open Printf</PRE>
+<PRE>let m = Hashtbl.create 1</PRE>
+<PRE>let get n = match m.TryFind n with Some p -&gt; p | None -&gt; 0</PRE>
+<PRE>let add n = Hashtbl.replace m n (get n + 1)</PRE>
+<PRE>let run() =
+  let rand = System.Random()
+  let t = System.Diagnostics.Stopwatch.StartNew()
+  let n = 1000
+  let a = Array.create n [||] in
+  for i = 0 to 10000 do
+    printf "."
+    a.[i % n] &lt;- Array.init (rand.Next 65536) (fun i -&gt; Some(float i))
+    add (int t.ElapsedMilliseconds)
+    t.Reset()
+    t.Start()
+  done;
+  printf "\n"
+  let n = Hashtbl.fold (fun k _ -&gt; max k) m 0
+  let a = Array.create (n + 1) 0
+  Hashtbl.iter (fun k v -&gt; a.[k] &lt;- v) m
+  use ch = System.IO.File.CreateText @"pauses.csv"
+  Array.iteri (fprintf ch "%d, %d\n") a</PRE>
+<PRE>do
+  run()</PRE>
+      <P>Each element is, in fact, a              <CODE>float option 
+      array</CODE> of random length itself, requiring significant memory and 
+      traversal time by the GC.           </P>
+      <P>Running this benchmark on a dual core machine gives the following 
+      distributions of pause times for the three different garbage 
+      collectors:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/pause_times.gif"> 
+                  </P>
+      <P></P>
+      <P>All of the collectors manage to keep &gt;90% of pause times below 10ms 
+      and the server GC even manages 99% of pause times below 10ms. However, all 
+      of the collectors also exhibit very long pauses, with 50% of the total 
+      pause time spent in pauses that last over 1s each. That is a consequence 
+      of the very aggressive allocation done in this benchmark, as discussed 
+      below in the context of each kind of collector.</P>
+      <H3>Stack depth</H3>
+      <P>The heap is a network of allocated blocks of memory that can refer to 
+      each other when they contain pointers. The roots of the heap are global 
+      variables and, in particular, all of the reference values on the stack. 
+      That is, all reference values that might be required by the remainder of 
+      any caller functions that will be executed after the current function 
+      returns. The stack is essentially an array of roots (pointers into the 
+      heap) and it is traversed atomically, meaning the garbage collector incurs 
+      a pause while it traverses the stack. Moreover, garbage collectors tend to 
+      be invoked roughly periodically. Consequently, programs that operate at a 
+      deep stack depth are placing additional burden on the collector which is 
+      forced to repeatedly traverse the stack.</P>
+      <P>This theory can be seen in practice by rerunning the previous benchmark 
+      from within a deeply nested function call:</P>
+<PRE>let rec deep n =
+  if n=0 then (run(); 0) else deep (n-1) + 1</PRE>
+<PRE>do
+  ignore(deep 10000)</PRE>
+      <P>This gives the following results with the default concurrent GC:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/pause_times_stack.gif"> 
+                  </P>
+      <P></P>
+      <P>Note how the use of a deep stack has shifted the distribution of pause 
+      times to ~50ms longer pauses.</P>
+      <H3>Workstation and Server GCs</H3>
+      <P>The heap is split into three generations: Gen0, Gen1 and Gen2. The 
+      first two are smaller heaps used to store younger objects whereas Gen2 is 
+      an arbitrarily-large heap used to store old objects.</P>
+      <P>The concurrent workstation GC, which is the default collector, is 
+      invoked by a managed thread when it runs out of allocation budget and runs 
+      on that same thread. The collector briefly suspends all managed threads 
+      and prepares to collect Gen2, restarting the managed threads while the 
+      collection is done concurrently and then freeing the space consumed by any 
+      unreachable data. If any managed threads exceed their allocation budget 
+      while a collection is in progress then they are stalled until the 
+      collection is complete.</P>
+      <P>The server GC splits Gen2 into a separate heap and GC thread for each 
+      processor. When a managed thread runs out of allocation budget it suspends 
+      all other managed threads, signals the GC threads to wake and perform a 
+      collection and then resumes once the collection is complete.</P>
+      <P>The concurrent workstation GC is preferable when long pauses are 
+      undesirable (e.g. for interactive programs). However, none of the 
+      available GCs are incremental so all of these collectors incur long pauses 
+      on any threads that allocate heavily. However, the concurrent workstation 
+      GC does allow managed threads that are not allocating heavily to continue 
+      to run concurrently with a collection. Thus, splitting interactive 
+      programs into a UI thread and worker threads is essential if the UI thread 
+      is to run without stalling due to garbage collection.</P>
+      <H2>Data structure specialization</H2>
+      <P>In the previous article on low-level optimizations we saw how type 
+      specialization can be used to obtain significant performance improvements. 
+      Data structures can also be specialized in order to improve 
+      performance.</P>
+      <P>A good example of data structure specialization appears in the          
+          <CODE>Set</CODE> implementations of F#, e.g. compared to OCaml. 
+      Specifically, the type of the tree used to represent sets internally could 
+      be defined in              <I>set.fs</I> as:           </P>
+<PRE>type SetTree&lt;'a&gt; = 
+  | SetEmpty
+  | SetNode of 'a * SetTree&lt;'a&gt; *  SetTree&lt;'a&gt; * int</PRE>
+      <P>but the F# standard library uses a slightly more complicated form:</P>
+<PRE>[&lt;CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)&gt;]
+type SetTree&lt;'a&gt; = 
+  | SetEmpty
+  | SetNode of 'a * SetTree&lt;'a&gt; *  SetTree&lt;'a&gt; * int
+  | SetOne of 'a</PRE>
+      <P>This introduces two special cases:</P>
+      <P>
+      <OL>
+        <LI>A special case for empty branches.</LI>
+        <LI>A special case for branches with a single element.</LI></OL>
+      <P></P>
+      <P>The              <CODE>CompilationRepresentation</CODE> attribute is 
+      used to get F# to represent the first argument-less type constructor,      
+              <CODE>SetEmpty</CODE> in this case, as a null pointer rather than 
+      an object. In general, that saves space and improves performance 
+      significantly but hinders reflection because              
+      <CODE>SetEmpty</CODE> no longer has any run-time type information. In this 
+      case, the disadvantage is unimportant because this is an internal 
+      representation.           </P>
+      <P>The              <CODE>SetOne(x)</CODE> constructor is used as an 
+      alternative representation of               <CODE>SetNode(x, null, null, 
+      1)</CODE> and, due to the absence of child pointers, consumes 
+      significantly less space. Moreover, such leaf nodes account for a large 
+      proportion of all nodes in a balanced binary tree.           </P>
+      <P>The reflection capabilities of the .NET platform also permit another 
+      interesting kind of data structure specialization. Specifically, 
+      specializations may be performed according to the type of a container 
+      including not only the type of its elements but the kind of container 
+      itself. Dispatch to a specialized routine may be performed using a pattern 
+      match over the boxed representation with a run-time type test using the    
+                <CODE>:?</CODE> notation to detect known special cases.          
+       </P>
+      <P>For example, the following function computes the sum of the elements in 
+      a sequence:</P>
+<PRE>&gt; let sum xs =
+    let mutable t = 0.0
+    for x in xs do
+      t &lt;- t + x
+    t;;
+val sum : seq&lt;float&gt; -&gt; float</PRE>
+      <P>This function may be applied to any type that implements the 
+      IEnumerable interface, including arrays and lists:</P>
+<PRE>&gt; let array = Array.init 40000000 float;;
+val array : float []</PRE>
+<PRE>&gt; let list = List.of_array array;;
+val list : float list</PRE>
+<PRE>&gt; #time;;
+--&gt; Timing now on</PRE>
+<PRE>&gt; sum array;;
+Real: 00:00:00.467, CPU: 00:00:00.468, GC gen0: 0, gen1: 0, gen2: 0
+val it : float = 7.9999998e+14</PRE>
+<PRE>&gt; sum list;;
+Real: 00:00:03.217, CPU: 00:00:03.187, GC gen0: 0, gen1: 0, gen2: 0
+val it : float = 7.9999998e+14</PRE>
+      <P>Data structure specialization for arrays and lists whilst retaining the 
+      genericity of the              <CODE>sum</CODE> function itself results in 
+      the following code:           </P>
+<PRE>&gt; let sum2 xs =
+    let mutable t = 0.0
+    match box xs with
+    | :? array&lt;float&gt; as xs -&gt;
+        for i=0 to xs.Length-1 do
+          t &lt;- t + xs.[i]
+    | :? list&lt;float&gt; as xs -&gt;
+        let mutable xs = xs
+        while not xs.IsEmpty do
+          t &lt;- t + xs.Head
+          xs &lt;- xs.Tail
+    | _ -&gt;
+        for x in xs do
+          t &lt;- t + x
+    t;;
+val sum2 : seq&lt;float&gt; -&gt; float</PRE>
+      <P>When the arrays and lists contain many elements the time taken to 
+      perform the dispatch based upon run-time type is negligible but 
+      performance is doubled for the special cases:</P>
+<PRE>&gt; sum2 array;;
+Real: 00:00:00.243, CPU: 00:00:00.250, GC gen0: 0, gen1: 0, gen2: 0
+val it : float = 7.9999998e+14</PRE>
+<PRE>&gt; sum2 list;;
+Real: 00:00:01.448, CPU: 00:00:01.453, GC gen0: 0, gen1: 0, gen2: 0
+val it : float = 7.9999998e+14</PRE>
+      <P>This technique can be used to obtain significant performance 
+      improvements in a variety of generic functions.</P>
+      <H2>Efficient loops</H2>
+      <P>Some programmers who are used to conventional imperative languages are 
+      concerned by the lack of looping constructs such as              
+      <CODE>break</CODE> ,              <CODE>continue</CODE> and even           
+         <CODE>goto</CODE> in F#. In fact, the F# team have considered adding 
+      these constructs to the language. However, it is possible to write many 
+      such loop efficiently in F# as recursive functions. Moreover, the F# 
+      compiler optimizes the recursive functions into loops rather than using 
+      tail calls (which are currently significantly less efficient on .NET).     
+            </P>
+      <P>For example, the following              <CODE>iterate</CODE> function 
+      implements the core of a Mandelbrot renderer by repeatedly applying a 
+      recurrence relation until either a maximum number of iterations is reached 
+      or the resulting value escapes the circle              <I>|z| &lt; 2</I> 
+      on the Argand plane:           </P>
+<PRE>&gt; let iterate (c: complex) =
+    let cr = c.r
+    let ci = c.i
+    let rec loop zr zi i =
+      if i &gt; max_iterations then 0 else
+        let zr2 = zr * zr
+        let zi2 = zi * zi
+        if zi2 + zr2 &gt; 4.0 then i else
+          let temp = zr * zi
+          loop (zr2 - zi2 + cr) (temp + temp + ci) (i + 1)
+    loop 0.0 0.0 1;;
+val iterate : complex -&gt; int</PRE>
+      <P>In related languages such as OCaml, this is actually an inefficient way 
+      to express a solution because the nested              <CODE>loop</CODE> 
+      function captures the values              <CODE>cr</CODE> and              
+      <CODE>ci</CODE> from its scope and, therefore, requires the use of a heavy 
+      weight closure. However, the representation used by F# is completely 
+      different and actually very efficient. This can be seen by decompiling the 
+      generated IL back into C# using the excellent Reflector tool to obtain the 
+      following:           </P>
+<PRE>int iterate(Complex c)
+{
+    double num = c.get_r();
+    double num2 = c.get_i();
+    double num3 = num;
+    double num4 = num2;
+    return loop@33@33(num, num2, 0.0, 0.0, 1);
+}</PRE>
+<PRE>int loop@33@33(double cr@33, double ci@33, double zr, double zi, int i)
+{
+    while (i &lt;= 0x10000)
+    {
+        double num = zr * zr;
+        double num2 = zi * zi;
+        if ((num2 + num) &gt; 4.0)
+        {
+            return i;
+        }
+        i++;
+        zi = ((2.0 * zr) * zi) + ci@33;
+        zr = (num - num2) + cr@33;
+        ci@33 = ci@33;
+        cr@33 = cr@33;
+    }
+    return 0;
+}</PRE>
+      <P>The tail recursive function has clearly been optimized into an 
+      efficient              <CODE>while</CODE> loop with factored 
+      subexpressions that even uses a              <CODE>return</CODE> inside 
+      the loop to escape prematurely and efficiently. Thus, this 
+      purely-functional recursive function is actually faster than any 
+      imperative loop that can be written in F# because there is no              
+      <CODE>return</CODE> construct in F#.           </P>
+      <H2>Use structs only for efficient storage</H2>
+      <P>One of the main advantages of the CLR over other VMs such as the JVM is 
+      its facility for arbitrary user-defined structs. These are a form of       
+             <I>value type</I> and are stored unboxed in memory, e.g. an array 
+      of complex numbers is stored as a single contiguous block of memory with 
+      no pointers because F#'s complex number type is a struct.           </P>
+      <P>However, despite recent improvements the handling of structs on .NET is 
+      still inefficient compared to languages like C and some alternative VMs 
+      such as              <A href="http://llvm.org/">LLVM</A> that handle 
+      structs as first-class aggregate values with no efficiency loss compared 
+      to the direct handling of each separate field of a struct as a separate 
+      variable. Consequently, structs can be a great option as an efficient 
+      storage format but their fields should be extracted manually and 
+      manipulated individually for the best possible performance on .NET.        
+         </P>
+      <P>For example, the following radix 2 FFT implementation uses ordinary 
+      complex arithmetic and, consequently, generates many temporary 
+structs:</P>
+<PRE>&gt; let rec fft_aux n a =
+    if n &lt; 2 then Array.init n a else
+      let e = fft_aux (n/2) (fun i -&gt; a(2*i))
+      let o = fft_aux (n/2) (fun i -&gt; a(2*i + 1))
+      let a = Array.create n Math.Complex.Zero
+      let f k k' =
+        let t = 2. * System.Math.PI * float k / float n
+        a.[k] &lt;- e.[k'] + complex (cos t) (sin t) * o.[k']
+      for k=0 to n/2 - 1 do
+        f k k
+      for k=n/2 to n - 1 do
+        f k (k - n/2)
+      a
+  and fft a = fft_aux (Array.length a) (Array.get a);;
+val fft : complex [] -&gt; complex []</PRE>
+      <P>Computing a 2             <SUP>20</SUP> -element FFT using this 
+      function takes 4.777s whereas the following implementation takes only 
+      4.068s thanks to manually inlined complex arithmetic to keep the structs 
+      only as a storage format:           </P>
+<PRE>&gt; let rec fft_aux n a =
+    if n &lt; 2 then Array.init n a else
+      let e = fft_aux (n/2) (fun i -&gt; a(2*i))
+      let o = fft_aux (n/2) (fun i -&gt; a(2*i + 1))
+      let a = Array.create n Math.Complex.Zero
+      let f k k' =
+        let t = 2. * System.Math.PI * float k / float n
+        let (ze: complex, zo: complex) = e.[k'], o.[k']
+        let tr, ti = cos t, sin t
+        a.[k] &lt;-
+          complex (ze.r + tr * zo.r - ti * zo.i) (ze.i + tr * zo.i + ti * zo.r)
+      for k=0 to n/2 - 1 do
+        f k k
+      for k=n/2 to n - 1 do
+        f k (k - n/2)
+      a
+  and fft a = fft_aux (Array.length a) (Array.get a);;
+val fft : complex [] -&gt; complex []</PRE>
+      <P>The effect is significantly more pronounced if structs are passed as 
+      function arguments and return values.</P>
+      <H2>Summary</H2>
+      <P>This article has described several low-level optimization techniques 
+      that can be used to improve the performance of a wide variety of F# 
+      programs when necessary. The techniques covered in this article were 
+      garbage collection friendliness, data structure specialization, using 
+      recursion to generate efficient loops and the use of structs for efficient 
+      storage and their avoidance in local computations.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of performance, 
+      particularly in the context of advanced lessons in parallelism using 
+      Microsoft's Task Parallel Library.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%202_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

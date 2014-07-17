@@ -1,0 +1,297 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0085)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/svd_compression.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Visualizing linear algebra: Singular Value 
+Decomposition</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Visualizing linear algebra: Singular Value 
+Decomposition</TITLE>     <LINK href="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Visualizing linear algebra: Singular Value Decomposition</H1>
+      <P>Singular Value Decomposition (SVD) is an important algorithm from 
+      linear algebra that decomposes a matrix into the product of three simpler 
+      matrices. The resulting decomposition has several applications. This 
+      article describes the design and implementation of an F# program that 
+      computes the SVD of an image and uses it to create a lossy compression 
+      algorithm with controllable quality. This involves numerical methods for 
+      computing the eigenvalues of real symmetric matrices and interactive 
+      visualization of the result as a standalone Windows Presentation 
+      Foundation application.</P>
+      <H2>Introduction</H2>
+      <P>In the case of a square real matrix              <I>A</I> , the 
+      Singular Value Decomposition (SVD) may be expressed in terms of the 
+      eigenvalue and eigenvector pairs of the real symmetric matrix              
+      <I>A A               <SUP>T</SUP>             </I> . The eigenvalues and 
+      eigenvectors of a real symmetric matrix can be computed using a simple but 
+      inefficient algorithm known as Jacobi iteration. The F# programming 
+      language allows this entire algorithm to be implemented in under 80 lines 
+      of code and, despite the inefficiencies of this algorithm, images up to 
+      256×256 pixels may be analyzed in only a few seconds.           </P>
+      <P>We begin by referencing the DLLs and opening the namespaces relevant to 
+      the F# Power Pack (which provides vectors and matrices), WPF and the Task 
+      Parallel Library:</P>
+<PRE>&gt; #r "FSharp.PowerPack.dll";;
+&gt; #r "PresentationCore.dll";;
+&gt; #r "PresentationFramework.dll";;
+&gt; #r "WindowsBase.dll";;
+&gt; #r "System.Threading.dll";;
+&gt; open Microsoft.FSharp.Math;;
+&gt; open System.Windows;;
+&gt; open System.Windows.Media;;
+&gt; open System.Threading;;</PRE>
+      <H2>Eigensolvers</H2>
+      <P>Eigensolving is equivalent to finding all of the roots of the 
+      characteristic polynomial of a matrix. Consequently, there are no direct 
+      methods for matrices over 4×4 and we must resort to iterative techniques 
+      instead. These techniques make ingenious use of matrix operations such as 
+      reflections and rotations that drive the matrix towards a diagonal 
+      representation without altering its eigenvalues or eigenvectors. Once all 
+      off-diagonal elements have been reduced to zero, the remaining diagonal 
+      elements are the eigenvalues and the columns of the matrix representing 
+      the accumulated operations are the eigenvectors.</P>
+      <P>The Jacobi algorithm uses rotations to drive off-diagonal elements 
+      towards zero. Consequently, the core routine is a function that applies a 
+      rotation to a pair of elements,              <CODE>i0, i1</CODE> and       
+             <CODE>i2, i3</CODE> , in the given matrix              
+      <CODE>a</CODE> :           </P>
+<PRE>&gt; let inline rot (a: matrix) s tau i0 i1 i2 i3 =
+    let g = a.[i0,i1]
+    let h = a.[i2,i3]
+    a.[i0,i1] &lt;- g - s * (h + g * tau)
+    a.[i2,i3] &lt;- h + s * (g - h * tau);;
+val inline rot : matrix -&gt; float -&gt; float -&gt; int -&gt; int -&gt; int -&gt; int -&gt; unit</PRE>
+      <P>The angle of rotation is found in terms of square roots using simple 
+      trigonometry. A function that eliminates an off diagonal element by 
+      applying a rotation, affecting a whole row and column, may then be 
+      written:</P>
+<PRE>&gt; let rec jacobi_elim (d: vector) (z: vector) (a: matrix) (v: matrix) ip iq n =
+    let theta = (d.[iq] - d.[ip]) * 0.5 / a.[ip,iq]
+    let t = 1. / (abs theta + sqrt(1. + theta * theta))
+    let t = if theta &lt; 0. then -t else t
+    let c = 1. / sqrt(1. + t*t)
+    let s = t * c
+    let tau = s / (1. + c)
+    let h = t * a.[ip,iq]
+    z.[ip] &lt;- z.[ip] - h
+    z.[iq] &lt;- z.[iq] + h
+    d.[ip] &lt;- d.[ip] - h
+    d.[iq] &lt;- d.[iq] + h
+    a.[ip,iq] &lt;- 0.
+    for j=0 to ip-1 do
+      rot a s tau j ip j iq
+    for j=ip+1 to iq-1 do
+      rot a s tau ip j j iq
+    for j=iq+1 to n-1 do
+      rot a s tau ip j iq j
+    for j=0 to n-1 do
+      rot v s tau j ip j iq;;
+val jacobi_elim :
+  vector -&gt; vector -&gt; matrix -&gt; matrix -&gt; int -&gt; int -&gt; int -&gt; unit</PRE>
+      <P>Note that the elimination of off-diagonal elements in              
+      <CODE>a</CODE> is followed by the accumulation of the rotations in the 
+      matrix              <CODE>v</CODE> that will culminate in the 
+      eigenvectors.           </P>
+      <P>For the purposes of this simple image compression example we shall 
+      neglect numerical precision and, instead, perform only a single iteration 
+      in order to obtain an adequate approximation to the eigenvalues and 
+      eigenvectors quickly. The following              <CODE>jacobi_iter</CODE> 
+      function tries to eliminate each off-diagonal element in turn and returns 
+      the estimated eigenvalues and eigenvectors:           </P>
+<PRE>&gt; let jacobi_iter (b: vector) (d: vector) (z: vector) (a: matrix) (v: matrix) =
+    let n = b.Length
+    for ip=0 to n-2 do
+      for iq=ip+1 to n-1 do
+        jacobi_elim d z a v ip iq n
+    let d = b + z
+    [|for i in 0 .. n-1 -&gt;
+        d.[i], Math.Vector.Generic.init n (fun j -&gt; v.[j,i])|]
+val jacobi_iter :
+  vector -&gt;
+    vector -&gt; vector -&gt; matrix -&gt; matrix -&gt; (float * Vector&lt;float&gt;) array</PRE>
+      <P>Finally, we can write a function that sanity checks the given matrix 
+      and computes and returns its eigenvalues and eigenvectors:</P>
+<PRE>&gt;  let jacobi (A: _ Matrix) =
+    let n, m = A.Dimensions
+    if n &lt;&gt; m then
+      invalidArg "a" "Matrix must be square"
+    if A &lt;&gt; A.Transpose then
+      invalidArg "a" "Matrix must be symmetric"
+    jacobi_iter A.Diagonal A.Diagonal (Vector.zero n) A (Matrix.identity n);;
+val jacobi : Matrix&lt;float&gt; -&gt; (float * Vector&lt;float&gt;) array</PRE>
+      <H2>The Singular Value Decomposition</H2>
+      <P>The Singular Value Decomposition (SVD) is a decomposition of a matrix   
+                 <I>A</I> into the product              <I>U S V               
+      <SUP>T</SUP>             </I> of three matrices. The matrices              
+      <I>U</I> and              <I>V</I> are unitary and the matrix              
+      <I>S</I> is diagonal.              <I>S</I> is given by the eigenvalues in 
+      descending order.              <I>V</I> is given by the eigenvectors in 
+      columns.              <I>U</I> is then simply              <I>A V S        
+             <SUP>-1</SUP>             </I> .           </P>
+      <P>The following              <CODE>svd</CODE> function returns the three 
+      matrices              <I>U</I> ,              <I>S</I> (as a vector of the 
+      diagonal elements) and              <I>V</I> of the given matrix           
+         <CODE>A</CODE> :           </P>
+<PRE>&gt; let svd (A: matrix) =
+    let n, _ = A.Dimensions
+    let eigenvalues, eigenvectors =
+      A.Transpose * A
+      |&gt; jacobi
+      |&gt; Array.sortWith (fun (x, _) (y, _) -&gt; compare y x)
+      |&gt; Array.unzip
+    let S =
+      Array.map (fun x -&gt; sqrt(abs x)) eigenvalues
+      |&gt; vector
+    let V = Matrix.init n n (fun i j -&gt; eigenvectors.[j].[i])
+    let U = A * V * Matrix.initDiagonal(Vector.map (( / ) 1.) S)
+    U, S, V;;
+val svd : matrix -&gt; Matrix&lt;float&gt; * vector * matrix</PRE>
+      <P>Our lossy image compressor will compute the SVD decomposition of a 
+      square real matrix and then reconstruct arbitrarily-accurate 
+      approximations from the first              <I>k</I> rows of the matrices   
+                 <I>U</I> ,              <I>S</I> and              <I>V</I> .    
+             </P>
+      <H2>Visualization</H2>
+      <P>The most compelling visualization of this technique is to allow the 
+      user to control the accuracy of the approximation interactively, updating 
+      the view of the image in real time as the parameter is altered. This turns 
+      out to be quite easy using WPF.</P>
+      <P>The following function deconstructs a given image into an array of 
+      floating-point values representing the intensities:</P>
+<PRE>&gt; let deconstruct (image: Imaging.BitmapImage) =
+    let w, h = image.PixelWidth, image.PixelHeight
+    let bpp = image.Format.BitsPerPixel / 8
+    let pixel = Array.create (w * h * bpp) 0uy
+    image.CopyPixels(pixel, w * bpp, 0)
+    let n = min w h
+    [|for i in 0 .. n-1 -&gt;
+        [|for j in 0 .. n-1 -&gt;
+            float pixel.[(i * w + j)*bpp]|]|];;
+val deconstruct : Imaging.BitmapImage -&gt; float array array</PRE>
+      <P>This program is designed to work with grayscale images but we have been 
+      careful to account for any number of bits per pixel and extract the first 
+      bytes for each pixel (which might be the red channel in the case of a full 
+      color image).</P>
+      <P>The following function reconstructs an image using the first            
+        <CODE>k</CODE> rows of the SVD decomposition:           </P>
+<PRE>&gt; let reconstruct (U: matrix, S: vector, V: matrix) k =
+    let n = S.Length
+    let pixel = Array.create (n*n) 0uy
+    Parallel.For(0, n, fun i -&gt;
+      for j=0 to n-1 do
+        let mutable x = 0.0
+        for m in 0 .. k-1 do
+          x &lt;- x + U.[i,m] * S.[m] * V.[j,m]
+        pixel.[i * n + j] &lt;- byte(max 0. (min 255. x)))
+    let format = PixelFormats.Gray8
+    let image = Imaging.BitmapSource.Create(n, n, 1., 1., format, null, pixel, n)
+    image;;
+val reconstruct : matrix * vector * matrix -&gt; int -&gt; Imaging.BitmapSource</PRE>
+      <P>The performance of this              <CODE>reconstruct</CODE> function 
+      is important because it will be called every time the image is updated as 
+      the user adjusts              <CODE>k</CODE> so we have parallelized the 
+      outer loop. This could be done more efficiently for small              
+      <CODE>k</CODE> but, in that case, the update will be sufficiently fast 
+      anyway so there is no motive to improve the parallelization.           
+</P>
+      <P>Finally, the following main program pulls everything together with a 
+      GUI:</P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    let file = Microsoft.Win32.OpenFileDialog()
+    if not &lt;| unbox(file.ShowDialog()) then exit 0</PRE>
+<PRE>    let image = Imaging.BitmapImage(System.Uri file.FileName)
+    let pixel = deconstruct image
+    let n = pixel.Length
+    let U, S, V = svd (matrix pixel)</PRE>
+<PRE>    let label = Controls.Label(Content="100%", Width=100.)</PRE>
+<PRE>    let slider = Controls.Slider(Minimum=1., Maximum=float n, Value=float n)
+    slider.SmallChange &lt;- 16.
+    
+    let view = Controls.Image(Stretch=Stretch.Uniform)
+    view.Source &lt;- reconstruct (U, S, V) n</PRE>
+<PRE>    let panel = Controls.DockPanel(Margin=Thickness 11.)
+    let add control position =
+      Controls.DockPanel.SetDock(control, position)
+      panel.Children.Add control |&gt; ignore
+    add slider Controls.Dock.Top
+    add label Controls.Dock.Top
+    add view Controls.Dock.Bottom</PRE>
+<PRE>    let window = Window(Content=panel, Margin=Thickness 11.)
+    window.Title &lt;- "Image compression via Singular Value Decomposition"</PRE>
+<PRE>    slider.ValueChanged.Add(fun e -&gt;
+      let k = int e.NewValue
+      label.Content &lt;- sprintf "%0.0f%%" (100. * float k / float n)
+      view.Source &lt;- reconstruct (U, S, V) k)</PRE>
+<PRE>    ignore((Application()).Run window);;</PRE>
+      <P>This asks the user to locate the image file using an open file dialog, 
+      loads the file from disk, deconstructs it and computes its SVD 
+      decomposition. Then a GUI is built with a slider to allow the user to 
+      alter              <CODE>k</CODE> , a label to indicate the exact 
+      proportion of rows being used in the reconstruction and an image control 
+      that is used to visualize the current approximant of the original image. 
+      These are placed vertically in a DockPanel so that the image fills the 
+      remainder of the window. Finally, a callback is added to the slider in 
+      order to update the view of the image when the parameter is altered by the 
+      user.           </P>
+      <H2>Results</H2>
+      <P>We used the pedagogical 256×256 grayscale Lena image from the study of 
+      image processing. The exact representation looks like this:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/exact.gif"> 
+                  </P>
+      <P></P>
+      <P>In this case, a coarse but recognisable approximation can be obtained 
+      from only 16 rows (7% of the 256 rows):</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/approx.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has demonstrated how powerful numerical methods can be 
+      implemented succinctly and efficiently in the F# programming language and 
+      coupled with responsive interactive visualizations using Windows 
+      Presentation Foundation to create compelling demonstrations.</P>
+      <P>Future F#.NET Journal articles will revisit the topics of numerical 
+      methods, interactive visualization and data 
+compression.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Visualizing%20linear%20algebra%20Singular%20Value%20Decomposition_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

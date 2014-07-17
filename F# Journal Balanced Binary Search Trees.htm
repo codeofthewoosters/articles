@@ -1,0 +1,409 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0091)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/balanced_binary_trees.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Balanced Binary Search Trees</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Balanced Binary Search Trees</TITLE>     <LINK 
+href="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/style.css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Balanced Binary Search Trees</H1>
+      <P>Functional programming languages like F# excel at handling immutable 
+      data structures. In the interests of efficiency, such  data structures are 
+      typically based upon trees rather than hash tables. Key benefits include 
+      the ability to express algorithms elegantly using a declarative style and 
+      the inherent thread safety of immutable data structures makes them ideal 
+      for concurrent programming. This article describes the design and 
+      implementation of a basic balanced binary search tree data structure 
+      similar to that of the built-in              <CODE>Set</CODE> module.      
+           </P>
+      <H2>Introduction</H2>
+      <P>Previous articles have explained why tree data structures are a core 
+      concept in functional programming languages like F#. Up to now, the 
+      examples given were all concrete data structures that reflected an 
+      abstract form of information, such as the use of abstract syntax trees to 
+      represent symbolic mathematical expressions and even programs. However, 
+      naive use of tree data structures can easily lead to the inefficiency of a 
+      simple list when trees become highly asymmetric. Specifically, allowing a 
+      tree to grow unbounded in a single direction (e.g. to the left) yields the 
+      inefficiencies of the list data structure, where all existing elements 
+      must be traversed before the last element can be reached, i.e. O(n) 
+      search. This inefficiency can be improved upon enormously without 
+      sacrificing the immutability the container by simply balancing the tree as 
+      it is created. A balanced tree provides O(log n) search.</P>
+      <H2>Monomorphic binary search tree type</H2>
+      <P>A binary search tree containing integers may be defined as:</P>
+<PRE>&gt; type t =
+    | Empty
+    | Node of t * int * t;;
+type t =
+  | Empty
+  | Node of t * int * t</PRE>
+      <P>The type constructor              <CODE>Empty</CODE> represents an 
+      empty search tree. Elements in a search tree are stored using the          
+          <CODE>Node</CODE> type constructor. In the interests of efficiency, 
+      child trees are always stored in order, so the elements in a left branch 
+      are always less than the central element which is always less than the 
+      elements of the right branch.           </P>
+      <P>For example, the following value is a valid binary search tree:</P>
+<PRE>&gt; Node(Node(Empty, 3, Empty), 4, Empty);;
+val it : t = Node(Node(Empty, 3, Empty), 4, Empty)</PRE>
+      <P>However, this type of search tree is of limited practical utility 
+      because it can only store elements of the type              
+      <CODE>int</CODE> . A tree that is generic over the type of elements that 
+      it stores is much more useful in practice.           </P>
+      <H2>Polymorphic binary tree</H2>
+      <P>A polymorphic binary search tree may be defined by preceding the type   
+                 <CODE>t</CODE> with a type variable              
+      <CODE>'a</CODE> and referring to the type of an element within this type 
+      definition as              <CODE>'a</CODE> rather than              
+      <CODE>int</CODE> :           </P>
+<PRE>&gt; type 'a t =
+    | Empty
+    | Node of 'a t * 'a * 'a t;;
+type 'a t =
+  | Empty
+  | Node of 'a t * 'a * 'a t</PRE>
+      <P>The previous example remains valid:</P>
+<PRE>&gt; let example = Node(Node(Empty, 3, Empty), 4, Empty);;
+val example : int t</PRE>
+      <P>However, note how the type of the tree is now              <CODE>int 
+      t</CODE> rather than just              <CODE>t</CODE> .           </P>
+      <H2>Folding over a tree</H2>
+      <P>We have already encountered the ubiquitous fold functions used to 
+      replace loops over containers in functional programming languages. A 
+      binary search tree might have two different fold functions for folding 
+      over the elements in forward and reverse order. The following              
+      <CODE>fold</CODE>  function implements a left fold by folding over the 
+      elements to the left before folding over those to the right:           
+</P>
+<PRE>&gt; let rec fold f accu = function
+    | Empty -&gt; accu
+    | Node(l, v, r) -&gt; fold f (f (fold f accu l) v) r;;
+val fold : ('a -&gt; 'b -&gt; 'a) -&gt; 'a -&gt; 'b t -&gt; 'a</PRE>
+      <P>For example, folding over our example search tree lists the integers in 
+      the container in order, with 3 appearing before 4 because it is in the 
+      left branch:</P>
+<PRE>&gt; fold (fun () n -&gt; print_int n) () example;;
+34</PRE>
+      <P>In F#, folding is the easiest way to accumulate a result from all of 
+      the elements in a container, e.g. to sum all of the elements. As we shall 
+      see, the ability to search for an individual element (i.e. test for set 
+      membership) is of particular interest in the context of balanced binary 
+      search trees as this operation can be performed asymptotically more 
+      quickly than with lists.</P>
+      <H2>Inserting elements without balancing</H2>
+      <P>A new element              <CODE>x</CODE> may be inserted into a tree 
+      using a function              <CODE>add</CODE> that pattern matches over 
+      the tree:           </P>
+<PRE>&gt; let rec add x = function
+    | Empty -&gt; Node(Empty, x, Empty)
+    | Node(l, v, r) -&gt;
+        match compare x v with
+        | c when c&lt;0 -&gt; Node(add x l, v, r)
+        | c when c&gt;0 -&gt; Node(l, v, add x r)
+        | _ -&gt; Node(l, x, r);;
+val add : 'a -&gt; 'a t -&gt; 'a t</PRE>
+      <P>Note that we are careful to use a single call to the built-in 
+      polymorphic comparison function              <CODE>compare</CODE> , that 
+      provides a total order over values of any type by returning -1, 0 or 1 for 
+      less than, equal to or greater than respectively. This is more efficient 
+      than calling the polymorphic comparison functions              
+      <CODE>&lt;</CODE> and              <CODE>&gt;</CODE> on the element type 
+      because they might require arbitrary computation rather than the ensuing 
+      integer comparisons used here.           </P>
+      <P>Inserting the element              <CODE>5</CODE> into our example tree 
+      results in the new piece of tree being introduced on the right-hand side 
+      of the root:           </P>
+<PRE>&gt; add 5 example
+val it : int t = Node (Node (Empty,3,Empty),4,Node (Empty,5,Empty))</PRE>
+      <P>Note that this leaves              <CODE>example</CODE> unaltered 
+      because this is an immutable (purely functional) data structure.           
+      </P>
+      <P>Adding a sorted sequence of elements leads to the worst-case behaviour 
+      of a highly unbalanced tree:</P>
+<PRE>&gt; List.fold_right add [1 .. 10] Empty
+val it : int t
+= Node
+   (Node
+     (Node
+       (Node
+         (Node
+           (Node
+             (Node
+               (Node (Node (Node (Empty,1,Empty),2,Empty),3,Empty),4,Empty),5,
+              Empty),6,Empty),7,Empty),8,Empty),9,Empty),10,Empty)</PRE>
+      <P>In this case, searching for the element              <CODE>10</CODE> 
+      would require us to traverse all other elements, performing 10 
+      comparisons. This inefficiency can be addressed by creating only balanced 
+      trees.           </P>
+      <H2>Inserting elements with balancing</H2>
+      <P>The              <CODE>add</CODE> function introduced in the previous 
+      section needs minimal alterations to use another function to balance trees 
+      as they are constructed.           </P>
+      <P>There are various different approaches to maintaining balancing. In 
+      this article, we shall consider height-balanced trees that ensure that 
+      child nodes remain within a fixed height difference of each other. 
+      Rebalancing is performed by rotating the tree, moving elements from the 
+      left to the right or vice-versa.</P>
+      <P>The process of keeping height-balanced trees balanced as nodes are 
+      inserted and removed makes heavy use of the height of a tree and, 
+      consequently, the height is typically stored in each node. The type 
+      definition then becomes:</P>
+<PRE>&gt; type 'a t =
+    | Empty
+    | Node of 'a t * 'a * 'a t * int
+type 'a t =
+  | Empty
+  | Node of 'a t * 'a * 'a t * int</PRE>
+      <P>where the extra              <CODE>int</CODE> argument to the           
+         <CODE>Node</CODE> type constructor stores the height.           </P>
+      <P>The following              <CODE>height</CODE> function can be used to 
+      find the height of a given tree:           </P>
+<PRE>&gt; let rec height = function
+    | Empty -&gt; 0
+    | Node(_, _, _, h) -&gt; h;;
+val height : 'a t -&gt; int</PRE>
+      <P>The              <CODE>Node</CODE> constructor can be replaced by a     
+               <CODE>node</CODE> function that augments the contents of a node 
+      with its height metadata:           </P>
+<PRE>&gt; let node(l, v, r) =
+    Node(l, v, r, 1 + max (height l) (height r));;
+val node : 'a t * 'a * 'a t -&gt; 'a t</PRE>
+      <P>The following              <CODE>bal</CODE> function performs a single 
+      local rotation of the tree in order to keep it balanced when a single node 
+      has been added or removed:           </P>
+<PRE>&gt; let rec bal(l, v, r) =
+    let hl, hr = height l, height r
+    match l, v, r with
+    | Node(ll, lv, lr, _), v, r when hl &gt; hr+1 -&gt;
+        let hll, hlr = height ll, height lr
+        match lr with
+        | Node(lrl, lrv, lrr, _) when hll &lt; hlr -&gt;
+            node(node(ll, lv, lrl), lrv, node(lrr, v, r))
+        | lr -&gt; node(ll, lv, node(lr, v, r))
+    | l, v, Node(rl, rv, rr, _) when hl+1 &lt; hr -&gt;
+        let hrl, hrr = height rl, height rr
+        match rl with
+        | Node(rll, rlv, rlr, _) when hrl &gt; hrr -&gt;
+            node(node(l, v, rll), rlv, node(rlr, rv, rr))
+        | rl -&gt; node(node(l, v, rl), rv, rr)
+    | l, v, r -&gt; node(l, v, r);;
+val bal : 'a t * 'a * 'a t -&gt; 'a t</PRE>
+      <P>The previous implementation of the              <CODE>add</CODE> 
+      function needs minimal alterations to handle balanced trees. Specifically, 
+      the              <CODE>bal</CODE> function is used to construct nodes when 
+      the structure of the tree might have changed and the              
+      <CODE>node</CODE> function is used otherwise:           </P>
+<PRE>&gt; let rec add x = function
+    | Empty -&gt; node(Empty, x, Empty)
+    | Node(l, v, r, _) -&gt;
+        match compare x v with
+        | c when c&lt;0 -&gt; bal(add x l, v, r)
+        | c when c&gt;0 -&gt; bal(l, v, add x r)
+        | _ -&gt; node(l, x, r);;
+val add : 'a -&gt; 'a t -&gt; 'a t</PRE>
+      <P>These functions capture the essence of balanced binary tree 
+      implementations and form an exquisite example of just how beautiful F# 
+      code can be. The origin of the efficiency of all balanced binary tree 
+      functions lies in their use of recursive subdivision to roughly halve the 
+      problem space at each step (because the left and right branches are 
+      roughly the same size).</P>
+      <H2>Finding and removing elements</H2>
+      <P>Functions for finding and removing elements are also easy to write in 
+      F#. The following              <CODE>mem</CODE> function searches a 
+      balanced tree recursively, looking for the given element:           </P>
+<PRE>&gt; let rec mem x = function
+    | Empty -&gt; false
+    | Node(l, v, r, _) -&gt;
+        match compare x v with
+        | c when c&lt;0 -&gt; mem x l
+        | c when c&lt;0 -&gt; mem x r
+        | _ -&gt; x=v;;
+val mem : 'a -&gt; 'a t -&gt; bool</PRE>
+      <P>Removing elements from the tree is slightly more involved. When the 
+      element in a node is removed, the left and right branches of the node must 
+      be joined. This is most easily performed by introducing functions that 
+      remove the first or last nodes from a tree.</P>
+      <P>The following              <CODE>split_left</CODE> function simply 
+      recurses into the left branch and accumulates the left-most element and 
+      remaining tree:           </P>
+<PRE>&gt; let rec split_left = function
+      | Empty -&gt; raise Not_found
+      | Node(Empty, x, r, _) -&gt; x, r
+      | Node(l, v, r, _) as t -&gt;
+          let x, l = split_left l
+          x, bal(l, v, r);;
+val split_left : 'a t -&gt; 'a * 'a t</PRE>
+      <P>This is a special case of removing the first element.</P>
+      <P>A function to merge left and right subtrees can then use this           
+         <CODE>split_left</CODE> function to take a central element from the 
+      right branch:           </P>
+<PRE>&gt; let merge l = function
+    | Empty -&gt; l
+    | r -&gt;
+        let v, r = split_left r
+        bal(l, v, r);;
+val merge : 'a t -&gt; 'a t -&gt; 'a t</PRE>
+      <P>Note that we are careful to handle the case of an empty right tree 
+      explicitly in the              <CODE>merge</CODE> function using a pattern 
+      match rather than handling the exception thrown by the              
+      <CODE>split_left</CODE> function. Exceptions are heavyweight on the .NET 
+      platform and, consequently, should be avoided in code that might be 
+      performance critical, such as this generic tree implementation.           
+      </P>
+      <P>The following              <CODE>remove</CODE> function searches a 
+      balanced tree recursively and removes the given element, raising the       
+             <CODE>Not_found</CODE> exception if the element is not found in the 
+      tree:           </P>
+<PRE>&gt; let rec remove x = function
+      | Empty -&gt; raise Not_found
+      | Node(l, v, r, _) -&gt;
+          match compare x v with
+          | c when c&lt;0 -&gt; bal(remove x l, v, r)
+          | c when c&gt;0 -&gt; bal(l, v, remove x r)
+          | _ -&gt; merge l r;;
+val remove : 'a -&gt; 'a t -&gt; 'a t</PRE>
+      <P>This function required more sophistication than the              
+      <CODE>add</CODE> function but the F# code required to implement this 
+      functionality is remarkably small. This completes a simple set 
+      implementation that allows elements to be added, removed and found in a 
+      set efficiently (all in logarithmic time).           </P>
+      <H2>Testing</H2>
+      <P>The wonderfully expressive static type system provided by F# means that 
+      most of the bugs in the above code are found by the F# compiler at compile 
+      time. These bugs are easily eliminated and, once the implementation 
+      compiles without error, the need for huge amounts of unit testing at 
+      microscopic scales is obviated. The few remaining bugs still warrant the 
+      use of unit tests but now only at a macroscopic level, i.e. testing the 
+      whole balanced binary tree module.</P>
+      <P>All of the above code can be tested by simply choosing random numbers, 
+      testing for membership in the set, inserting and recording new numbers in 
+      a list and then trying to remove the recorded numbers from the set to 
+      obtain the empty set. Additionally, the balancing criteria of the tree 
+      (that subtrees differ in depth by at most one) can be tested at every 
+      intermediate step.</P>
+      <P>The maximum difference in height of all subtrees in a tree may be found 
+      with:</P>
+<PRE>&gt; let rec check = function
+    | Empty -&gt; 0
+    | Node(l, _, r, _) -&gt;
+        max(max(abs(height l - height r)) (check l)) (check r);;
+val check : 'a t -&gt; int</PRE>
+      <P>The following function inserts a random number into a set and (if the 
+      number was not already present in the set) a list:</P>
+<PRE>&gt; let aux (list, set) _ =
+    let n = rand.Next()
+    let set' = add n set
+    if mem n set then list, set' else
+    let d = check set'
+    if d &gt; 1 then print_any d
+    n::list, set';;
+val aux : int list * int t -&gt; 'a -&gt; int list * int t</PRE>
+      <P>The following function removes the given element from the set:</P>
+<PRE>&gt; let aux2 set x =
+    if not(mem x set) then printf "Not here!"
+    let set = remove x set
+    let d = check set
+    if d &gt; 1 then print_any d
+    set;;
+val aux2 : 'a t -&gt; 'a -&gt; 'a t</PRE>
+      <P>A pair of folds can be used to generate a large set and remove its 
+      elements, leaving only the empty set:</P>
+<PRE>&gt; let list, set = Seq.fold aux ([], empty) {1 .. 10000}
+  Seq.fold aux2 set list;;
+val it : int t = Empty</PRE>
+      <P>This test indicates that the balancing and searching of this tree 
+      implementation work correctly.</P>
+      <H2>Further work</H2>
+      <P>When considering ways to make this balanced binary tree implementation 
+      more generic, the possibilities are endless. Here are some ideas for the 
+      keen reader:</P>
+      <P>
+      <UL>
+        <LI>Add a                  <CODE>split</CODE> function to split a tree 
+        into trees containing subranges               </LI>
+        <LI>Add another type constructor to represent subtrees that have not yet 
+        been rebalanced. Searching should force rebalancing but operations like 
+        folds do not need to rebalance.</LI>
+        <LI>Replace searching by value for set-theoretic operations with 
+        searching by index for array-like operations.</LI>
+        <LI>Augment the definition of the tree type with an                  
+        <CODE>Item</CODE> property to allow easy indexing into the tree.         
+              </LI></UL>
+      <P></P>
+      <H2>Summary</H2>
+      <P>As this example has shown, the combination of variant types and pattern 
+      matching make it extremely easy to implement high-performance tree-based 
+      algorithms based upon purely functional (immutable) data structures.</P>
+      <P>As data structures and algorithms are core subjects in computer 
+      science, unrelated to the particular merits of the F# language, this is 
+      the ideal opportunity to mine the wealth of information and even 
+      implementations already accumulated for the OCaml programming language. In 
+      particular, we recommend the following excellent OCaml data 
+structures:</P>
+      <P>
+      <UL>
+        <LI><A 
+        href="http://www.lri.fr/~filliatr/ftp/ocaml/ds/ptset.ml.html">Patricia 
+        trees</A> ,                  <A href="http://www.lri.fr/~filliatr/ftp/ocaml/ds/rope.ml.html">Ropes</A> 
+        and                  <A href="http://www.lri.fr/~filliatr/ftp/ocaml/ds/heap.ml.html">Heaps</A> 
+        by Jean-Christophe Filliatre               </LI>
+        <LI><A href="http://www.ocaml.info/ocaml_sources/pure-fun-1.0.6/">Purely 
+        functional data structures</A> implemented in OCaml by Markus Mottl      
+                 </LI></UL>
+      <P></P>
+      <P>For a detailed discussion of the theoretical characteristics and design 
+      of purely functional data structures, read Chris Okasaki's excellent PhD 
+      thesis and book              <A href="http://www.cs.cmu.edu/~rwh/theses/okasaki.pdf">Purely 
+      Functional Data Structures</A> .           </P>
+      <P>For a thorough description of algorithmic complexity in the context of 
+      data structures and the design and implementation of data structures for 
+      numerical computing, read              <A href="http://www.ffconsultancy.com/products/ocaml_for_scientists/">OCaml 
+      for Scientists</A> .           </P>
+      <P>Future F#.NET Journal articles will cover more exotic purely functional 
+      data structures in detail as well as many adaptations of the balanced 
+      binary search tree introduced in this article. In particular, the example 
+      of balanced trees will also be used to illustrate extensible programming 
+      styles, code reuse and a variety of sophisticated algorithms including 
+      multiresolution representations for graphics.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Balanced%20Binary%20Search%20Trees_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

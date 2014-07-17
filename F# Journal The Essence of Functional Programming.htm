@@ -1,0 +1,485 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0077)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/essence.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: The Essence of Functional Programming</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: The Essence of Functional Programming</TITLE>    
+ <LINK href="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>The Essence of Functional Programming</H1>
+      <P>Most programmers learning F# will be coming from a background of 
+      object-oriented programming languages like C++, Java and C#. For those 
+      readers, it is vitally important to forget about object-oriented 
+      programming when learning the F# programming language, even though it 
+      exposes the OO features of the .NET platform.</P>
+      <P>F# is fundamentally a functional programming language and the use of 
+      functions instead of objects often leads to shorter and clearer code. 
+      Indeed, many of the benefits of functional programming are already known 
+      to OO programmers in the form of "design patterns".</P>
+      <P>This article will elucidate the essential properties of functional 
+      programming, covering three main topics:</P>
+      <P>
+      <UL>
+        <LI>Immutability</LI>
+        <LI>Recursion</LI>
+        <LI>Functions as values</LI></UL>
+      <P></P>
+      <P>We shall now explain each of these concepts in detail before providing 
+      several examples that demonstrate the clarity and power of functional 
+      programming.</P>
+      <H2>Immutability</H2>
+      <P>The benefits of C's              <CODE>const</CODE> are widely 
+      documented. This keyword allows a variable to be marked as a constant, 
+      declaring it to be immutable. The value of the variable cannot then be 
+      changed and any attempt to do so is picked up as an error by the compiler. 
+      Whenever a variable is known to be constant, marking its declaration with  
+                  <CODE>const</CODE> helps to catch errors.           </P>
+      <P>The F# language takes              <CODE>const</CODE> a step further. 
+      In F#, all atomic values are immutable by default. The affect on atomic 
+      values is quite innocuous but the extensive use of immutability and, in 
+      particular, the development of wholly immutable data structures is a very 
+      interesting and powerful concept. Let us look at the small-scale effects 
+      of immutability before addressing the design of immutable data structures. 
+                </P>
+      <H3>Immutable variables</H3>
+      <P>Consider the following declaration of              <CODE>x</CODE> :     
+            </P>
+<PRE>&gt; let x = 3;;
+val x : int</PRE>
+      <P>This is actually equivalent to the C++:</P>
+<PRE>const int x = 3;</PRE>
+      <P>Note that              <CODE>x</CODE> is still referred to as a 
+      "variable" in F#, even though its value cannot be varied. The term 
+      "variable" simply means a              <I>named value</I> in F#.           
+      </P>
+      <P>Learning how to evolve a value in the presence of immutability is easy. 
+      A sequence of mutating assignments in C:</P>
+<PRE>int x=2;
+x = 3*x;
+x = x+1;</PRE>
+      <P>can be translated into a sequence of redeclarations in F#:</P>
+<PRE>let x = 2
+let x = 3*x
+let x = x+1</PRE>
+      <P>Each redeclaration of              <CODE>x</CODE> supercedes the 
+      previous declaration and any use of              <CODE>x</CODE> in the 
+      body of a              <CODE>let x =</CODE> definition refers to the 
+      previous definition of              <CODE>x</CODE> .           </P>
+      <P>Note that redeclarations are not allowed in the top-level of compiled 
+      code in F#. In such cases, different variable names must be used rather 
+      than superceding the same name.</P>
+      <H3>Immutable data structures</H3>
+      <P>Two core concepts underpin the design and use of immutable data 
+      structures:</P>
+      <P>
+      <UL>
+        <LI>Referential transparency</LI>
+        <LI>Recursive data structures</LI></UL>
+      <P></P>
+      <P>Referential transparency refers to the fact that immutable data 
+      structures never need to be copied. Consequently, functional programming 
+      languages like F# always confer data structures by reference. Composing a 
+      new data structure from parts of an old data structure simply refers to 
+      the existing data rather than copying it.</P>
+      <P>Lists are immutable in F# and the following function accepts an element 
+                   <CODE>h</CODE> and a list              <CODE>t</CODE> and 
+      returns the list that results from prepending              <CODE>h</CODE> 
+      onto              <CODE>t</CODE> :           </P>
+<PRE>&gt; let prepend h t = h::t;;
+val prepend : 'a -&gt; 'a list -&gt; 'a list</PRE>
+      <P>The follow example demonstrates that the              
+      <CODE>prepend</CODE> function leaves the original list unaltered, whilst 
+      the returned list refers to the original:           </P>
+<PRE>&gt; let list = [1; 2; 3];;
+val list : int list
+&gt; prepend 0 list;;
+val it : int list = [0; 1; 2; 3]
+&gt; list;;
+val it : int list = [1; 2; 3]</PRE>
+      <P>A recursive data structure is any data structure with a definition that 
+      refers to itself. In the case of a tree, child nodes are also trees so a 
+      tree is an example of a recursive data structure. In addition to allowing 
+      simple declarations of many important data structures, functions that act 
+      upon such data structures can be written simply using recursion.</P>
+      <P>The following data type defines a simple binary tree with values at the 
+      nodes and empty leaves:</P>
+<PRE>&gt; type 'a tree =
+    | Node of 'a tree * 'a * 'a tree
+    | Empty;;</PRE>
+      <P>Note that this type definition is recursive because the arguments of 
+      the              <CODE>Node</CODE> constructor are trees.           </P>
+      <P>Binary trees like the              <CODE>tree</CODE> type are very 
+      common in functional programming and similar types underpin the built-in   
+                 <CODE>Set</CODE> and              <CODE>Map</CODE> 
+      implementations.           </P>
+      <P>As a consequence of referential transparency and the use of recursive 
+      data structures, actions that develop immutable data structures (such as 
+      adding elements to a set) typically result in a new data structure that 
+      contains references back to the internals of the original data 
+      structure.</P>
+      <P>The primary benefit of immutability is simplicity. In practice, the 
+      simplicity of immutable data structures often results in performance 
+      improvements. For example, when computing the union of two sets, the use 
+      of mutable data structures typically results in excessive copying (see the 
+                   <CODE>set_union</CODE> implementation in the C++ standard 
+      library, for example) whereas immutable data structures allow the input 
+      sets to be referred to by the output set.           </P>
+      <H2>Recursion</H2>
+      <P>A recursive function is a function that calls itself. This approach is 
+      often used for divide-and-conquer algorithms, where a problem is split 
+      into smaller parts and the function invokes itself recursively to solve 
+      the smaller parts.</P>
+      <P>As we have seen, the default behaviour of a              
+      <CODE>let</CODE> definition is to assume that all variables have already 
+      been defined, allowing variable definitions to be superceded. In order to 
+      define a recursive function, it is necessary to use the variable being 
+      defined in the body of its definition. This is achieved by supplementing 
+      the definition with the              <CODE>rec</CODE> keyword.           
+      </P>
+      <H3>Example: Raise to positive integer power</H3>
+      <P>A function that raises a floating point number              
+      <CODE>x</CODE> to a positive integer power              <CODE>n</CODE> may 
+      be written:           </P>
+<PRE>&gt; let rec ipow x = function
+    | 0 -&gt; 1.
+    | n -&gt; x * ipow x (n-1);;
+val ipow : float -&gt; int -&gt; float</PRE>
+      <P>This function reduces the problem of an arbitrary exponent              
+      <CODE>n</CODE> into a problem involving              <CODE>n-1</CODE> 
+      using the recurrence relation              <I>x               <SUP>n</SUP> 
+      = x x               <SUP>n-1</SUP>             </I> .           </P>
+      <P>The performance of this algorithm can be improved by trying to bisect 
+      the exponent each iteration rather than decrementing it:</P>
+<PRE>&gt; let sqr (x : float) = x * x;;
+val sqr : float -&gt; float
+&gt; let rec ipow x = function
+    | 0 -&gt; 1.
+    | 1 -&gt; x
+    | n when n%2 = 0 -&gt; sqr(ipow x (n/2))
+    | n -&gt; x * sqr(ipow x (n/2));;
+val ipow : float -&gt; int -&gt; float</PRE>
+      <P>The time taken to execute this function now scales as O(log n) rather 
+      than O(n).</P>
+      <H3>Example: Binary tree</H3>
+      <P>Functions that handle recursive data structures are most naturally 
+      recursive themselves.</P>
+      <P>The data type representing a binary tree is most easily manipulated 
+      using recursive functions. A function to insert a new element into an 
+      ordered tree may be written:</P>
+<PRE>&gt; let rec add x = function
+    | Empty -&gt; Node(Empty, x, Empty)
+    | Node(l, v, r) when x&lt;v -&gt; Node(add x l, v, r)
+    | Node(l, v, r) when x&gt;v -&gt; Node(l, v, add x r)
+    | Node(l, v, r) -&gt; Node(l, x, r);;
+val add : 'a -&gt; 'a tree -&gt; 'a tree</PRE>
+      <P>Note that this function is recursive: it calls itself to insert the 
+      given element into the left or right child tree when necessary.</P>
+      <P>When this function composes a result using an expression like           
+         <CODE>Node(add x l, v, r)</CODE> , the values of              
+      <CODE>v</CODE> and              <CODE>r</CODE> refer back to parts of the 
+      input data structure. Consequently, this function only generates new tree 
+      nodes on the path from the root to the node containing the inserted value 
+      and does not copy the entire tree. Parts of tree that can no longer be 
+      referenced are deallocated by the garbage collector.           </P>
+      <H2>Functions as values</H2>
+      <P>Perhaps the most important functionality provided by functional 
+      programming languages is the ability to handle functions like any other 
+      value. In a functional language, functions may be passed as arguments to 
+      other functions, returned by functions and stored in data structures. This 
+      style of programming leads to several design patterns that are prominent 
+      in functional programming languages and provide unrivalled elegance when 
+      solving many problems.</P>
+      <P>We shall now examine each of these patterns in detail.</P>
+      <H3>Higher-order functions</H3>
+      <P>A function that accepts another function as an argument is known as a   
+                 <I>higher-order function</I> .           </P>
+      <P>Higher-order functions are very common in functional programming. In 
+      particular, higher-order functions are often provided with data structures 
+      to apply a given function to the elements of a container. This replaces a 
+      common use of              <CODE>for</CODE> loops in conventional 
+      programming languages.           </P>
+      <P>The              <CODE>List</CODE> module provides a              
+      <CODE>map</CODE> function that creates a new list with each element given 
+      by the result of applying a given function to the corresponding element in 
+      the input list:           </P>
+<PRE>val map : ('a -&gt; 'b) -&gt; 'a list -&gt; 'b list</PRE>
+      <P>For example, the square of each element in a list is given by:</P>
+<PRE>&gt; List.map (fun n -&gt; n*n) [1 .. 5];;
+val it : int list = [1; 4; 9; 16; 25]</PRE>
+      <P>This use of higher-order functions is very common and most of the data 
+      structures in the F# standard library provide              
+      <CODE>map</CODE> functions.           </P>
+      <H3>Curried functions</H3>
+      <P>A function that returns another function as its return value is known 
+      as a              <I>curried function</I> .           </P>
+      <P>Curried functions are also a common idiom in functional programming, so 
+      much so that the F# language provides concise syntax for defining curried 
+      functions.</P>
+      <P>The syntax              <CODE>let f x y = ...</CODE> defines a curried 
+      function              <CODE>f</CODE> that accepts an argument              
+      <CODE>x</CODE> and returns a function that accepts an argument             
+       <CODE>y</CODE> .           </P>
+      <P>Perhaps the simplest example of a curried function is the built-in add 
+      function, denoted              <CODE>( + )</CODE> :           </P>
+<PRE>&gt; ( + );;
+val it : int -&gt; int -&gt; int</PRE>
+      <P>As this function is curried, the first argument can be applied to 
+      obtain a new function:</P>
+<PRE>&gt; let inc = ( + ) 1;;
+val inc : int -&gt; int</PRE>
+      <P>In this case, partially applying              <CODE>1</CODE> as the 
+      first argument has resulted in a function that adds one to the given 
+      integer.           </P>
+      <P>For example, the increment of 3 is 4:</P>
+<PRE>&gt; inc 3;;
+val it : int = 4</PRE>
+      <P>The definition of this              <CODE>inc</CODE> function may be 
+      supplied to the              <CODE>List.map</CODE> function:           
+</P>
+<PRE>&gt; List.map (( + ) 1) [1; 2; 3];;
+val it : int list = [2; 3; 4]</PRE>
+      <P>The ability to partially apply the arguments of a function to obtain a 
+      more specialized function is the primary benefit of currying.</P>
+      <H3>Combinators</H3>
+      <P>A combinator is a curried higher-order function that is used to combine 
+      other functions.</P>
+      <P>Combinators are useful because they allow functions to be composed in 
+      non-trivial ways to get a task done.</P>
+      <P>As the              <CODE>List.map</CODE> function is both higher-order 
+      and curried, it can be composed. For example, a map function for a nested 
+      list of lists may be written in terms of the              
+      <CODE>List.map</CODE> function as:           </P>
+<PRE>&gt; let map_2 f = List.map (List.map f);;
+val map_2 : ('a -&gt; 'b) -&gt; 'a list list -&gt; 'b list list</PRE>
+      <P>This allows a function to be mapped over the elements inside a list of 
+      lists:</P>
+<PRE>&gt; map_2 (fun n -&gt; n*n) [[1; 2; 3]; [4; 5; 6]];;
+- : int list list = [[1; 4; 9]; [16; 25; 36]]</PRE>
+      <P>Note how succinctly the composition of functions allows new 
+      functionality to be evolved.</P>
+      <H3>Example: Timing combinator</H3>
+      <P>The ability to time how long a function application takes can be very 
+      useful. This can be implemented simply and efficiently as a 
+combinator:</P>
+<PRE>&gt; let time f x =
+    let t = new System.Diagnostics.Stopwatch()
+    t.Start()
+    let f_x = f x
+    printf "%fs\n" (Float.of_int64 t.ElapsedMilliseconds / 1e3)
+    f_x;;
+val time : ('a -&gt; 'b) -&gt; 'a -&gt; 'b</PRE>
+      <P>For example, the expression              <CODE>List.fold_left ( + ) 
+      0</CODE> can be used to sum a list of integers and the application of this 
+      function to a list may be timed using the              <CODE>time</CODE> 
+      combinator:           </P>
+<PRE>&gt; time (List.fold_left ( + ) 0I) [1I .. 1000000I];;
+0.421s
+val it : int = 500000500000</PRE>
+      <P>Note the use of arbitrary-precision integers here, denoted by the 
+      suffix              <CODE>I</CODE> . Also, the order of evaluation is 
+      subtle but important. The list is built before the              
+      <CODE>time</CODE> combinator is called. Only the application of the        
+            <CODE>List.fold_left</CODE> function is timed.           </P>
+      <P>The design of the              <CODE>time</CODE> function as a 
+      combinator allows it to be used with minimal invasion, i.e. an existing 
+      function application              <CODE>f x</CODE> can be timed by simply 
+      altering the code to              <CODE>time f x</CODE> .           </P>
+      <P>We shall use this              <CODE>time</CODE> combinator in future 
+      examples.           </P>
+      <H3>Example: Nesting combinator</H3>
+      <P>The ability to repeatedly apply a function to a value is often useful, 
+      e.g. to compute              <I>f(f(f(x)))</I> . This can be achieved 
+      using a curried higher-order function              <CODE>nest</CODE> that 
+      nests a function application a given number of times:           </P>
+<PRE>&gt; let rec nest n f x =
+    match n with
+    | 0 -&gt; x
+    | n -&gt; nest (n-1) f (f x);;
+val nest : int -&gt; ('a -&gt; 'a) -&gt; 'a -&gt; 'a</PRE>
+      <P>The simple implementation of the              <CODE>ipow</CODE> 
+      function may be written elegantly in terms of              
+      <CODE>nest</CODE> and multiplication by              <CODE>x</CODE> :      
+           </P>
+<PRE>&gt; let ipow x n = nest n (( * ) x) 1.;;
+val ipow : float -&gt; int -&gt; float = &lt;fun&gt;</PRE>
+      <P>Note that the order of the arguments to the curried              
+      <CODE>nest</CODE> function has been carefully chosen to allow the 
+      parameter              <CODE>n</CODE> to be partially applied to get a 
+      more specialized function that nests a certain number of times.           
+      </P>
+      <P>Combinators like the              <CODE>nest</CODE> function can often 
+      be used as a means to factor out algorithms in a reusable way, resulting 
+      in shorter and clearer programs.           </P>
+      <H3>Example: Numerical derivative combinator</H3>
+      <P>In mathematics, the derivative operator converts one function into 
+      another and a numerical approximation may be written in F# as a 
+      higher-order function:</P>
+<PRE>&gt; let d f x =
+    let dx = sqrt epsilon_float in
+    (f(x + dx) - f(x - dx)) / (2. * dx);;
+val d : (float -&gt; float) -&gt; float -&gt; float</PRE>
+      <P>This function may be applied to a function              <CODE>f</CODE> 
+      of the type              <CODE>float -&gt; float</CODE> to give a 
+      numerical approximation to that function:           </P>
+<PRE>&gt; let f x = x ** 3. - x - 1.;;
+val f : float -&gt; float</PRE>
+      <P>For example, the numerical approximation of              <I>f(x) = x    
+                 <SUP>3</SUP> - x - 1             </I> at              
+      <I>x=2</I> is              <I>f'(2) = 11</I> :           </P>
+<PRE>&gt; d f 2.;;
+val it : float = 11.</PRE>
+      <P>Moreover, as the              <CODE>d</CODE> function is curried, it 
+      can also be partially applied to give a derivative function:           
+</P>
+<PRE>&gt; let f' = d f;;
+val f' : float -&gt; float</PRE>
+      <P>The function              <CODE>f'</CODE> is a numerical approximation 
+      to the derivative of              <CODE>f</CODE> .           </P>
+<PRE>&gt; f' 2.;;
+val it : float = 11.</PRE>
+      <P>You can even combine the              <CODE>nest</CODE> combinator with 
+      the              <CODE>d</CODE> combinator to obtain higher derivatives, 
+      such as the third derivative of              <CODE>f</CODE> :           
+      </P>
+<PRE>&gt; let f''' = nest 3 d f;;
+val f''' : float -&gt; float</PRE>
+      <P>The use of combinators to implement mathematical operators in this way 
+      clearly demonstrates the power of this approach in the context of 
+      numerical computing.</P>
+      <H2>Built-in functional operators</H2>
+      <P>The F# language provides three built-in functional operators:           
+         <CODE>|&gt;</CODE> ,              <CODE>&lt;&lt;</CODE> and             
+       <CODE>&gt;&gt;</CODE> .           </P>
+      <P>The              <CODE>|&gt;</CODE> operator is function application in 
+      reverse, i.e.              <CODE>x |&gt; f</CODE> is equivalent to         
+           <CODE>f x</CODE> . This operator has two main uses. Primarily, this 
+      operator allows a value to be "piped" through a series of functions. An 
+      additional use is to present the argument to a function first so that the 
+      compiler knows its type before the type of the function expression is 
+      inferred.           </P>
+      <P>For example, the following expression squares the elements of the input 
+      list and then filters out elements below 10:</P>
+<PRE>&gt; [1 .. 10] |&gt;
+  List.map (fun n -&gt; n*n) |&gt;
+  List.filter (fun n -&gt; n&lt;10);;
+val it : int list = [1; 4; 9]</PRE>
+      <P>The              <CODE>&lt;&lt;</CODE> operator provides function 
+      composition, i.e.              <CODE>(f &lt;&lt; g) x</CODE> is equivalent 
+      to              <CODE>f(g(x))</CODE> .           </P>
+      <P>The              <CODE>&gt;&gt;</CODE> operator provides reverse 
+      function composition, i.e.              <CODE>(f &gt;&gt; g) x</CODE> is 
+      equivalent to              <CODE>g(f(x))</CODE> .           </P>
+      <H2>Case Study: Queens problem</H2>
+      <P>A famous problem that serves as an excellent example of the use of 
+      combinators in F# is the Queens Problem. The task is to find all 
+      configurations of              <I>n</I> queens on an              
+      <I>nï¿½n</I> chessboard such that no queen is attacking any other.         
+        </P>
+      <P>This program makes extensive use of lists, so we begin by opening the 
+      namespace of the              <CODE>List</CODE> module:           </P>
+<PRE>&gt; open List;;</PRE>
+      <P>Testing to see if one queen can attack another is a core operation in 
+      this program that can be implemented using simple arithmetic:</P>
+<PRE>&gt; let safe (x1, y1) (x2, y2) =
+    x1 &lt;&gt; x2 &amp;&amp; y1 &lt;&gt; y2 &amp;&amp; x2-x1 &lt;&gt; y2-y1 &amp;&amp; x1-y2 &lt;&gt; x2-y1;;
+val safe : int * int -&gt; int * int -&gt; bool</PRE>
+      <P>The program revolves around a              <CODE>search</CODE> function 
+      that considers both placing and not-placing a queen at each position in    
+                <CODE>ps</CODE> , storing the current list of queens in          
+          <CODE>qs</CODE> and applying              <CODE>f</CODE> to every full 
+      set of              <CODE>qs</CODE> :           </P>
+<PRE>&gt; let rec search f n qs ps =
+    match ps with
+    | [] -&gt; if length qs = n then f qs
+    | q::ps -&gt;
+        search f n qs ps;
+        search f n (q::qs) (filter (safe q) ps);;
+val search :
+  ((int * int) list -&gt; unit) -&gt;
+  int -&gt; (int * int) list -&gt; (int * int) list -&gt; unit</PRE>
+      <P>The first pattern is matched when all positions are exhausted. If       
+             <I>n</I> queens were found then the function              
+      <CODE>f</CODE> is applied to              <CODE>qs</CODE> .           </P>
+      <P>The second pattern is matched when a queen is considered at             
+       <CODE>q</CODE> with              <CODE>ps</CODE> positions remaining. The 
+      search is split two ways, firstly trying without a queen and then trying 
+      with a queen at              <CODE>q</CODE> . In the latter case, the 
+      remaining positions              <CODE>ps</CODE> has all unsafe positions 
+      filtered out before continuing the search.           </P>
+      <P>The square board of positions may be generated with a list 
+      comprehension:</P>
+<PRE>&gt; let ps n =
+    [ for i in 1 .. n
+        for j in 1 .. n -&gt;
+          i, j ];;
+val ps : int -&gt; (int * int) list</PRE>
+      <P>A board with queens at              <CODE>qs</CODE> may be printed 
+      with:           </P>
+<PRE>&gt; let print n qs =
+    for y in 1 .. n do
+      for x in 1 .. n do
+        printf "%s" (if mem (x, y) qs then "Q" else ".")
+      printf "\n"
+    printf "\n";;
+val print : (int * int) list -&gt; unit</PRE>
+      <P>The solutions for a given board size              <CODE>n</CODE> can be 
+      found and printed with:           </P>
+<PRE>&gt; let solve n = search (print n) n [] (ps n);;
+val solve : int -&gt; unit</PRE>
+      <P>The following prints the 92 solutions for              <I>n=8</I> :     
+            </P>
+<PRE>&gt; solve 8;;</PRE>
+      <P>The remarkable brevity of this program demonstrates the utility of 
+      functional programming. The main data structure is an immutable list. 
+      Searching is performed using a recursive function. Several functions 
+      exploit currying and higher-order functions in the interests of 
+      brevity.</P>
+      <P>The              <CODE>search</CODE> function makes use of combinators, 
+      using them to search recursively whilst filtering out valid solutions. 
+      Returning from the first search to start another search is known as        
+            <I>backtracking</I> and is made particularly elegant by immutability 
+      as there is no need to undo state changes.           </P>
+      <P>The              <CODE>print</CODE> function also make considerable use 
+      of functional programming, using the higher-order              
+      <CODE>List.iter</CODE> function.           </P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20The%20Essence%20of%20Functional%20Programming_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

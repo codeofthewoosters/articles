@@ -1,0 +1,27 @@
+TABLE#page {
+	BORDER-TOP: #ffbb77 2px solid; BORDER-RIGHT: #ffbb77 2px solid; BORDER-BOTTOM: #ffbb77 2px solid; BORDER-LEFT: #ffbb77 2px solid; WIDTH: 960px; BACKGROUND-COLOR: #fffbf7
+}
+TABLE#page TD {
+	BORDER-TOP: #ffbb77 0px solid; BORDER-RIGHT: #ffbb77 0px solid; VERTICAL-ALIGN: top; BORDER-BOTTOM: #ffbb77 0px solid; BORDER-LEFT: #ffbb77 0px solid; WIDTH: 900px
+}
+.left {
+	WIDTH: 100px
+}
+TABLE#cards {
+	TEXT-ALIGN: center; WIDTH: 95%
+}
+TABLE#cards TD {
+	WIDTH: 12.5%
+}
+TABLE#overview {
+	WIDTH: 900px
+}
+TABLE#overview TD.left {
+	WIDTH: 150px
+}
+TABLE#overview TD.center {
+	
+}
+TABLE#overview TD.right {
+	TEXT-ALIGN: center; WIDTH: 150px
+}

@@ -1,0 +1,743 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0077)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/scimark.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Porting and optimizing the SciMark2 benchmark</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Porting and optimizing the SciMark2 
+benchmark</TITLE>     <LINK href="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Porting and optimizing the SciMark2 benchmark</H1>
+      <P>The SciMark2 benchmark is a suite of numerical algorithms that were 
+      originally collated into a benchmark for scientific computing on the Java 
+      platform. Porting this benchmark to F# provides an excellent tutorial on 
+      the implementation of efficient numerical algorithms and the existing C# 
+      implementation of this benchmark can be used for comparison. The results 
+      illustrate the strengths and weaknesses of the current F# implementation 
+      in terms of performance.</P>
+      <H2>Fast Fourier transform (FFT)</H2>
+      <P>The first benchmark in SciMark2 is an FFT implementation almost 
+      identical to the Danielson-Lanczos algorithm described in a previous 
+      F#.NET Journal article.</P>
+      <P>In this case, we choose to encapsulate the FFT-related definitions in 
+      an              <CODE>FFT</CODE> module defined in the "fft.fs" file with 
+      the following "fft.fsi" interface definition:           </P>
+<PRE>#light</PRE>
+<PRE>module FFT</PRE>
+<PRE>val flops : int -&gt; int</PRE>
+<PRE>/// In-place FFT.
+val transform : complex array -&gt; unit</PRE>
+<PRE>/// In-place inverse FFT.
+val inverse : complex array -&gt; unit</PRE>
+<PRE>/// Calculate the RMS error due to forward and reverse transform of the given data.
+val test : complex array -&gt; float</PRE>
+      <P>The implementation in the "fft.fs" file is as follows:</P>
+<PRE>#light</PRE>
+<PRE>module FFT</PRE>
+<PRE>let rec log2 = function
+  | 1 -&gt; 0
+  | n when n &amp;&amp;&amp; 1 = 1 -&gt; invalid_arg "log2"
+  | n -&gt; 1 + log2(n &gt;&gt;&gt; 1)</PRE>
+<PRE>let flops n =
+  (5 * n - 2) * log2 n + 2 * (n + 1)</PRE>
+<PRE>let bitreverse data =
+  let n = Array.length data / 2
+  let nm1 = n - 1
+  let mutable i = 0
+  let mutable j = 0
+  while i &lt; nm1 do
+    if i &lt; j then
+      let ii, jj = i &lt;&lt;&lt; 1, j &lt;&lt;&lt; 1
+      let r, i = data.[ii], data.[ii+1]
+      data.[ii] &lt;- data.[jj]
+      data.[ii+1] &lt;- data.[jj+1]
+      data.[jj] &lt;- r
+      data.[jj+1] &lt;- i
+    let mutable k = n &gt;&gt;&gt; 1
+    while k &lt;= j do
+      j &lt;- j - k
+      k &lt;- k &gt;&gt;&gt; 1
+    j &lt;- j + k
+    i &lt;- i + 1</PRE>
+<PRE>let pi = System.Math.PI</PRE>
+<PRE>let inline aux (data : _ array) i j wd =
+  data.[j] &lt;- data.[i] - wd
+  data.[i] &lt;- data.[i] + wd</PRE>
+<PRE>let transform_internal (data : complex array) d =
+  bitreverse data
+  let n = Array.length data / 2
+  let logn = log2 n
+  let mutable dual = 1
+  for bit = 0 to logn - 1 do
+    let mutable w = complex 1. 0.
+    let t = float d * pi / float dual
+    let s, t = sin t, sin(t / 2.)
+    let s2 = 2. * t * t
+    let mutable b = 0
+    while b &lt; n do
+      let i, j = 2 * b, 2 * (b + dual)
+      aux data i j data.[j]
+      b &lt;- b + 2 * dual
+    for a=1 to dual-1 do
+      w &lt;- w  - s2 $* w
+      let mutable b = 0
+      while b &lt; n do
+        let i, j = 2 * (b + a), 2 * (b + a + dual)
+        let z1 = data.[j]
+        aux data i j (w * z1)
+        b &lt;- b + 2 * dual
+    dual &lt;- dual &lt;&lt;&lt; 1</PRE>
+<PRE>let transform a = transform_internal a (-1)</PRE>
+<PRE>let inverse a =
+  transform_internal a 1
+  let nd = a.Length
+  let n = nd / 2
+  let norm = 1.0 / float n
+  for i = 0 to nd - 1 do
+    a.[i] &lt;- a.[i] * norm</PRE>
+<PRE>let test data =
+  let copy = Array.copy data
+  transform data
+  inverse data
+  let norm (z : complex) = z.r * z.r + z.i * z.i
+  let diff =
+    Array.map2 ( - ) data copy
+    |&gt; Array.fold_left (fun t x -&gt; t + norm x) 0.
+  sqrt(diff / float data.Length)</PRE>
+      <P>The              <CODE>transform</CODE> and              
+      <CODE>inverse</CODE> functions call the              
+      <CODE>transform_internal</CODE> function to perform the actual 
+      computation. This function begins by calling the              
+      <CODE>bitreverse</CODE>  function to reorder the elements of the input 
+      matrix before repeatedly looping over the array.           </P>
+      <P>This F# implementation is substantially more concise than its C# and 
+      Java counterparts thanks to the use of F#'s built-in              
+      <CODE>complex</CODE> struct type for complex numbers (which cannot even be 
+      implemented in Java). However, this F# code is also 3× slower than the C# 
+      implementation due to the overhead of using the              
+      <CODE>complex</CODE> type even though this type is represented internally 
+      as an unboxed struct. The performance degradation can be reduced to 3× 
+      slower by manually inlining all arithmetic operations and replacing        
+            <CODE>complex</CODE> temporaries with two separate              
+      <CODE>float</CODE> values instead. Ultimately, optimal performance can 
+      only be achieved by resorting to the same 2n-length              
+      <CODE>float</CODE> array than Java uses.           </P>
+      <P>Thus, we replace              <CODE>complex</CODE> with              
+      <CODE>float</CODE> in the "fft.fsi" file:           </P>
+<PRE>#light</PRE>
+<PRE>module FFT</PRE>
+<PRE>/// Approximate number of floating point operations as a function of the
+/// number of complex numbers in the input array.
+val flops : int -&gt; int</PRE>
+<PRE>/// In-place FFT with complex elements represented by adjacent pairs of floats.
+val transform : float array -&gt; unit</PRE>
+<PRE>/// In-place inverse FFT with complex elements represented by adjacent pairs of floats.
+val inverse : float array -&gt; unit</PRE>
+<PRE>/// Calculate the RMS error due to forward and reverse transform of the given data.
+val test : float array -&gt; float</PRE>
+      <P>and use the following definitions in the "fft.fs" file:</P>
+<PRE>let inline aux (data : _ array) i j wdr wdi =
+  data.[j] &lt;- data.[i] - wdr
+  data.[j+1] &lt;- data.[i+1] - wdi
+  data.[i] &lt;- data.[i] + wdr
+  data.[i+1] &lt;- data.[i+1] + wdi</PRE>
+<PRE>let inline aux2 n a dual (data : float array) wr wi =
+  let mutable b = 0
+  while b &lt; n do
+    let i, j = 2 * (b + a), 2 * (b + a + dual)
+    let z1r, z1i = data.[j], data.[j+1]
+    aux data i j (wr * z1r - wi * z1i) (wr * z1i + wi * z1r)
+    b &lt;- b + 2 * dual</PRE>
+<PRE>let transform_internal data d =
+  bitreverse data
+  let n = Array.length data / 2
+  let mutable dual = 1
+  while dual &lt; n do
+    let mutable b = 0
+    while b &lt; n do
+      let i, j = 2 * b, 2 * (b + dual)
+      aux data i j data.[j] data.[j + 1]
+      b &lt;- b + 2 * dual
+    let mutable wr = 1.
+    let mutable wi = 0.
+    let t = float d * pi / float dual
+    let s, t = sin t, sin(t / 2.)
+    let s2 = 2. * t * t
+    for a=1 to dual-1 do
+      let wr' = wr - s * wi - s2 * wr
+      let wi' = wi + s * wr - s2 * wi
+      wr &lt;- wr'
+      wi &lt;- wi'
+      aux2 n a dual (data : float array) wr wi
+    dual &lt;- dual &lt;&lt;&lt; 1</PRE>
+<PRE>let test data =
+  let copy = Array.copy data
+  transform data
+  inverse data
+  let diff =
+    Array.map2 ( - ) data copy
+    |&gt; Array.fold_left (fun t x -&gt; t + x * x) 0.
+  sqrt(diff / float data.Length)</PRE>
+      <P>Several important optimizations are exploited in the              
+      <CODE>bitreverse</CODE> and              <CODE>transform_internal</CODE> 
+      functions:           </P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>mutable</CODE> keyword is used to 
+        implement efficient mutable variables as opposed to using                
+          <CODE>ref</CODE> (which would be significantly slower but allows 
+        mutables to escape scope, which is not necessary here).               
+        </LI>
+        <LI>Four lines are factored out from the two inner loops into a separate 
+                         <CODE>aux</CODE> function but no performance is lost 
+        because this function is marked                  <CODE>inline</CODE> .   
+                    </LI>
+        <LI>All                  <CODE>complex</CODE> values have all been 
+        removed in favor of manually inlined arithmetic over                  
+        <CODE>float</CODE> values.               </LI></UL>
+      <P></P>
+      <P>Note that .NET handles common subexpression elimination (CSE) and 
+      hoisting of loop invariants for us, so there is no need to do this 
+      manually in F#.</P>
+      <P>This FFT implementation can be tested on an array representing eight 
+      complex numbers:</P>
+<PRE>&gt; let a = [|0.; 0.; 1.; 0.; 0.; 0.; 0.; 0.; 0.; 0.; 0.; 0.; 0.; 0.; 0.; 0.|];;
+val a : float array</PRE>
+      <P>The              <CODE>FFT.transform</CODE> function produces the 
+      following result as expected:           </P>
+<PRE>&gt; FFT.transform a;;
+val it : unit = ()
+&gt; a;;
+val it : float array
+= [|1.0; 0.0; 0.7071067812; -0.7071067812; 0.0; -1.0; -0.7071067812;
+    -0.7071067812; -1.0; 0.0; -0.7071067812; 0.7071067812; 0.0; 1.0;
+    0.7071067812; 0.7071067812|]</PRE>
+      <P>One way to test the implementation is to make sure the              
+      <CODE>FFT.inverse</CODE> function recovers the original to within 
+      numerical precision:           </P>
+<PRE>&gt; FFT.inverse a;;
+val it : unit = ()
+&gt; a;;
+val it : float array
+= [|0.0; 0.0; 1.0; -2.775557562e-17; 0.0; 0.0; -3.925231147e-17;
+    2.775557562e-17; 0.0; 0.0; 1.110223025e-16; -2.775557562e-17; 0.0; 0.0;
+    3.925231147e-17; 2.775557562e-17|]</PRE>
+      <P>We may also check that four forward transforms leave the array 
+      unchanged except for normalization:</P>
+<PRE>&gt; FFT.transform a;;
+val it : unit = ()
+&gt; FFT.transform a;;
+val it : unit = ()
+&gt; FFT.transform a;;
+val it : unit = ()
+&gt; FFT.transform a;;
+val it : unit = ()
+&gt; a;;
+val it : float array
+= [|0.0; 0.0; 64.0; 1.243449788e-14; 0.0; 0.0; 0.0; -1.776356839e-15; 0.0; 0.0;
+    2.131628207e-14; -8.881784197e-15; 0.0; 0.0; 0.0; -1.776356839e-15|]</PRE>
+      <P>As we shall see, the performance of this FFT implementation is 
+      essentially identical to that of C#.</P>
+      <H2>Successive over-relaxation (SOR)</H2>
+      <P>Jacobi successive over-relaxation exercises typical access patterns in 
+      finite difference applications, for example, solving Laplace's equation in 
+      2D with Drichlet boundary conditions. The algorithm excercises basic "grid 
+      averaging" memory patterns, where each A(i,j) is assigned an average 
+      weighting of its four nearest neighbors.</P>
+      <P>This benchmark may be implemented in F# as follows:</P>
+<PRE>#light</PRE>
+<PRE>module SOR</PRE>
+<PRE>let flops n m i = (m - 1) * (n - 1) * i * 6</PRE>
+<PRE>let exec omega g i =
+  let m = Array.length g
+  let n = Array.length g.[0]
+  for p=0 to i-1 do
+    for i=1 to m-2 do
+      for j=1 to n-2 do
+        let s = g.[i-1].[j] + g.[i+1].[j] + g.[i].[j-1] + g.[i].[j+1]
+        g.[i].[j] &lt;- 0.25 * omega * s + (1. - omega) * g.[i].[j]</PRE>
+      <P>Note that the original Java implementation hoists the three 
+      subexpressions of the form              <CODE>g.[i+_]</CODE> but this is 
+      not beneficial in F# because .NET automates this optimization.           
+      </P>
+      <P>This direct translation of the SOR benchmark already matches the 
+      performance of the C#. However, the simple low-level optimization of 
+      unrolling the inner loop once and reusing the common subexpressions        
+            <CODE>g.[i].[j]</CODE> and              <CODE>g.[i].[j+1]</CODE> can 
+      be used to improve performance:           </P>
+<PRE>let exec omega g i =
+  let m = Array.length g
+  let n = Array.length g.[0]
+  for p=0 to i-1 do
+    for i=1 to m-2 do
+      let mutable j = 1
+      while j &lt; n-2 do
+        let gij1 = g.[i].[j+1]
+        let s = g.[i-1].[j] + g.[i+1].[j] + g.[i].[j-1] + gij1
+        let gij = 0.25 * omega * s + (1. - omega) * g.[i].[j]
+        let s = g.[i-1].[j+1] + g.[i+1].[j+1] + gij + g.[i].[j+2]
+        g.[i].[j] &lt;- gij
+        g.[i].[j+1] &lt;- 0.25 * omega * s + (1. - omega) * gij1
+        j &lt;- j + 2
+      if j=n-2 then
+        let s = g.[i-1].[j] + g.[i+1].[j] + g.[i].[j-1] + g.[i].[j+1]
+        g.[i].[j] &lt;- 0.25 * omega * s + (1. - omega) * g.[i].[j]</PRE>
+      <P>This implementation is ~20% faster than the original but significantly 
+      more complicated.</P>
+      <H2>Random number generator</H2>
+      <P>The SciMark2 benchmark includes its own pseudo random number generator 
+      (PRNG) that is of particular importance in the Monte Carlo benchmark, 
+      where most of the time is spent in this random number generator.</P>
+      <P>The algorithm generates unsigned 32-bit random numbers that are 
+      converted to double-precision floating point numbers:</P>
+<PRE>#light</PRE>
+<PRE>let m = Array.create 17 0
+let mutable i = 4
+let mutable j = 16
+let mdig = 32
+let m1 = (1 &lt;&lt;&lt; mdig - 2) + ((1 &lt;&lt;&lt; mdig - 2) - 1)
+let m2 = 1 &lt;&lt;&lt; mdig / 2
+let dm1 = 1.0 / float m1</PRE>
+<PRE>do
+  let seed = 101010
+  let jseed = min (abs seed) m1;
+  let mutable jseed = if jseed &amp;&amp;&amp; 1 = 0 then jseed - 1 else jseed
+  let k0 = 9069 % m2
+  let k1 = 9069 / m2
+  let mutable j0 = jseed % m2
+  let mutable j1 = jseed / m2
+  for i=0 to 16 do
+    jseed &lt;- j0 * k0
+    j1 &lt;- (jseed / m2 + j0 * k1 + j1 * k0) % (m2 / 2)
+    j0 &lt;- jseed % m2
+    m.[i] &lt;- j0 + m2 * j1
+  i &lt;- 4
+  j &lt;- 16</PRE>
+<PRE>let inline NextDouble() =
+  let mutable k = m.[i] - m.[j]
+  if k &lt; 0 then k &lt;- k + m1
+  m.[j] &lt;- k
+  i &lt;- if i = 0 then 16 else i - 1
+  j &lt;- if j = 0 then 16 else j - 1
+  dm1 * float k</PRE>
+      <P>Note that we have deviated slightly from the original Java by removing 
+      the superfluous lock.</P>
+      <P>This straightforward implementation also does not require any 
+      optimization to achieve the same performance as C#. However, performance 
+      on the Monte Carlo benchmark can be improved slightly by marking the       
+             <CODE>NextDouble</CODE> function              <CODE>inline</CODE> . 
+                </P>
+      <H2>Monte Carlo</H2>
+      <P>This benchmark is a very simple Monte Carlo simulation that computes a 
+      crude approximation to the value of pi by counting how many random numbers 
+      over the unit square fall inside the unit-radius circle:</P>
+<PRE>#light</PRE>
+<PRE>module MonteCarlo</PRE>
+<PRE>let flops n = 4 * n</PRE>
+<PRE>let exec n =
+  let sqr x = x * x
+  let mutable c = 0
+  for i=1 to n do
+    if sqr(Random.NextDouble()) + sqr(Random.NextDouble()) &lt;= 1. then
+      c &lt;- c + 1
+  4. * float c / float n</PRE>
+      <P>For example:</P>
+<PRE>&gt; exec 1000000;;
+val it : float = 3.144292</PRE>
+      <P>This benchmark spends most of its time in the random number generator. 
+      The inlining of the              <CODE>NextDouble</CODE> function from the 
+                   <CODE>Random</CODE> module makes this F# implementation ~4% 
+      faster than the C#.           </P>
+      <H2>Sparse matrices</H2>
+      <P>This benchmark tests the performance of multiplying a dense vector by a 
+      sparse matrix:</P>
+<PRE>#light</PRE>
+<PRE>module Sparse</PRE>
+<PRE>let flops n nz =
+  (nz / n) * n * 2</PRE>
+<PRE>type sparse_matrix = { v: float array; row: int array; col: int array }</PRE>
+<PRE>// y &lt;- m*v
+let mul (y : _ array) m (v : _ array) =
+  for r=0 to m.row.Length-2 do
+    y.[r] &lt;- 0.
+    for i=m.row.[r] to m.row.[r+1]-1 do
+      y.[r] &lt;- y.[r] + v.[m.col.[i]] * m.v.[i]</PRE>
+<PRE>let exec = mul</PRE>
+      <P>Note that we have followed the original SciMark2 benchmark 
+      implementation in using an external result vector              
+      <CODE>y</CODE> when, in fact, this function would be substantially easier 
+      to use in real work if it were functional, i.e. allocated and returned a 
+      new result vector at each invocation. We did not do this because it 
+      degrades performance and would make F# look artificially bad.           
+      </P>
+      <P>The matrix is stored in conventional compressed-row format which is 
+      neatly encapsulated in the              <CODE>sparse_matrix</CODE> record 
+      type. In contrast, the Java implementation passes the components of the 
+      sparse matrix as separate arguments, which is substantially uglier. The    
+                <CODE>v</CODE> field of the              
+      <CODE>sparse_matrix</CODE> record type contains the actual floating-point 
+      values in the non-zero matrix elements. The              <CODE>row</CODE> 
+      field contains an array representing the offsets of each row in the        
+            <CODE>col</CODE> array. The              <CODE>col</CODE> field 
+      lists the columns at which non-zero elements lie.           </P>
+      <P>The unique aspect of this benchmark is the dereferencing of an array 
+      element to obtain an index that is then used to dereference another 
+      array.</P>
+      <P>In this case we find that there is a significant optimization to 
+      perform: accumulating the sum in a              <CODE>mutable</CODE> 
+      temporary rather than using the array element directly:           </P>
+<PRE>let mul (y : _ array) m (v : _ array) =
+  for r=0 to m.row.Length-2 do
+    let mutable sum = 0.
+    for i=m.row.[r] to m.row.[r+1]-1 do
+      sum &lt;- sum + v.[m.col.[i]] * m.v.[i]
+    y.[r] &lt;- sum</PRE>
+      <P>This implementation is 65% faster than the original.</P>
+      <P>We also find that hoisting the loop invariants              
+      <CODE>m.col</CODE> and              <CODE>m.v</CODE> improves performance 
+      as well as manually unrolling the loop once:           </P>
+<PRE>let mul (y : _ array) m (v : _ array) =
+  for r=0 to m.row.Length-2 do
+    let mcol, mv = m.col, m.v
+    let mutable i = m.row.[r]
+    let i1 = m.row.[r+1]
+    let mutable sum = 0.
+    while i &lt; i1-1 do
+      sum &lt;- sum + v.[mcol.[i]] * mv.[i] + v.[mcol.[i+1]] * mv.[i+1]
+      i &lt;- i + 2
+    if i = i1-1 then
+      sum &lt;- sum + v.[mcol.[i]] * mv.[i]
+    y.[r] &lt;- sum</PRE>
+      <P>This is the final implementation of the sparse matrix-vector 
+      multiply.</P>
+      <H2>LU decomposition</H2>
+      <P>This final benchmark implements a useful algorithm from linear algebra. 
+      LU decomposition is a simple and efficient way to solve sets of dense 
+      linear equations that avoids the more expensive process of general matrix 
+      inversion. This benchmark uses partial pivoting to improve numerical 
+      stability and also includes a              <CODE>solve</CODE> routine that 
+      can be used to test the LU implementation.           </P>
+      <P>By far the most obvious way to implement this benchmark is using the 
+      built-in              <CODE>Math.matrix</CODE> type to represent a 
+      real-valued matrix:           </P>
+<PRE>#light</PRE>
+<PRE>module LU</PRE>
+<PRE>let flops n =
+  2 * n * n * n / 3</PRE>
+<PRE>let inline lu (a : matrix) (pivot : _ array) =
+  let n, m = a.Dimensions
+  let minmn = min m n
+  for j=0 to minmn-1 do
+    let mutable jp = j
+    let mutable t = abs(a.[j, j])
+    for i=j+1 to m-1 do
+      let ab = abs(a.[i, j])
+      if ab &gt; t then
+        jp &lt;- i
+        t &lt;- ab
+    pivot.[j] &lt;- jp
+    if a.[jp, j] = 0. then invalid_arg "lu"
+    if jp &lt;&gt; j then
+      for i=0 to n-1 do
+        let t = a.[jp, i]
+        a.[jp, i] &lt;- a.[j, i]
+        a.[j, i] &lt;- t
+    if j &lt; m-1 then
+      let recp = 1. / a.[j, j]
+      for k=j+1 to m-1 do
+        a.[k, j] &lt;- a.[k, j] * recp
+    if j &lt; minmn-1 then
+      for ii=j+1 to m-1 do
+        for jj=j+1 to n-1 do
+          a.[ii, jj] &lt;- a.[ii, jj] - a.[ii, j] * a.[j, jj]</PRE>
+      <P>However, this turns out to be extremely inefficient, achieving only 13 
+      MFLOPS compared to 615 MFLOPS for the equivalent C# function.</P>
+      <P>The F# standard library currently uses the same              
+      <CODE>matrix</CODE> type for both dense and sparse matrices so there is an 
+      indirection at every access depending which kind of matrix we are dealing 
+      with even though this is constant for our entire function.           </P>
+      <P>Specifically, the              <CODE>Math.Matrix.Item</CODE> property 
+      is:           </P>
+<PRE>member m.Item
+   with get (idx1,idx2) = Specialized.getM m idx1 idx2
+   and  set (idx1,idx2) v = Specialized.setM m idx1 idx2 v</PRE>
+      <P>That calls the following              <CODE>Specialized.getM</CODE> 
+      function:           </P>
+<PRE>let getM a i j =
+    match a with
+    | Dense a -&gt; GU.getDMGU a i j
+    | Sparse a -&gt; GU.getSMGU a i j</PRE>
+      <P>For a dense matrix, that calls the following              
+      <CODE>GU.getDMGU</CODE> function:           </P>
+<PRE>let inline getDMGU  m i j   = getDMGUA m.arrDM i j</PRE>
+      <P>On .NET 2.0 and later, this calls the following function to extract the 
+      element from a 2D .NET array:</P>
+<PRE>let inline getDMGUA  arrDM i j   = arrDM.(i,j)</PRE>
+      <P>This is obviously a lot of overhead and bogs down the performance of 
+      every single element access and, of course, the core of the inner loop of 
+      this O(n             <SUP>3</SUP> ) algorithm makes heavy use of element 
+      access and the performance of the whole function is awful as a 
+      consequence.           </P>
+      <P>The solution is to act upon the underlying dense matrix representation 
+      directly to avoid all of these costly indirections. In this context, it is 
+      easier to simply stop using the              <CODE>matrix</CODE> type 
+      altogether and resort to either a single 1D array of floats with n×m 
+      elements, a single 2D array of floats or an array of arrays of floats.     
+            </P>
+      <P>However, it is not at all clear which of these three possible data 
+      structures will perform the best in this particular case. Indeed, one can 
+      imagine a variety of other data structures (e.g. storing subsquares of the 
+      matrix contiguously in a single array) that we may also wish to test. 
+      Ideally, we would like to be able to write a data structure agnostic 
+      implementation of the LU algorithm and, fortunately, the F# programming 
+      language provides an excellent feature that allows us to do this:          
+          <CODE>inline</CODE> .           </P>
+      <P>The following implementation of the LU function accepts              
+      <CODE>get</CODE> and              <CODE>set</CODE> functions to manipulate 
+      the matrix regardless of its actual representation:           </P>
+<PRE>let inline lu n m get set (pivot : _ array) =
+  let minmn = min m n
+  for j=0 to minmn-1 do
+    let mutable jp = j
+    let mutable t = abs(get j j)
+    for i=j+1 to m-1 do
+      let ab = abs(get i j)
+      if ab &gt; t then
+        jp &lt;- i
+        t &lt;- ab
+    pivot.[j] &lt;- jp
+    if get jp j = 0. then invalid_arg "lu"
+    if jp &lt;&gt; j then
+      for i=0 to n-1 do
+        let t = get jp i
+        set jp i (get j i)
+        set j i t
+    if j &lt; m-1 then
+      let recp = 1. / get j j
+      for k=j+1 to m-1 do
+        set k j (get k j * recp)
+    if j &lt; minmn-1 then
+      for ii=j+1 to m-1 do
+        let a_ii_j = get ii j
+        for jj=j+1 to n-1 do
+          set ii jj (get ii jj - a_ii_j * get j jj)  </PRE>
+      <P>This inlined function parameterized over other functions represents the 
+      use of an incredibly powerful form of high performance abstraction that is 
+      essentially unique to the F# programming language. This is a general 
+      solution to the problem of wanting an algorithm over an unknown data 
+      structure with minimal overheads.</P>
+      <P>This inlined              <CODE>lu</CODE> function makes it easy to 
+      determine the performance of this algorithm over the three data structures 
+      described before without having to implement three completely separate     
+               <CODE>lu</CODE> functions. We simply apply the appropriate        
+            <CODE>get</CODE> and              <CODE>set</CODE> functions, such 
+      as:           </P>
+<PRE>let inline get i j = m.[n*i+j]
+let inline set i j x = m.[n*i+j] &lt;- x</PRE>
+<PRE>let inline get i j = m.[i,j]
+let inline set i j x = m.[i,j] &lt;- x</PRE>
+<PRE>let inline get i j = m.[i].[j]
+let inline set i j x = m.[i].[j] &lt;- x</PRE>
+      <P>In this case, we find that a single 1D array attains 486 MFLOPS, a 2D 
+      array attains 204 MFLOPS and an array of arrays attains 612 MFLOPS. So it 
+      seems that the .NET implementation of 2D arrays used by the F# standard 
+      library is 3× slower than 1D arrays. As an aside, this means that a single 
+      1D array is likely to be a preferable alternative to a 2D array when the 
+      internal representation is required to be contiguous (e.g. for interfacing 
+      to native-code libraries).</P>
+      <P>However, we have one remaining trick up our collective sleeve because 
+      the fastest implementation (an array of arrays of floats) facilitates one 
+      further optimization that can be used to improve performance even further. 
+      Specifically, the row exchange can be performed by swapping the arrays 
+      representing the rows in O(1) rather than swapping individual elements in 
+      O(n) as our generic              <CODE>lu</CODE> function did.           
+      </P>
+      <P>Thus, the following is our final optimized implementation of the 
+      non-inlined              <CODE>lu</CODE> function specific to the array of 
+      arrays of floats:           </P>
+<PRE>let aux j n m (a : _ array array) =
+  let a_j = a.[j]
+  let mutable ii = j+1
+  while ii &lt; m-1 do
+    let a_ii = a.[ii]
+    let a_ii_j = a_ii.[j]
+    let a_ii1 = a.[ii+1]
+    let a_ii1_j = a_ii1.[j]
+    for jj=j+1 to n-1 do
+      a_ii.[jj] &lt;- a_ii.[jj] - a_ii_j * a_j.[jj]
+      a_ii1.[jj] &lt;- a_ii1.[jj] - a_ii1_j * a_j.[jj]
+    ii &lt;- ii + 2
+  if ii = m-1 then
+    let a_ii = a.[ii]
+    let a_ii_j = a_ii.[j]
+    for jj=j+1 to n-1 do
+      a_ii.[jj] &lt;- a_ii.[jj] - a_ii_j * a_j.[jj]</PRE>
+<PRE>let lu (a : _ array array) (pivot : _ array) =
+  let n, m = a.Length, a.[0].Length
+  let minmn = min m n
+  for j=0 to minmn-1 do
+    let mutable jp = j
+    let mutable t = abs(a.[j].[j])
+    for i=j+1 to m-1 do
+      let ab = abs(a.[i].[j])
+      if ab &gt; t then
+        jp &lt;- i
+        t &lt;- ab
+    pivot.[j] &lt;- jp
+    if a.[jp].[j] = 0. then invalid_arg "lu"
+    if jp &lt;&gt; j then
+      let t = a.[jp]
+      a.[jp] &lt;- a.[j]
+      a.[j] &lt;- t
+    if j &lt; m-1 then
+      let recp = 1. / a.[j].[j]
+      for k=j+1 to m-1 do
+        a.[k].[j] &lt;- a.[k].[j] * recp
+    if j &lt; minmn-1 then
+        aux j n m a</PRE>
+      <P>This function attains 757 MFLOPS on our test machine.</P>
+      <P>We can test this              <CODE>lu</CODE> function using a port of 
+      the linear solver from the SciMark2 benchmark:           </P>
+<PRE>&gt; let solve (a : matrix) =
+    let n, m = a.Dimensions
+    let a =
+      [|for i in 0 .. n-1 -&gt;
+          [|for j in 0 .. m-1 -&gt;
+              a.[i,j] |] |]
+    let pivot = Array.create (min n m) 0
+    lu a pivot
+    fun b -&gt;
+      let b = Vector.to_array b
+      let ii = ref 0
+      for i=0 to m-1 do
+        let ip = pivot.[i]
+        let mutable sum = b.[ip]
+        b.[ip] &lt;- b.[i]
+        if !ii = 0 then
+          for j = !ii to i-1 do
+            sum &lt;- sum - a.[i].[j] * b.[j]
+        else
+          if sum = 0. then ii := i
+        b.[i] &lt;- sum
+      for i=n-1 downto 0 do
+        let mutable sum = b.[i]
+        for j=i+1 to n-1 do
+          sum &lt;- sum - a.[i].[j] * b.[j]
+        b.[i] &lt;- sum / a.[i].[i]
+      vector b;;
+val solve : matrix -&gt; (vector -&gt; vector)</PRE>
+      <P>This              <CODE>solve</CODE> function has the effect of 
+      transforming the given vector by the inverse of the given matrix but 
+      without explicitly computing the inverse (which is slow and suffers from 
+      numerical errors).           </P>
+      <P>This can be used to construct the inverse of a matrix by solving for 
+      the basis vectors and transposing the result:</P>
+<PRE>&gt; let n = 3;;
+val n : int
+&gt; let m =
+    [|[|1.; 2.; 3.|];
+      [|1.; 4.; 9.|];
+      [|1.; 8.; 27.|]|]
+    |&gt; matrix;;
+val m : matrix
+&gt; let pivot = Array.create n 0;;
+val pivot : int array
+&gt; let im =
+    [ for i in 0 .. n-1 -&gt;
+        [ for j in 0 .. n-1 -&gt;
+            if i=j then 1. else 0. ]
+        |&gt; vector ]
+    |&gt; List.map (solve m &gt;&gt; Vector.to_array)
+    |&gt; matrix
+    |&gt; Matrix.transpose;;
+val im : matrix
+&gt; im * m;;
+val it : Matrix&lt;float&gt; = matrix [[1.0; 0.0; 0.0];
+                                 [0.0; 1.0; 0.0];
+                                 [2.775557562e-17; 0.0; 1.0];]
+&gt; m * im;;
+val it : Matrix&lt;float&gt; = matrix [[1.0; 0.0; 0.0];
+                                 [4.440892099e-16; 1.0; 0.0];
+                                 [1.776356839e-15; 0.0; 1.0];]</PRE>
+      <P>The products of the original matrix and its computed inverse recover 
+      the identity matrix to within numerical error, as expected.</P>
+      <H2>Results</H2>
+      <P>Measuring these benchmarks on a 2.2GHz Athlon 64 X2 running 32-bit 
+      Windows XP obtains the following results compared to C#:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/scimark32.gif"> 
+                  </P>
+      <P></P>
+      <P>F# beats C# in every benchmark and is ~10% faster overall, attaining a 
+      composite score of 452 MFLOPS compared to 402 MFLOPS for C#.</P>
+      <H2>Summary</H2>
+      <P>This article has covered a variety of different optimization techniques 
+      that are generally applicable in the context of numerical programming 
+      F#.</P>
+      <P>The most important optimizations in the context of numerical code 
+      were:</P>
+      <P>
+      <UL>
+        <LI>Separating small performance-critical sections of code into separate 
+        functions can drastically improve performance by discouraging F# and 
+        .NET from splitting such blocks up.</LI>
+        <LI>Judicious use of the                  <CODE>inline</CODE> keyword 
+        allows numerical code to be factored, not only substantially reducing 
+        code size but without incurring severe performance penalties for this 
+        form of abstraction as imposed by most other languages.               
+        </LI>
+        <LI>Manual common subexpression elimination can be used to factor out 
+        some expensive operations like array indexing when .NET does not manage 
+        to do it automatically.</LI></UL>
+      <P></P>
+      <P>Perhaps the single most important concept introduced in this article is 
+      the efficient representation of algorithms over unknown data structures by 
+      making higher-order functions with              <CODE>inline</CODE> .      
+           </P>
+      <P>Finally, we should note that alignment causes significant noise on the 
+      results for 32-bit operating systems because the float arrays are randomly 
+      aligned or not aligned to 16 byte boundaries and this has a substantial 
+      effect on performance.</P>
+      <P>The Visual Studio project implementing this benchmark may be downloaded 
+                   <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/27/SciMark2.zip">here</A>
+       .           </P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Porting%20and%20optimizing%20the%20SciMark2%20benchmark_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

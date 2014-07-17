@@ -1,0 +1,129 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0085)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/cildisassembler.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20CIL%20dissassembler_files/style.css"><LINK rel=stylesheet 
+type=text/css 
+href="F%23%20Journal%20CIL%20dissassembler_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20CIL%20dissassembler_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20CIL%20dissassembler_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20CIL%20dissassembler_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Writing a CIL disassembler</H1>
+      <P>The .NET Framework provides powerful reflection capabilities oriented 
+      towards compiling run-time generated code to CIL from .NET languages such 
+      as F#. In essence, the <CODE>System.Reflection.Emit</CODE> namespace 
+      provides a programmatic CIL assembler. Relatively little support is 
+      provided for the inverse problem of disassembling bytecode back to CIL 
+      instructions although this can be very useful for instrumenting assemblies 
+      with new code to record code coverage, capture unit tests and measure 
+      performance characteristics and so forth. This article walks through the 
+      design and implementation of a tiny CIL disassembler that applies the 
+      reflection API to itself in order to obtain the required mappings from 
+      bytecodes to CIL instructions.</P>
+      <P>We shall be compiling all of our source code into an assembly and then 
+      using reflection to decompile part of it. Let us begin by defining a 
+      Fibonacci function in F# that we can later decompile:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;fib&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&lt;2&nbsp;then&nbsp;n&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fib(n-1)&nbsp;+&nbsp;fib(n-2);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fib&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>This simple little function demonstrates conditionals, branches, basic 
+      arithmetic and method invocation so it is a surprisingly comprehensive 
+      test for a simple disassembler such as ours.</P>
+      <P>We open the following namespaces because we shall be using many 
+      definitions from each:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Reflection;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Reflection.Emit;;</CODE></P>
+      <P>Our first challenge is to create a dictionary mapping bytecodes back to 
+      the opcodes they represent. The <CODE>OpCodes</CODE> class from the 
+      <CODE>Reflection.Emit</CODE> API has a member for each opcode that 
+      provides a </P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;opCodes&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;opCodes&nbsp;=&nbsp;Array.create&nbsp;65536&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ty&nbsp;=&nbsp;typeof&lt;System.Reflection.Emit.OpCodes&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Map<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;field&nbsp;in&nbsp;ty.GetFields()&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;value&nbsp;=&nbsp;(field.GetValue()&nbsp;:?&gt;&nbsp;System.Reflection.Emit.OpCode)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;value.Value&nbsp;|&gt;&nbsp;uint16&nbsp;|&gt;&nbsp;int,&nbsp;value&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;opCodes&nbsp;:&nbsp;Map&lt;int,System.Reflection.Emit.OpCode&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;map<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[(0,&nbsp;nop);&nbsp;(1,&nbsp;break);&nbsp;(2,&nbsp;ldarg.0);&nbsp;(3,&nbsp;ldarg.1);&nbsp;(4,&nbsp;ldarg.2);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(5,&nbsp;ldarg.3);&nbsp;(6,&nbsp;ldloc.0);&nbsp;(7,&nbsp;ldloc.1);&nbsp;(8,&nbsp;ldloc.2);&nbsp;...]</CODE></P>
+      <P>We shall use the following active patterns to simplify dissecting the 
+      sequence of bytes into ints and floats of different sizes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|UI8|)&nbsp;(xs:&nbsp;byte&nbsp;[],&nbsp;i)&nbsp;=&nbsp;xs.[i],&nbsp;(xs,&nbsp;i+1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|I8|)&nbsp;(xs:&nbsp;byte&nbsp;[],&nbsp;i)&nbsp;=&nbsp;sbyte&nbsp;xs.[i],&nbsp;(xs,&nbsp;i+1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|I16|)&nbsp;(xs,&nbsp;i)&nbsp;=&nbsp;System.BitConverter.ToInt16(xs,&nbsp;i),&nbsp;(xs,&nbsp;i+2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|I32|)&nbsp;(xs,&nbsp;i)&nbsp;=&nbsp;System.BitConverter.ToInt32(xs,&nbsp;i),&nbsp;(xs,&nbsp;i+4)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|F32|)&nbsp;(xs,&nbsp;i)&nbsp;=&nbsp;System.BitConverter.ToSingle(xs,&nbsp;i),&nbsp;(xs,&nbsp;i+4)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|I64|)&nbsp;(xs,&nbsp;i)&nbsp;=&nbsp;System.BitConverter.ToInt64(xs,&nbsp;i),&nbsp;(xs,&nbsp;i+8);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|UI8|&nbsp;)&nbsp;:&nbsp;byte&nbsp;[]&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;byte&nbsp;*&nbsp;(byte&nbsp;[]&nbsp;*&nbsp;int)<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|I8|&nbsp;)&nbsp;:&nbsp;byte&nbsp;[]&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;sbyte&nbsp;*&nbsp;(byte&nbsp;[]&nbsp;*&nbsp;int)<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|I16|&nbsp;)&nbsp;:&nbsp;byte&nbsp;[]&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;int16&nbsp;*&nbsp;(byte&nbsp;[]&nbsp;*&nbsp;int)<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|I32|&nbsp;)&nbsp;:&nbsp;byte&nbsp;[]&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;*&nbsp;(byte&nbsp;[]&nbsp;*&nbsp;int)<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|F32|&nbsp;)&nbsp;:&nbsp;byte&nbsp;[]&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;float32&nbsp;*&nbsp;(byte&nbsp;[]&nbsp;*&nbsp;int)<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|I64|&nbsp;)&nbsp;:&nbsp;byte&nbsp;[]&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;int64&nbsp;*&nbsp;(byte&nbsp;[]&nbsp;*&nbsp;int)</CODE></P>
+      <P>CIL instructions are represented by an opcode and an operand. There are 
+      many different types of operand. For example, some CIL instructions convey 
+      bytecode offsets as ints whereas others convey the identity of a method 
+      for a call. The following union type allows us to handle all of the 
+      operand types supported by CIL without having to sacrifice type safety 
+      completely by upcasting to <CODE>System.Object</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;OperandType&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int8&nbsp;of&nbsp;sbyte<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int16&nbsp;of&nbsp;int16<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int64&nbsp;of&nbsp;int64<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Float32&nbsp;of&nbsp;float32<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Float&nbsp;of&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;String&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Method&nbsp;of&nbsp;MethodBase<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Field&nbsp;of&nbsp;FieldInfo<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Signature&nbsp;of&nbsp;byte&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Type&nbsp;of&nbsp;System.Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NoOperand;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;operandType&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int8&nbsp;of&nbsp;sbyte<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int16&nbsp;of&nbsp;int16<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int64&nbsp;of&nbsp;int64<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Float32&nbsp;of&nbsp;float32<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Float&nbsp;of&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;String&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Method&nbsp;of&nbsp;MethodBase<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Field&nbsp;of&nbsp;FieldInfo<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Signature&nbsp;of&nbsp;byte&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Type&nbsp;of&nbsp;System.Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NoOperand</CODE></P>
+      <P>The following <CODE>readArg</CODE> function reads a single operand from 
+      a CIL instruction of the given operand type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;readArg&nbsp;(methodInfo:&nbsp;System.Reflection.MethodBase)&nbsp;operandType&nbsp;bytes&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;operandType,&nbsp;bytes&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineBrTarget,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int&nbsp;arg,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineField,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Field(methodInfo.Module.ResolveField&nbsp;arg),&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineI,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int&nbsp;arg,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineI8,&nbsp;I8(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int8&nbsp;arg,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineMethod,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;genericTypeArguments&nbsp;=&nbsp;methodInfo.DeclaringType.GetGenericArguments()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;genericMethodArguments&nbsp;=&nbsp;try&nbsp;methodInfo.GetGenericArguments()&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;null<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Method(methodInfo.Module.ResolveMethod(arg,&nbsp;genericTypeArguments,&nbsp;genericMethodArguments)),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineNone,&nbsp;bytes&nbsp;-&gt;&nbsp;NoOperand,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineR,&nbsp;I64(arg,&nbsp;bytes)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Float(System.BitConverter.Int64BitsToDouble&nbsp;arg),&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineSig,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Signature(methodInfo.Module.ResolveSignature&nbsp;arg),&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineString,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String(methodInfo.Module.ResolveString&nbsp;arg),&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineSwitch,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int&nbsp;arg,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineTok,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int&nbsp;arg,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineType,&nbsp;I32(arg,&nbsp;bytes)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;genericTypeArguments&nbsp;=&nbsp;methodInfo.DeclaringType.GetGenericArguments()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;genericMethodArguments&nbsp;=&nbsp;try&nbsp;methodInfo.GetGenericArguments()&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;null<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type(methodInfo.Module.ResolveType(arg,&nbsp;genericTypeArguments,&nbsp;genericMethodArguments)),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.InlineVar,&nbsp;I16(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int16&nbsp;arg,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.ShortInlineBrTarget,&nbsp;I8(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int(int&nbsp;arg),&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.ShortInlineI,&nbsp;I8(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int8&nbsp;arg,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.ShortInlineR,&nbsp;F32(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Float32&nbsp;arg,&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OperandType.ShortInlineVar,&nbsp;I8(arg,&nbsp;bytes)&nbsp;-&gt;&nbsp;Int16(int16&nbsp;arg),&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;operandType,&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;failwithf&nbsp;"Operand&nbsp;type&nbsp;%A&nbsp;not&nbsp;implemented"&nbsp;operandType;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;readArg&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MethodBase&nbsp;-&gt;&nbsp;OperandType&nbsp;-&gt;&nbsp;byte&nbsp;[]&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;operandType&nbsp;*&nbsp;(byte&nbsp;[]&nbsp;*&nbsp;int)</CODE></P>
+      <P>The following <CODE>disassembleInstruction</CODE> function reads an 
+      opcode and operand from a sequence of bytes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;disassembleInstruction&nbsp;methodBase&nbsp;(xs:&nbsp;_&nbsp;[],&nbsp;i&nbsp;as&nbsp;bytes)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i=xs.Length&nbsp;then&nbsp;None&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;opCode,&nbsp;bytes&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;bytes&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;UI8(254uy,&nbsp;UI8(byte,&nbsp;bytes))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;opCodes.[0xfe00&nbsp;|||&nbsp;int&nbsp;byte],&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;UI8(byte,&nbsp;bytes)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;opCodes.[int&nbsp;byte],&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;operandType&nbsp;=&nbsp;opCode.OperandType<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;arg,&nbsp;bytes&nbsp;=&nbsp;readArg&nbsp;methodBase&nbsp;operandType&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some((opCode,&nbsp;arg),&nbsp;bytes);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;disassembleInstruction&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MethodBase&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;byte&nbsp;[]&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;((OpCode&nbsp;*&nbsp;operandType)&nbsp;*&nbsp;(byte&nbsp;[]&nbsp;*&nbsp;int))&nbsp;option</CODE></P>
+      <P>The following <CODE>disassemble</CODE> function uses the 
+      <CODE>GetILAsByteArray</CODE> member to obtain the byte array containing 
+      the assembled CIL instructions that form the body of the given method and 
+      disassembles the byte array into a sequence of CIL instructions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;disassemble&nbsp;(methodBase:&nbsp;System.Reflection.MethodBase)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(methodBase.GetMethodBody().GetILAsByteArray(),&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.unfold&nbsp;(disassembleInstruction&nbsp;methodBase);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;disassemble&nbsp;:&nbsp;MethodBase&nbsp;-&gt;&nbsp;seq&lt;OpCode&nbsp;*&nbsp;operandType&gt;</CODE></P>
+      <P>This program can disassemble most functions.</P>
+      <H2>Results</H2>
+      <P>We can load our own program as an assembly in order to disassemble the 
+      <CODE>fib</CODE> function that we defined at the beginning:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ass&nbsp;=&nbsp;System.Reflection.Assembly.LoadFile&nbsp;@"...\DissectingPrograms.exe";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ass&nbsp;:&nbsp;Assembly&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DissectingPrograms,&nbsp;Version=0.0.0.0,&nbsp;Culture=neutral,&nbsp;PublicKeyToken=null</CODE></P>
+      <P>The main module from this assembly is:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mdl&nbsp;=&nbsp;ass.GetModule&nbsp;"DissectingPrograms.exe";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mdl&nbsp;:&nbsp;Module&nbsp;=&nbsp;DissectingPrograms.exe</CODE></P>
+      <P>The class representing the code in the <CODE>Program.fs</CODE> file may 
+      be obtained as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ty&nbsp;=&nbsp;mdl.GetType&nbsp;"Program";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ty&nbsp;:&nbsp;System.Type&nbsp;=&nbsp;Example</CODE></P>
+      <P>Our <CODE>fib</CODE> method is then given by:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mthd&nbsp;=&nbsp;ty.GetMethod&nbsp;"fib";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mthd&nbsp;:&nbsp;MethodInfo&nbsp;=&nbsp;Int32&nbsp;fib(Int32)</CODE></P>
+      <P>The following function gives a name to a method by appending the 
+      namespace, class name and method name:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;nameOfMethod&nbsp;(mthd:&nbsp;#MethodBase)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;mthd&nbsp;=&nbsp;null&nbsp;then&nbsp;"null"&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ty&nbsp;=&nbsp;mthd.DeclaringType<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ty&nbsp;=&nbsp;null&nbsp;then&nbsp;mthd.Name&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ty.Namespace&nbsp;+&nbsp;"."&nbsp;+&nbsp;ty.Name&nbsp;+&nbsp;"::"&nbsp;+&nbsp;mthd.Name;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;nameOfMethod&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;-&gt;&nbsp;string&nbsp;when&nbsp;'a&nbsp;:&gt;&nbsp;MethodBase&nbsp;and&nbsp;'a&nbsp;:&nbsp;equality&nbsp;and&nbsp;'a&nbsp;:&nbsp;null</CODE></P>
+      <P>The compiled form of our <CODE>fib</CODE> function may now be 
+      disassembled as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;instr,&nbsp;arg&nbsp;in&nbsp;disassemble&nbsp;mthd&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;arg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NoOperand&nbsp;-&gt;&nbsp;printfn&nbsp;"%s"&nbsp;instr.Name<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Method&nbsp;mthd&nbsp;-&gt;&nbsp;printfn&nbsp;"%s&nbsp;%s"&nbsp;instr.Name&nbsp;(nameOfMethod&nbsp;mthd)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;arg&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_,&nbsp;args&nbsp;=&nbsp;Reflection.FSharpValue.GetUnionFields(arg,&nbsp;typeof&lt;operandType&gt;)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%s&nbsp;%A"&nbsp;instr.Name&nbsp;args.[0];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;nop<BR>&nbsp;&nbsp;&nbsp;&nbsp;ldarg.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;ldc.i4.2<BR>&nbsp;&nbsp;&nbsp;&nbsp;bge.s&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;br.s&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;br.s&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;ldarg.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;ret<BR>&nbsp;&nbsp;&nbsp;&nbsp;ldarg.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;ldc.i4.1<BR>&nbsp;&nbsp;&nbsp;&nbsp;sub<BR>&nbsp;&nbsp;&nbsp;&nbsp;call&nbsp;.Program::fib<BR>&nbsp;&nbsp;&nbsp;&nbsp;ldarg.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;ldc.i4.2<BR>&nbsp;&nbsp;&nbsp;&nbsp;sub<BR>&nbsp;&nbsp;&nbsp;&nbsp;call&nbsp;.Program::fib<BR>&nbsp;&nbsp;&nbsp;&nbsp;add<BR>&nbsp;&nbsp;&nbsp;&nbsp;ret</CODE></P>
+      <P>The result is a sequence of CIL instructions that is quite 
+      comprehensible. The function parameter is loaded followed by the int 
+      <CODE>2</CODE> and they are compared. If the parameter is less than 
+      <CODE>2</CODE> then it is loaded and returned. Otherwise, the argument is 
+      loaded and <CODE>1</CODE> subtracted before <CODE>fib</CODE> is called 
+      recursively and the argument is loaded again and <CODE>2</CODE> subtracted 
+      before <CODE>fib</CODE> is invoked, the two results left on the stack are 
+      added before the function returns.</P>
+      <P>The same sequence of CIL instructions is seen if the code is 
+      disassembled using a tool such as ILSpy or Reflector. Interestingly, the 
+      Mono project have been working on a CIL disassembler and estimated it 
+      would take several months to implement but we have been able to implement 
+      it here in under 100 lines of F# code!</P>
+      <H2>Results</H2>
+      <P>This article has shown how a novel application of the .NET reflection 
+      API to itself makes it easy to create a CIL disassembler that extracts the 
+      CIL instructions that make up the body of any method.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of 
+      metaprogramming and CIL.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2011</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20CIL%20dissassembler_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

@@ -1,0 +1,222 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0085)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/slidingaverages.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20sliding%20averages_files/style.css"><LINK rel=stylesheet 
+type=text/css 
+href="F%23%20Journal%20sliding%20averages_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20sliding%20averages_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20sliding%20averages_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20sliding%20averages_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Sliding averages</H1>
+      <P>Sliding window algorithms are a class of algorithms that treat streams 
+      of data by computing a statistic across a window for each position of the 
+      window within the data stream. Moving averages are sliding window 
+      algorithms that compute an average over each window. This article begins 
+      with a simple implementation of the sliding mean average and goes on to 
+      examine more efficient algorithms for both mean and median sliding 
+      averages.</P>
+      <H2>Introduction</H2>
+      <P>Sliding window algorithms are commonly used to study medium-range 
+      effects in data. Perhaps the most influential sliding window algorithm is 
+      the foundation of the graphic equalizer: a primitive method of 
+      time-frequency analysis called the Windowed Fourier Transform (WFT) that 
+      computes the FFTs of windows at different positions within a signal in 
+      order to estimate the frequencies present at a given point in time. This 
+      article examines the simpler but still tricky problem of sliding 
+      averages.</P>
+      <H3>Simple solutions</H3>
+      <P>Luckily, F# provides an easy way to break a sequence into a sequence of 
+      fixed-width windows in the form of the <CODE>Seq.windowed</CODE> 
+      function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;xs&nbsp;=&nbsp;[0.0;&nbsp;1.0;&nbsp;0.0;&nbsp;-1.0;&nbsp;0.0;&nbsp;1.0;&nbsp;0.0;&nbsp;-1.0];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs&nbsp;:&nbsp;float&nbsp;list&nbsp;=&nbsp;[0.0;&nbsp;1.0;&nbsp;0.0;&nbsp;-1.0;&nbsp;0.0;&nbsp;1.0;&nbsp;0.0;&nbsp;-1.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Seq.windowed&nbsp;2&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;float&nbsp;[]&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;[[|0.0;&nbsp;1.0|];&nbsp;[|1.0;&nbsp;0.0|];&nbsp;[|0.0;&nbsp;-1.0|];&nbsp;[|-1.0;&nbsp;0.0|];&nbsp;...]</CODE></P>
+      <P>Note how the sequence was broken up into windows containing two 
+      elements each. This is not the same as dividing the input into 
+      <CODE>n/2</CODE> subsequences because the window is slid across the input 
+      one element at a time.</P>
+      <P>Sliding averages are easily computed using the 
+      <CODE>Seq.windowed</CODE> function. The sliding mean may be computed by 
+      applying the <CODE>Seq.average</CODE> function to each subsequence using a 
+      configurable window width <CODE>n</CODE> as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;slidingMean&nbsp;n&nbsp;(xs:&nbsp;float&nbsp;seq)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.windowed&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.map&nbsp;Seq.average;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;slidingMean&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;seq&lt;float&gt;&nbsp;-&gt;&nbsp;seq&lt;float&gt;</CODE></P>
+      <P>Note that is it necessary to annotate the type of this function because 
+      the built-in functions are generic over any numeric types that provide the 
+      appropriate operations.</P>
+      <P>For example, applying <CODE>slidingMean</CODE> to our example data set 
+      <CODE>xs</CODE> produces a downsampling of the data where consecutive 
+      pairs of elements have been averaged together.</P>
+      <P>The genericity may be preserved by marking the <CODE>slidingMean</CODE> 
+      function <CODE>inline</CODE> as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;slidingMean&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.windowed&nbsp;10<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.map&nbsp;Seq.average;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;slidingMean&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&lt;&nbsp;^a&gt;&nbsp;-&gt;&nbsp;seq&lt;&nbsp;^a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;&nbsp;^a&nbsp;:&nbsp;(static&nbsp;member&nbsp;(&nbsp;+&nbsp;)&nbsp;:&nbsp;&nbsp;^a&nbsp;*&nbsp;&nbsp;^a&nbsp;-&gt;&nbsp;&nbsp;^a)&nbsp;and<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^a&nbsp;:&nbsp;(static&nbsp;member&nbsp;DivideByInt&nbsp;:&nbsp;&nbsp;^a&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;&nbsp;^a)&nbsp;and<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;^a&nbsp;:&nbsp;(static&nbsp;member&nbsp;get_Zero&nbsp;:&nbsp;-&gt;&nbsp;&nbsp;^a)</CODE></P>
+      <P>Similarly, the simplest way to compute the moving median for a data set 
+      is to explicitly extract the array of elements in each window, sort them 
+      and extract the median from the center of the resulting array. A function 
+      to compute the median of a sequence may be written in F# as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;median&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Array.ofSeq&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;xs.Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.sortInPlaceWith&nbsp;compare&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;%&nbsp;2&nbsp;=&nbsp;1&nbsp;then&nbsp;xs.[n/2]&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(xs.[n/2]&nbsp;+&nbsp;xs.[n/2&nbsp;-&nbsp;1])&nbsp;/&nbsp;2.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;median&nbsp;:&nbsp;seq&lt;float&gt;&nbsp;-&gt;&nbsp;float</CODE></P>
+      <P>A function to compute the sliding median can then map this 
+      <CODE>median</CODE> function over the windows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;slidingMedian&nbsp;n&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.windowed&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.map&nbsp;median;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;slidingMedian&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;seq&lt;float&gt;&nbsp;-&gt;&nbsp;seq&lt;float&gt;</CODE></P>
+      <P>However, the main weakness of these implementations of sliding averages 
+      is that they fail to reuse computations from each window to the next and, 
+      consequently, perform many redundant calculations and could be much more 
+      efficient. As these kinds of statistical averages are often applied to 
+      large data sets there is great value in optimizing these algorithms in 
+      order to reduce the amount of time it takes to compute a sliding 
+      average.</P>
+      <P>For example, the following constructs an example data set that we can 
+      use to benchmark our solutions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;example&nbsp;=&nbsp;Array.init&nbsp;100000&nbsp;(fun&nbsp;i&nbsp;-&gt;&nbsp;tan(float&nbsp;i&nbsp;/&nbsp;1000.0));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;example&nbsp;:&nbsp;float&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|0.0;&nbsp;0.001000000333;&nbsp;0.002000002667;&nbsp;0.003000009;&nbsp;0.004000021333;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.005000041667;&nbsp;0.006000072001;&nbsp;0.007000114336;&nbsp;0.008000170671;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.009000243008;&nbsp;0.01000033335;&nbsp;0.01100044369;&nbsp;0.01200057603;&nbsp;0.01300073238;</CODE></P>
+      <P>In this case, the naive <CODE>slidingMedian</CODE> function takes 
+      73s:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;xys&nbsp;=&nbsp;slidingMedian&nbsp;1000&nbsp;example&nbsp;|&gt;&nbsp;Array.ofSeq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:01:12.965,&nbsp;CPU:&nbsp;00:02:06.594,&nbsp;GC&nbsp;gen0:&nbsp;1626,&nbsp;gen1:&nbsp;1618,&nbsp;gen2:&nbsp;1618<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xys&nbsp;:&nbsp;float&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|0.5456536209;&nbsp;0.5469520681;&nbsp;0.5482519365;&nbsp;0.549553231;&nbsp;0.5508559565;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.5521601181;&nbsp;0.5534657206;&nbsp;0.5547727692;&nbsp;0.5560812688;&nbsp;0.5573912245;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.5587026413;&nbsp;0.5600155243;&nbsp;0.5613298787;&nbsp;0.5626457094;&nbsp;0.5639630216;</CODE></P>
+      <P>Naturally, we can optimize this simple solution in order to improve its 
+      performance.</P>
+      <H2>Algorithmic optimization</H2>
+      <P>As always, the first step towards a usefully-efficient implementation 
+      is to attempt algorithmic optimizations. This requires us to think about 
+      the operations being performed and how the most common operations might be 
+      made more efficient.</P>
+      <P>The core inefficiency of the naive algorithm is that it fails to 
+      capitalize on the relationship between the median of one window and the 
+      median of the next window. The median splits the set of values in the 
+      window in half, with 50% of the values appearing below the median and 50% 
+      above. The simplest way to represent this in F# is to maintain a pair of 
+      sets for the lower and upper halves of the window and rebalance the sets 
+      to keep them the same size as new elements are added into the window and 
+      removed from the back of the window. This is complicated by the fact that 
+      the built-in <CODE>Set</CODE> data structure removes duplicates but we 
+      want to allow them. There are several possible solutions to this, 
+      including implementing a multiset data structure, but we can work around 
+      the issue most simply by storing not only the value from the stream in the 
+      set but also its index, i.e. a pair.</P>
+      <P>The following <CODE>balance</CODE> function uses the 
+      <CODE>Set.count</CODE> function of the sets to determine the number of 
+      elements in each set and moves the smallest element in the upper set or 
+      the largest element from the lower set across in order to balance the sets 
+      such that the number of elements in the lower set is either equal to or 
+      one greater than that of the upper set:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;balance&nbsp;(lt,&nbsp;gt)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dn&nbsp;=&nbsp;Set.count&nbsp;gt&nbsp;-&nbsp;Set.count&nbsp;lt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dn&nbsp;&gt;&nbsp;0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y&nbsp;=&nbsp;Set.minElement&nbsp;gt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Set.add&nbsp;y&nbsp;lt,&nbsp;Set.remove&nbsp;y&nbsp;gt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;dn&nbsp;&lt;&nbsp;-1&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;Set.maxElement&nbsp;lt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Set.remove&nbsp;x&nbsp;lt,&nbsp;Set.add&nbsp;x&nbsp;gt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lt,&nbsp;gt;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;balance&nbsp;:&nbsp;Set&lt;'a&gt;&nbsp;*&nbsp;Set&lt;'a&gt;&nbsp;-&gt;&nbsp;Set&lt;'a&gt;&nbsp;*&nbsp;Set&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>The following <CODE>median</CODE> function determines the median of the 
+      union of the two sets either as the largest element in the lower set (for 
+      an odd number of elements in the window) or as an average of the two 
+      middle elements:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;median&nbsp;(lt,&nbsp;gt)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x,&nbsp;_&nbsp;=&nbsp;Set.maxElement&nbsp;lt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Set.count&nbsp;lt&nbsp;&gt;&nbsp;Set.count&nbsp;gt&nbsp;then&nbsp;x&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(x&nbsp;+&nbsp;fst(Set.minElement&nbsp;gt))&nbsp;/&nbsp;2.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;median&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Set&lt;float&nbsp;*&nbsp;'a&gt;&nbsp;*&nbsp;Set&lt;float&nbsp;*&nbsp;'b&gt;&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison&nbsp;and&nbsp;'b&nbsp;:&nbsp;comparison</CODE></P>
+      <P>Before writing a function to implement the sliding median we shall 
+      write a pair of auxiliary functions to insert an element into our pair of 
+      sets when it enters the sliding window and another function to remove an 
+      element from our pair of sets when it leaves the sliding window.</P>
+      <P>An <CODE>add</CODE> function to insert an element may be written as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;add&nbsp;x&nbsp;(lt,&nbsp;gt)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Set.isEmpty&nbsp;lt&nbsp;then&nbsp;lt,&nbsp;Set.add&nbsp;x&nbsp;gt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;x&nbsp;&lt;=&nbsp;Set.maxElement&nbsp;lt&nbsp;then&nbsp;Set.add&nbsp;x&nbsp;lt,&nbsp;gt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;lt,&nbsp;Set.add&nbsp;x&nbsp;gt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;balance;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;Set&lt;'a&gt;&nbsp;*&nbsp;Set&lt;'a&gt;&nbsp;-&gt;&nbsp;Set&lt;'a&gt;&nbsp;*&nbsp;Set&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>If the set <CODE>lt</CODE> of elements less than or equal to the median 
+      is empty then the new element is inserted into the set of elements greater 
+      than or equal to the median. Otherwise the new element is compared with 
+      the largest element from the smaller set and inserted into either the 
+      lower or upper set accordingly. Finally, the <CODE>balance</CODE> function 
+      is used to rebalance the two sets once the new element has been added.</P>
+      <P>The <CODE>remove</CODE> function to remove an element from the sets is 
+      much simpler:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;remove&nbsp;x&nbsp;(lt,&nbsp;gt)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;balance(Set.remove&nbsp;x&nbsp;lt,&nbsp;Set.remove&nbsp;x&nbsp;gt);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;remove&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;Set&lt;'a&gt;&nbsp;*&nbsp;Set&lt;'a&gt;&nbsp;-&gt;&nbsp;Set&lt;'a&gt;&nbsp;*&nbsp;Set&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>This relies upon the <CODE>Set.remove</CODE> function returning the 
+      original set if the given element could not be found.</P>
+      <P>Finally, the following <CODE>slidingMedian</CODE> function computes the 
+      sliding median average over a given sequence using the given window 
+      width:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;slidingMedian&nbsp;n&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;let&nbsp;window&nbsp;=&nbsp;System.Collections.Generic.Queue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;s&nbsp;=&nbsp;ref(Set.empty,&nbsp;Set.empty)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x&nbsp;in&nbsp;xs&nbsp;|&gt;&nbsp;Seq.mapi&nbsp;(fun&nbsp;i&nbsp;x&nbsp;-&gt;&nbsp;x,&nbsp;i)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;window.Count&nbsp;&lt;&nbsp;n&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;:=&nbsp;add&nbsp;x&nbsp;!s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.Enqueue&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;window.Count&nbsp;=&nbsp;n&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;median&nbsp;!s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y&nbsp;=&nbsp;window.Dequeue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;:=&nbsp;add&nbsp;x&nbsp;(remove&nbsp;y&nbsp;!s)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;median&nbsp;!s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.Enqueue&nbsp;x&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;slidingMedian&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;seq&lt;float&gt;&nbsp;-&gt;&nbsp;seq&lt;float&gt;</CODE></P>
+      <P>In this case, we use a sequence expression to provide an elegant way to 
+      generate medians on-the-fly. A mutable queue is used to track the elements 
+      in the current window, in order to remove elements as they fall out of the 
+      window. The <CODE>Seq.mapi</CODE> function is used to convert the sequence 
+      of input values into value and index pairs to ensure that the elements 
+      stored in the F# <CODE>Set</CODE> collections are always unique. The input 
+      elements are iterated over using a <CODE>for</CODE> comprehension, adding 
+      new elements to the window until it fills whereupon the last element is 
+      also dequeued in order to maintain a constant length <CODE>n</CODE> 
+      window. Nothing is yielded from the sequence expression while the window 
+      is fulling but a single element is yielded when the window is first full 
+      and then an element is yielded for each new element from the input 
+      sequence.</P>
+      <P>This implementation of the <CODE>slidingMedian</CODE> function is 
+      almost 9× faster than the previous implementation thanks to the 
+      algorithmic optimization of tracking just the changes in the median as the 
+      window is slid across the input sequence rather than recomputing each 
+      median separately:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;slidingMedian&nbsp;1000&nbsp;example<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.ofSeq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:08.350,&nbsp;CPU:&nbsp;00:00:08.346,&nbsp;GC&nbsp;gen0:&nbsp;87,&nbsp;gen1:&nbsp;2,&nbsp;gen2:&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|0.5456536209;&nbsp;0.5469520681;&nbsp;0.5482519365;&nbsp;0.549553231;&nbsp;0.5508559565;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.5521601181;&nbsp;0.5534657206;&nbsp;0.5547727692;&nbsp;0.5560812688;&nbsp;0.5573912245;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.5587026413;&nbsp;0.5600155243;&nbsp;0.5613298787;&nbsp;0.5626457094;&nbsp;0.5639630216;</CODE></P>
+      <P>Further performance improvements can be obtained by applying low-level 
+      optimizations to the solution in order to reduce the constant factor in 
+      the algorithmic complexity.</P>
+      <H2>Low-level optimization</H2>
+      <P>The program can be optimized further by fine tuning the way in which it 
+      is implemented in order to improve performance by a significant constant 
+      factor. We begin by defining a struct type <CODE>T2</CODE> to hold a pair 
+      of values unboxed, to replace our previous use of a tuple:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;T2&lt;'a,&nbsp;'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;a&nbsp;:&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;b&nbsp;:&nbsp;'b<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(a,&nbsp;b)&nbsp;=&nbsp;{a=a;&nbsp;b=b};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;T2&lt;'a,'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;a:'a&nbsp;*&nbsp;b:'b&nbsp;-&gt;&nbsp;T2&lt;'a,'b&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;a:&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;b:&nbsp;'b<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Next, we replace each of the <CODE>balance</CODE>, <CODE>median</CODE>, 
+      <CODE>add</CODE> and <CODE>remove</CODE> functions with equivalents using 
+      the mutable <CODE>SortedSet</CODE> collection provided by .NET instead of 
+      the purely functional <CODE>Set</CODE> collection provided by F#. The 
+      <CODE>balance</CODE> function becomes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;balance&nbsp;(lt:&nbsp;SortedSet&lt;_&gt;,&nbsp;gt:&nbsp;SortedSet&lt;_&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dn&nbsp;=&nbsp;gt.Count&nbsp;-&nbsp;lt.Count<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dn&nbsp;&gt;&nbsp;0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;gt.Min<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lt.Add&nbsp;x&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gt.Remove&nbsp;x&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;elif&nbsp;dn&nbsp;&lt;&nbsp;-1&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;lt.Max<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lt.Remove&nbsp;x&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gt.Add&nbsp;x&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;balance&nbsp;:&nbsp;SortedSet&lt;'a&gt;&nbsp;*&nbsp;SortedSet&lt;'a&gt;&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The <CODE>median</CODE> function becomes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;median&nbsp;(lt:&nbsp;SortedSet&lt;T2&lt;_,&nbsp;_&gt;&gt;,&nbsp;gt:&nbsp;SortedSet&lt;T2&lt;_,&nbsp;_&gt;&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;lt.Max.a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lt.Count&nbsp;&gt;&nbsp;gt.Count&nbsp;then&nbsp;x&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(x&nbsp;+&nbsp;gt.Min.a)&nbsp;/&nbsp;2.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;median&nbsp;:&nbsp;SortedSet&lt;T2&lt;float,'a&gt;&gt;&nbsp;*&nbsp;SortedSet&lt;T2&lt;float,'b&gt;&gt;&nbsp;-&gt;&nbsp;float</CODE></P>
+      <P>The <CODE>add</CODE> function becomes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;add&nbsp;x&nbsp;(lt:&nbsp;SortedSet&lt;_&gt;,&nbsp;gt:&nbsp;SortedSet&lt;_&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lt.Count&nbsp;=&nbsp;0&nbsp;||&nbsp;x&nbsp;&gt;&nbsp;lt.Max&nbsp;then&nbsp;gt.Add&nbsp;x&nbsp;|&gt;&nbsp;ignore&nbsp;else&nbsp;lt.Add&nbsp;x&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;balance&nbsp;(lt,&nbsp;gt);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;SortedSet&lt;'a&gt;&nbsp;*&nbsp;SortedSet&lt;'a&gt;&nbsp;-&gt;&nbsp;unit&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>The <CODE>remove</CODE> function becomes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;remove&nbsp;x&nbsp;(lt:&nbsp;SortedSet&lt;_&gt;,&nbsp;gt:&nbsp;SortedSet&lt;_&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lt.Remove&nbsp;x&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gt.Remove&nbsp;x&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;balance&nbsp;(lt,&nbsp;gt);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;remove&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;SortedSet&lt;'a&gt;&nbsp;*&nbsp;SortedSet&lt;'a&gt;&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Note that all of these functions now require type annotations because 
+      we are using members to add and remove elements rather than calling a 
+      static function with a known type.</P>
+      <P>Now we are ready to replace the <CODE>slidingMedian</CODE> function 
+      itself:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;slidingMedian&nbsp;n&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;let&nbsp;window&nbsp;=&nbsp;System.Collections.Generic.Queue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lt,&nbsp;gt&nbsp;=&nbsp;SortedSet(),&nbsp;SortedSet()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x&nbsp;in&nbsp;xs&nbsp;|&gt;&nbsp;Seq.mapi&nbsp;(fun&nbsp;i&nbsp;x&nbsp;-&gt;&nbsp;T2(x,&nbsp;i))&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;window.Count&nbsp;&lt;&nbsp;n&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;x&nbsp;(lt,&nbsp;gt)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.Enqueue&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;window.Count&nbsp;=&nbsp;n&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;median&nbsp;(lt,&nbsp;gt)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y&nbsp;=&nbsp;window.Dequeue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remove&nbsp;y&nbsp;(lt,&nbsp;gt)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;x&nbsp;(lt,&nbsp;gt)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;median&nbsp;(lt,&nbsp;gt)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.Enqueue&nbsp;x&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;slidingMedian&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;seq&lt;float&gt;&nbsp;-&gt;&nbsp;seq&lt;float&gt;</CODE></P>
+      <P>The changes are remarkably small. The <CODE>SortedSet</CODE> 
+      constructor is used to initialize the collections instead of using the 
+      <CODE>Set.empty</CODE> value.</P>
+      <P>Thanks to the use of mutable collections, this new version is over 3.3× 
+      faster again:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;slidingMedian&nbsp;1000&nbsp;example<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.ofSeq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:02.498,&nbsp;CPU:&nbsp;00:00:02.355,&nbsp;GC&nbsp;gen0:&nbsp;99,&nbsp;gen1:&nbsp;1,&nbsp;gen2:&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|0.5456536209;&nbsp;0.5469520681;&nbsp;0.5482519365;&nbsp;0.549553231;&nbsp;0.5508559565;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.5521601181;&nbsp;0.5534657206;&nbsp;0.5547727692;&nbsp;0.5560812688;&nbsp;0.5573912245;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.5587026413;&nbsp;0.5600155243;&nbsp;0.5613298787;&nbsp;0.5626457094;&nbsp;0.5639630216;</CODE></P>
+      <P>The same basic technique of exploiting redundancy between computations 
+      using algorithmic optimizations and then applying low-level optimizations 
+      such as avoiding allocations is a powerful way to create 
+      production-quality solutions to such problems.</P>
+      <H2>Summary</H2>
+      <P>This article has described a generic approach for solving sliding 
+      window problems easily and efficiently. The trick is to compute the small 
+      changes in the median from one window to the next rather than recomputing 
+      each result from scratch.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of 
+      semi-numerical algorithms.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20sliding%20averages_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

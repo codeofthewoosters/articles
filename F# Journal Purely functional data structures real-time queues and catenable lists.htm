@@ -1,0 +1,475 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0085)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/pure_fun_second.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Purely functional data structures: real-time queues and 
+catenable lists</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Purely functional data structures: real-time 
+queues and catenable lists</TITLE>     <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Purely functional data structures: real-time queues and catenable 
+      lists</H1>
+      <P>This is the second article in a series describing the design and 
+      implementation of some purely functional data structures. Real-time queues 
+      and catenable lists that provide reliable O(1) time complexity operations 
+      are described in detail. In particular, laziness is used to ensure that 
+      operations are performed efficiently even when the data structures are 
+      used persistently. This culminates in the creation of some useful new data 
+      structure implementations.</P>
+      <H3>Real-time queues</H3>
+      <P>Queues allow elements to be pushed on at one end and popped off from 
+      the other, also known as first-in first-out (FIFO) order. The previous 
+      article described the design and implementation of              <I>batched 
+      queues</I> that amortize the costs involved in pushing and popping by 
+      reversing an internal list that may contain all of the elements in the 
+      queue. Consequently, a single operation had worst case              
+      <I>O(n)</I> time complexity even though the average case is amortized      
+              <I>O(1)</I> time complexity. Moreover, the batched queue 
+      implementation made no attempt to remember the result of the reversal and, 
+      consequently, persistent use such as removing the same element from the 
+      same queue where the same old queue has an element removed repeatedly can 
+      incur the same list reversal many times.           </P>
+      <P>Lazy evaluation is an excellent solution to the problem of remembering 
+      the results of operations that have been performed before in order to 
+      ensure that work is not needlessly duplicated. Moreover, lazy evaluation 
+      fits elegantly into the functional programming paradigm. In particular, 
+      user code benefits from a thread-safe implementation of laziness in the 
+      standard library.</P>
+      <P>In this context, a              <I>real-time</I> data structure offers 
+      guaranteed complexity instead of only amortized complexity. The following 
+      real-time queue implementation, adapted from that given in SML by Okasaki, 
+      offers O(1) complexity:           </P>
+<PRE>&gt; type private RealTimeQueue&lt;'a&gt;(xs, ys, zs) =
+    let rec rotate = function
+      | Stream.Nil, y::_, zs -&gt; Stream.Cons(y, lazy zs)
+      | Stream.Cons(x, xs), y::ys, zs -&gt;
+          Stream.Cons(x, lazy(rotate(xs.Value, ys, Stream.Cons(y, lazy zs))))
+      | _, [], _ -&gt; invalid_arg "Queue.rotate"</PRE>
+<PRE>    let rec exec(xs, ys, zs) =
+      match zs with
+      | Stream.Cons(_, zs) -&gt; (RealTimeQueue(xs, ys, zs.Value) :&gt; IQueue&lt;'a&gt;)
+      | Stream.Nil -&gt;
+          let xs' = rotate (xs, ys, Stream.empty)
+          (RealTimeQueue(xs', [], xs') :&gt; IQueue&lt;'a&gt;)</PRE>
+<PRE>    interface IQueue&lt;'a&gt; with
+      override q.IsEmpty =
+        match xs with
+        | Stream.Nil -&gt; true
+        | _ -&gt; false
+      
+      override q.PushBack y = exec(xs, y::ys, zs)
+      
+      override q.PopFront() =
+        match xs with
+        | Stream.Cons(x, xs) -&gt; x, exec(xs.Value, ys, zs)
+        | Stream.Nil -&gt; raise Empty
+    
+    interface IEnumerable&lt;'a&gt; with
+      member q.GetEnumerator() : IEnumerator&lt;'a&gt; =
+        let decap (q: IQueue&lt;_&gt;) =
+          if q.IsEmpty then None else Some(q.PopFront())
+        (Seq.unfold decap (q :&gt; IQueue&lt;'a&gt;)).GetEnumerator()
+    
+    interface IEnumerable with
+      member q.GetEnumerator() =
+        ((q :&gt; seq&lt;'a&gt;).GetEnumerator() :&gt; IEnumerator)
+    
+    interface System.IEquatable&lt;IQueue&lt;'a&gt;&gt; with
+      member q1.Equals(q2: IQueue&lt;'a&gt;) =
+        List.of_seq q1 = List.of_seq q2
+    
+    override q1.Equals q2 =
+      (q1 :&gt; IQueue&lt;'a&gt;).Equals ((unbox q2) :&gt; IQueue&lt;'a&gt;)
+    
+    interface System.IComparable&lt;IQueue&lt;'a&gt;&gt; with
+      member q1.CompareTo(q2: IQueue&lt;'a&gt;) =
+        Seq.compare compare q1 q2
+    
+    interface System.IComparable with
+      member q1.CompareTo(q2: obj) =
+        Seq.compare compare q1 (unbox q2)
+    
+    interface IComparer&lt;IQueue&lt;'a&gt;&gt; with
+      member q.Compare(q1, q2) =
+        q1.CompareTo q2
+    
+    override q.GetHashCode() =
+      hash(List.of_seq q)
+    
+    interface IStructuralHash with
+      member q.GetStructuralHashCode n =
+        hash(List.of_seq q);;
+type private RealTimeQueue&lt;'a&gt; =
+  private
+  class
+    interface IStructuralHash
+    interface IComparer&lt;IQueue&lt;'a&gt;&gt;
+    interface System.IComparable
+    interface System.IComparable&lt;IQueue&lt;'a&gt;&gt;
+    interface System.IEquatable&lt;IQueue&lt;'a&gt;&gt;
+    interface IEnumerable
+    interface IEnumerable&lt;'a&gt;
+    interface IQueue&lt;'a&gt;
+    private new : xs:Stream&lt;'a&gt; * ys:'a list * zs:Stream&lt;'a&gt; -&gt;
+                  RealTimeQueue&lt;'a&gt;
+    override private Equals : q2:obj -&gt; bool
+    override private GetHashCode : unit -&gt; int
+  end</PRE>
+      <P>The auxiliary functions              <CODE>rotate</CODE> and            
+        <CODE>exec</CODE> are defined by              <CODE>let</CODE> bindings 
+      nested at the top of the              <CODE>RealTimeQueue</CODE> class 
+      definition. The use of an implicit constructor (from the three values      
+              <CODE>xs</CODE> ,              <CODE>ys</CODE> and              
+      <CODE>zs</CODE> ) permits the use of these              <CODE>let</CODE> 
+      bindings.           </P>
+      <P>This implementation essentially performs part of the list reversal as 
+      core operations are performed. Although the implementation is purely 
+      functional, laziness allows the results to be remembered from one 
+      invocation to the next even if persistence is used because the first 
+      evaluation of a thunk leaves its result for the next evaluation to reuse 
+      immediately.</P>
+      <P>The              <CODE>RealTimeQueue</CODE> class is actually an 
+      internal implementation and, in particular, requires the three values      
+              <CODE>xs</CODE> ,              <CODE>ys</CODE> and              
+      <CODE>zs</CODE> when it is constructed. Consequently, an API for users 
+      that exposes only              <CODE>empty</CODE> ,              
+      <CODE>add</CODE> and              <CODE>take</CODE> must also be defined. 
+      This is most easily done by marking the              
+      <CODE>RealTimeQueue</CODE> class              <CODE>private</CODE> and 
+      exposing a              <CODE>RealTimeQueue</CODE> module instead:         
+        </P>
+<PRE>&gt; module RealTimeQueue =
+    let empty&lt;'a&gt; =
+      (RealTimeQueue&lt;'a&gt;(Stream.empty, [], Stream.empty) :&gt; IQueue&lt;'a&gt;)
+    
+    let add (q: IQueue&lt;_&gt;) x = q.PushBack x
+    
+    let take (q: IQueue&lt;_&gt;) = q.PopFront();;
+module RealTimeQueue = begin
+  val empty&lt;'a&gt; : IQueue&lt;'a&gt;
+  val add : IQueue&lt;'a&gt; -&gt; 'a -&gt; IQueue&lt;'a&gt;
+  val take : IQueue&lt;'a&gt; -&gt; 'a * IQueue&lt;'a&gt;
+end</PRE>
+      <P>Although the module signature implies that these definitions deal only 
+      abstractly with classes implementing              <CODE>IQueue</CODE> the  
+                  <CODE>empty</CODE> definition is, of course, specifically 
+      related to the concrete              <CODE>RealTimeQueue</CODE> that it 
+      creates.           </P>
+      <P>Note how the definition of              <CODE>empty</CODE> as what 
+      appears to be a value has the generic type argument              
+      <CODE>&lt;'a&gt;</CODE> . This is a discrepancy between OCaml and .NET. In 
+      OCaml, polymorphic values can be defined directly and the compiler will 
+      automatically hoist the allocation of constant values even if they are 
+      generic but, on .NET, they must be replaced by a generic static member 
+      that returns a value. Moreover, that value is often freshly allocated as 
+      it is here.           </P>
+      <P>As an aside, the F# standard library uses an interesting optimization 
+      to amortize the cost of allocating new values representing empty data 
+      structures for each unique combination of generic type parameters. For 
+      example, the implementation of              <CODE>Set.empty</CODE> in the 
+      F# standard library includes the following:           </P>
+<PRE>// We use .NET generics per-instantiation static fields to avoid
+// allocating a new object for each empty set (it is just be a
+// lookup into a .NET table of type-instantiation-indexed static
+// fields).</PRE>
+<PRE>static let empty : Set&lt;'a&gt; = 
+  let comparer =
+    ComparisonIdentity.GetFastStructuralComparisonFunction&lt;'a&gt;() 
+  new Set&lt;'a&gt;(comparer,SetEmpty)</PRE>
+      <P>The usual .NET and F# interfaces have been implemented in order to 
+      allow this data structure to be used interoperably with existing code. For 
+      example, when a real-time queue is constructed in an F# interactive 
+      session it is pretty printed as a sequence:</P>
+<PRE>&gt; open RealTimeQueue;;
+&gt; Seq.fold add empty [1;2;3];;
+val it : IQueue&lt;int&gt; = seq [1; 2; 3]</PRE>
+      <H3>Performance</H3>
+      <P>Let's test the performance characteristics of the batched and real-time 
+      purely functional queue implementations. This is most easily done from 
+      within an F# interactive session using our F# for Visualization library. 
+      Once the DLL has been referenced the relevant namespaces may be opened 
+      with:</P>
+<PRE>&gt; open FlyingFrog.Graphics;;
+&gt; open FlyingFrog.Graphics.Typeset;;</PRE>
+      <P>The following              <CODE>u</CODE> variable represents the 
+      largest number of elements in a container examined in this benchmark:      
+           </P>
+<PRE>&gt; let u = 30000;;
+val u : int</PRE>
+      <P>The following              <CODE>i1</CODE> variable represents the 
+      number of samples tested by the benchmark:           </P>
+<PRE>&gt; let i1 = 300;;
+val i1 : int</PRE>
+      <P>The              <CODE>Plot</CODE> constructor is used to create a new 
+      plot that can be updated interactively and from any thread:           </P>
+<PRE>&gt; let plot =
+    Plot([], (0., float u), (0., 1.5e-3), Labels=(Char 'n', Char 't'));;
+val plot : Plot</PRE>
+<PRE>Binding session to 'C:\Program Files\FlyingFrog\FSharpForVisualization.dll'...</PRE>
+      <P>We shall run the benchmarks for the batched and real-time queues in 
+      parallel, filling the following array with results as they are 
+      measured:</P>
+<PRE>&gt; let xyss =
+    [|for i in 0 .. 1 -&gt;
+        [|for i in 0 .. i1 -&gt; 0., infinity|]|];;
+val xyss : (float * float) array array</PRE>
+      <P>The Task Parallel Library is used to provide parallelism. Once 
+      referenced, the relevant namespace may be opened with:</P>
+<PRE>&gt; open System.Threading;;</PRE>
+      <P>The following              <CODE>bench</CODE> function tests the 
+      effectiveness of reuse during persistent use by measuring the time taken 
+      to take elements from queues of different lengths, uploading the results 
+      to the interactive plot as they are generated:           </P>
+<PRE>&gt; let bench (empty: IQueue&lt;_&gt;) d =
+    let n = 1
+    let qs = [|for i in 1 .. n -&gt; empty|]
+    for i in 1 .. i1 do
+      let k = u * i / i1
+      while Seq.length qs.[0] &lt; k do
+        for j=0 to qs.Length-1 do
+          qs.[j] &lt;- qs.[j].PushBack(float j)
+      let t =
+        [|for _ in 1 .. 10 -&gt;
+            let mutable iters = 1
+            let t = System.Diagnostics.Stopwatch.StartNew()
+            while iters=0 || t.ElapsedMilliseconds &lt; 100L do
+              for _ in 0 .. iters do
+                for j=0 to qs.Length-1 do
+                  try ignore(qs.[j].PopFront()) with Empty -&gt; ()
+                iters &lt;- iters + 1
+            float t.ElapsedMilliseconds / 1e3 / float n / float iters|]
+        |&gt; Seq.reduce min
+      xyss.[d].[i] &lt;- float k, t
+      printf "%d: %A\n" (Seq.length qs.[0]) (snd xyss.[d].[i])
+      if i % 10 = 0 then
+        plot.Data &lt;- [|for xys in xyss -&gt; Data xys|];;
+val bench : IQueue&lt;float&gt; -&gt; int -&gt; unit</PRE>
+      <P>The              <CODE>bench</CODE> function may be run on the batched 
+      and real-time queues simultaneously as follows:           </P>
+<PRE>&gt; let () =
+    Tasks.Future.Create(fun () -&gt; bench BatchedQueue.empty 0) |&gt; ignore
+    Tasks.Future.Create(fun () -&gt; bench RealTimeQueue.empty 1) |&gt; ignore
+    Run();;</PRE>
+      <P>This produces the following result:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/queues.gif"> 
+                  </P>
+      <P></P>
+      <P>The time taken to remove elements from the batched queue (in red) 
+      increases linearly with the number of elements in the queue because each 
+      operation reverses the internal list. In contrast, the time taken to 
+      remove elements from the real-time queue (in green) remains is uniformly 
+      fast because laziness remembers the results of the previous work and 
+      reuses them between persistent uses of the queue.</P>
+      <H2>Catenable lists</H2>
+      <P>The purely functional stream and queue data structures described so far 
+      can be used to construct more sophisticated data structures such as an 
+      alternative to lists that provide O(1) append. These so-called             
+       <I>catenable lists</I> may be implemented as follows:           </P>
+<PRE>&gt; type CatenableList&lt;'a&gt; =
+    val empty : 'a CatenableList Lazy IQueue
+    val t : ('a * 'a CatenableList Lazy IQueue) option
+    
+    internal new(empty, t) = {empty=empty; t=t}</PRE>
+<PRE>    member private xs.T = xs.t
+    
+    member private xs.Link s =
+      match xs.T with
+      | Some(x, q: IQueue&lt;_&gt;) -&gt;
+          CatenableList(xs.empty, Some(x, q.PushBack s))
+      | None -&gt; invalid_arg "CatenableList.link"
+    
+    static member private LinkAll (q: 'a CatenableList Lazy IQueue) =
+      let t, q = q.PopFront()
+      if q.IsEmpty then t.Value else
+        t.Value.Link (lazy(CatenableList.LinkAll q))
+    
+    member xs.IsEmpty = Option.is_none xs.T
+    
+    member xs.TryPop() =
+      match xs.T with
+      | Some(x, q) -&gt;
+          if q.IsEmpty then
+            Some(x, CatenableList(xs.empty, None))
+          else
+            Some(x, CatenableList.LinkAll q)
+      | None -&gt; None
+    
+    member xs.Append(ys: _ CatenableList) =
+      if xs.IsEmpty then ys else
+        if ys.IsEmpty then xs else
+          xs.Link(lazy ys)
+    
+    member xs.Cons x =
+      CatenableList(xs.empty, Some(x, xs.empty)).Append xs
+    
+    interface IEnumerable&lt;'a&gt; with
+      member xs.GetEnumerator() : IEnumerator&lt;'a&gt; =
+        let decap (xs: CatenableList&lt;_&gt;) = xs.TryPop()
+        (Seq.unfold decap xs).GetEnumerator()
+    
+    interface IEnumerable with
+      member q.GetEnumerator() =
+        ((q :&gt; seq&lt;'a&gt;).GetEnumerator() :&gt; IEnumerator)
+    
+    interface System.IEquatable&lt;CatenableList&lt;'a&gt;&gt; with
+      member q1.Equals(q2: CatenableList&lt;'a&gt;) =
+        List.of_seq q1 = List.of_seq q2
+    
+    override q1.Equals q2 =
+      q1.Equals ((unbox q2) :&gt; CatenableList&lt;'a&gt;)
+    
+    interface System.IComparable&lt;CatenableList&lt;'a&gt;&gt; with
+      member q1.CompareTo(q2: CatenableList&lt;'a&gt;) =
+        Seq.compare compare q1 q2
+    
+    interface System.IComparable with
+      member q1.CompareTo(q2: obj) =
+        Seq.compare compare q1 (unbox q2)
+    
+    interface IComparer&lt;CatenableList&lt;'a&gt;&gt; with
+      member q.Compare(q1, q2) =
+        Seq.compare compare q1 q2
+    
+    override q.GetHashCode() =
+      hash(List.of_seq q)
+    
+    interface IStructuralHash with
+      member q.GetStructuralHashCode n =
+        hash(List.of_seq q);;
+type CatenableList&lt;'a&gt; =
+  class
+    val empty: IQueue&lt;Lazy&lt;CatenableList&lt;'a&gt;&gt;&gt;
+    val t: ('a * IQueue&lt;Lazy&lt;CatenableList&lt;'a&gt;&gt;&gt;) option
+    interface IStructuralHash
+    interface IComparer&lt;CatenableList&lt;'a&gt;&gt;
+    interface System.IComparable
+    interface System.IComparable&lt;CatenableList&lt;'a&gt;&gt;
+    interface System.IEquatable&lt;CatenableList&lt;'a&gt;&gt;
+    interface IEnumerable
+    interface IEnumerable&lt;'a&gt;
+    internal new : empty:IQueue&lt;Lazy&lt;CatenableList&lt;'a&gt;&gt;&gt; *
+                   t:('a * IQueue&lt;Lazy&lt;CatenableList&lt;'a&gt;&gt;&gt;) option -&gt;
+                   CatenableList&lt;'a&gt;
+    member Append : ys:CatenableList&lt;'a&gt; -&gt; CatenableList&lt;'a&gt;
+    member Cons : x:'a -&gt; CatenableList&lt;'a&gt;
+    override Equals : q2:obj -&gt; bool
+    override GetHashCode : unit -&gt; int
+    member private Link : s:Lazy&lt;CatenableList&lt;'a&gt;&gt; -&gt; CatenableList&lt;'a&gt;
+    static member
+      private LinkAll : q:IQueue&lt;Lazy&lt;CatenableList&lt;'a&gt;&gt;&gt; -&gt; CatenableList&lt;'a&gt;
+    member TryPop : unit -&gt; ('a * CatenableList&lt;'a&gt;) option
+    member IsEmpty : bool
+    member private T : ('a * IQueue&lt;Lazy&lt;CatenableList&lt;'a&gt;&gt;&gt;) option
+  end</PRE>
+      <P>This follows a similar approach to encapsulation as before except that 
+      the class itself cannot be private in this case because it is exposed 
+      directly in the interface (as opposed to adhering to a public interface as 
+                   <CODE>RealTimeQueue</CODE> did with the              
+      <CODE>IQueue</CODE> interface). Thus we opt to keep the              
+      <CODE>CatenableList</CODE> class public but make its only constructor      
+              <CODE>internal</CODE> (requiring the use of an explicit            
+        <CODE>new</CODE> constructor definition) and then expose the 
+      construction of an empty catenable list only via .           </P>
+      <P>The idiomatic ML API for a catenable list built upon a real-time queue 
+      may then be implemented as a module:</P>
+<PRE>&gt; module CatenableList =
+    let empty&lt;'a&gt; =
+      CatenableList(RealTimeQueue.empty&lt;'a CatenableList Lazy&gt;, None)
+    
+    let append (xs: CatenableList&lt;_&gt;) ys = xs.Append ys
+    
+    let cons h (t: CatenableList&lt;_&gt;) = t.Cons h;;
+module CatenableList = begin
+  val empty&lt;'a&gt; : CatenableList&lt;'a&gt;
+  val append : CatenableList&lt;'a&gt; -&gt; CatenableList&lt;'a&gt; -&gt; CatenableList&lt;'a&gt;
+  val cons : 'a -&gt; CatenableList&lt;'a&gt; -&gt; CatenableList&lt;'a&gt;
+end</PRE>
+      <P>Catenable lists are designed to provide fast concatenation so it is 
+      logical to end this article with a comparison of the performance of this 
+      operation between ordinary F# lists and catenable lists:</P>
+<PRE>&gt; let xs = [1..1000000];;
+val xs : int list
+&gt; xs @ xs;;
+Real: 00:00:00.192, CPU: 00:00:00.187, GC gen0: 3, gen1: 2, gen2: 0
+val it : int list
+= [1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12; 13; 14; 15; 16; 17; 18; 19; 20; 21;
+   22; 23; 24; 25; 26; 27; 28; 29; 30; 31; 32; 33; 34; 35; 36; 37; 38; 39; 40;
+   41; 42; 43; 44; 45; 46; 47; 48; 49; 50; 51; 52; 53; 54; 55; 56; 57; 58; 59;
+   60; 61; 62; 63; 64; 65; 66; 67; 68; 69; 70; 71; 72; 73; 74; 75; 76; 77; 78;
+   79; 80; 81; 82; 83; 84; 85; 86; 87; 88; 89; 90; 91; 92; 93; 94; 95; 96; 97;
+   98; 99; 100; ...]</PRE>
+<PRE>&gt; let of_seq (s: _ seq) =
+    Seq.fold (fun xs x -&gt; append xs (cons x empty)) empty s;;
+val of_seq : seq&lt;'a&gt; -&gt; CatenableList&lt;'a&gt;
+&gt; let s = seq {1..1000000};;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+&gt; let arr = [|1..1000000|];;
+val arr : int array
+&gt; let xs = of_seq arr;;
+val xs : CatenableList&lt;int&gt;
+Real: 00:00:08.394, CPU: 00:00:08.392, GC gen0: 43, gen1: 23, gen2: 3
+&gt; CatenableList.append xs ys;;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val it : CatenableList&lt;int&gt; = seq [1; 2; 3; 4; ...]</PRE>
+      <P>Note that the time taken to append two million-element lists is 0.192s 
+      whereas the time taken to append two catenable lists of the same lengths 
+      is immeasurably small (under 1ms). This has many obvious practical 
+      applications, not least that catenable lists are easily constructed by 
+      appending to the rear, as a simpler and more comprehensible alternative to 
+      the usual prepending to the front of an ordinary list in order to 
+      accumulate a result in reverse and then using              
+      <CODE>List.rev</CODE> to reverse the result at the end. Indeed, this 
+      technique was used in our              <CODE>of_seq</CODE> function for 
+      catenable lists.           </P>
+      <H2>Summary</H2>
+      <P>This article has described the use of laziness to design a real-time 
+      implementation of queues that allow operations to be performed in O(1) 
+      even when used persistently. This queue implementation was used to create 
+      a catenable list that supports concatenation in O(1).</P>
+      <P>Future F#.NET Journal articles will revisit the subject of purely 
+      functional data structures and their characteristics and design, as well 
+      as demonstrating how such data structures can be used to greatly simplify 
+      some common practical problems such as undo 
+buffers.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Purely%20functional%20data%20structures%20real-time%20queues%20and%20catenable%20lists_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

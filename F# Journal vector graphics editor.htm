@@ -1,0 +1,185 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0090)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/vectorgraphicseditor.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20vector%20graphics%20editor_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20vector%20graphics%20editor_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20vector%20graphics%20editor_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20vector%20graphics%20editor_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20vector%20graphics%20editor_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>A vector graphics editor</H1>
+      <P>The combination of asynchronous workflows and union types with pattern 
+      matching make F# a powerful tool for GUI programming. This article 
+      examines the design and implementation of a simple vector graphics editor 
+      written in F# built around the concept of passing messages from the user 
+      interface thread to a background worker implementing the application 
+      logic.</P>
+      <H2>Introduction</H2>
+      <P>The union types and pattern matching invented for the ML family have a 
+      wide range of practical applications beyond their intended remit of 
+      metaprogramming. This article looks at the use of union types and pattern 
+      matching in the construction of GUI programs.</P>
+      <P>A vector graphics editor is a simple GUI application that allows the 
+      user to construct contours by placing vertices using the mouse and then 
+      manipulate the contours either by dragging them whole or by dragging the 
+      individual vertices within them. This article develops a simple vector 
+      graphics editor using union types to represent the state of the editor and 
+      the user's interactions. An asynchronous agent called the "cortex" 
+      provides the application logic and is responsible for maintaining the 
+      current state and processing user interaction, prompting the UI thread to 
+      redraw when necessary. Windows Presentation Foundation is used for 
+      visualization.</P>
+      <H2>Implementation</H2>
+      <P>We begin by opening the <CODE>System.Windows</CODE> namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>Although WPF provides a 2D <CODE>Vector</CODE> type we shall define our 
+      own that supports structural equality and comparison:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Vector&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;x:&nbsp;float;&nbsp;y:&nbsp;float&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(+)&nbsp;(u:&nbsp;Vector,&nbsp;v:&nbsp;Vector)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;x&nbsp;=&nbsp;u.x&nbsp;+&nbsp;v.x;&nbsp;y&nbsp;=&nbsp;u.y&nbsp;+&nbsp;v.y&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(-)&nbsp;(u:&nbsp;Vector,&nbsp;v:&nbsp;Vector)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;x&nbsp;=&nbsp;u.x&nbsp;-&nbsp;v.x;&nbsp;y&nbsp;=&nbsp;u.y&nbsp;-&nbsp;v.y&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(*)&nbsp;(s:&nbsp;float,&nbsp;u:&nbsp;Vector)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;x&nbsp;=&nbsp;s&nbsp;*&nbsp;u.x;&nbsp;y&nbsp;=&nbsp;s&nbsp;*&nbsp;u.y&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;u.AsTranslation&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.TranslateTransform(u.x,&nbsp;u.y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;u.AsPoint&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Point(u.x,&nbsp;u.y);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Vector&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{x:&nbsp;float;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y:&nbsp;float;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;AsPoint&nbsp;:&nbsp;Point<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;AsTranslation&nbsp;:&nbsp;Media.TranslateTransform<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;+&nbsp;)&nbsp;:&nbsp;u:Vector&nbsp;*&nbsp;v:Vector&nbsp;-&gt;&nbsp;Vector<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;*&nbsp;)&nbsp;:&nbsp;s:float&nbsp;*&nbsp;u:Vector&nbsp;-&gt;&nbsp;Vector<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;-&nbsp;)&nbsp;:&nbsp;u:Vector&nbsp;*&nbsp;v:Vector&nbsp;-&gt;&nbsp;Vector<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>This allows us to place values of the <CODE>Vector</CODE> type and 
+      other F# types that use it in sorted collections such as 
+      <CODE>Set</CODE>.</P>
+      <P>Real vector graphics editors typically allow both straight-line and 
+      cubic Bezier curve line segments but, in the interests of simplicity, we 
+      shall represent a contour as a list of the vector positions of its 
+      vertices:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Contour&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;points:&nbsp;Vector&nbsp;list&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(+)&nbsp;(d:&nbsp;Vector,&nbsp;contour:&nbsp;Contour)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;points&nbsp;=&nbsp;List.map&nbsp;((+)&nbsp;d)&nbsp;contour.points&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(@@)&nbsp;(point:&nbsp;Vector,&nbsp;contour:&nbsp;Contour)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;points&nbsp;=&nbsp;point::contour.points&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;mapi&nbsp;f&nbsp;contour&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;points&nbsp;=&nbsp;List.mapi&nbsp;f&nbsp;contour.points&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Contour&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{points:&nbsp;Vector&nbsp;list;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mapi&nbsp;:&nbsp;f:(int&nbsp;-&gt;&nbsp;Vector&nbsp;-&gt;&nbsp;Vector)&nbsp;-&gt;&nbsp;contour:Contour&nbsp;-&gt;&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;+&nbsp;)&nbsp;:&nbsp;d:Vector&nbsp;*&nbsp;contour:Contour&nbsp;-&gt;&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;@@&nbsp;)&nbsp;:&nbsp;point:Vector&nbsp;*&nbsp;contour:Contour&nbsp;-&gt;&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The state of the application incorporates the state of the editor (e.g. 
+      what is selected) and the set of contours on the canvas. The state of the 
+      editor is represented by a value of the following union type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;EditState&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Editing&nbsp;of&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CreatingContour&nbsp;of&nbsp;Vector&nbsp;*&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingContour&nbsp;of&nbsp;Vector&nbsp;*&nbsp;Vector&nbsp;*&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingHandle&nbsp;of&nbsp;Vector&nbsp;*&nbsp;Vector&nbsp;*&nbsp;Contour&nbsp;*&nbsp;int;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;EditState&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Editing&nbsp;of&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CreatingContour&nbsp;of&nbsp;Vector&nbsp;*&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingContour&nbsp;of&nbsp;Vector&nbsp;*&nbsp;Vector&nbsp;*&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingHandle&nbsp;of&nbsp;Vector&nbsp;*&nbsp;Vector&nbsp;*&nbsp;Contour&nbsp;*&nbsp;int</CODE></P>
+      <P>The <CODE>Off</CODE> state represents an editor with nothing selected. 
+      The <CODE>Editing</CODE> state represents a single contour having been 
+      selected such that its constituent vertices are displayed with handles 
+      that can be dragged. The <CODE>CreatingContour</CODE> state represents 
+      adding new vertices to the end of an existing contour. The 
+      <CODE>DraggingContour</CODE> state represents a whole contour being 
+      dragged and contains the initial and current mouse positions in order to 
+      convey how far the contour has been translated. The 
+      <CODE>DraggingHandle</CODE> state represents an individual vertex handle 
+      being dragged and, again, conveys the initial and current mouse positions 
+      as well as the index of the vertex within the contour.</P>
+      <P>The application state may then be represented by an 
+      <CODE>EditState</CODE> and set of contours:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;State&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Contours:&nbsp;Set&lt;Contour&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EditState:&nbsp;EditState<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;State&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{Contours:&nbsp;Set&lt;Contour&gt;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EditState:&nbsp;EditState;}</CODE></P>
+      <P>The mouse click events are used to send messages to the cortex 
+      conveying information about the kind of click and what was clicked on. The 
+      following <CODE>Surface</CODE> type is used to convey whether a mouse 
+      click occurred on the canvas, on one of the contours or on a handle within 
+      the selected contour:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Surface&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OnCanvas<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OnContour&nbsp;of&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OnHandle&nbsp;of&nbsp;int;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Surface&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OnCanvas<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OnContour&nbsp;of&nbsp;Contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OnHandle&nbsp;of&nbsp;int</CODE></P>
+      <P>The <CODE>Button</CODE> and <CODE>Direction</CODE> union types in the 
+      following <CODE>Mouse</CODE> module are used to convey which mouse button 
+      had a state change and whether the button went up or down:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Mouse&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Button&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Left<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Right<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Direction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Down<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Up;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Mouse&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Button&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Left<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Right<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Direction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Down<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Up<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Each user interaction sent from the GUI to the cortex is conveyed by a 
+      value of the type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Interaction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MouseButton&nbsp;of&nbsp;Mouse.Button&nbsp;*&nbsp;Mouse.Direction&nbsp;*&nbsp;Surface&nbsp;*&nbsp;Vector<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MouseMove&nbsp;of&nbsp;Vector<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DeleteKey;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Interaction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MouseButton&nbsp;of&nbsp;Mouse.Button&nbsp;*&nbsp;Mouse.Direction&nbsp;*&nbsp;Surface&nbsp;*&nbsp;Vector<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MouseMove&nbsp;of&nbsp;Vector<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DeleteKey</CODE></P>
+      <P>Changes to mouse button states are conveyed with 
+      <CODE>MouseButton</CODE>. Mouse movements are conveyed with 
+      <CODE>MouseMove</CODE>. Pressing the delete key is conveyed by 
+      <CODE>DeleteKey</CODE>.</P>
+      <P>The following <CODE>handle</CODE> function creates a small red circular 
+      WPF <CODE>Shape</CODE> used to represent a handle for visualizing and 
+      manipulating vertex:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;handle&nbsp;(p:&nbsp;Vector)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;size&nbsp;=&nbsp;{&nbsp;x&nbsp;=&nbsp;4.0;&nbsp;y&nbsp;=&nbsp;4.0&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;shape&nbsp;=&nbsp;Shapes.Ellipse(Width=size.x,&nbsp;Height=size.y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.RenderTransform&nbsp;&lt;-&nbsp;(p&nbsp;-&nbsp;size).AsTranslation<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.Fill&nbsp;&lt;-&nbsp;Media.Brushes.Red<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape&nbsp;:&gt;&nbsp;Shapes.Shape;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;handle&nbsp;:&nbsp;Vector&nbsp;-&gt;&nbsp;Shapes.Shape</CODE></P>
+      <P>The following <CODE>shapeOfContour</CODE> function draws one of our 
+      contours as a thick black WPF <CODE>Polyline</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;shapeOfContour&nbsp;contour&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;shape&nbsp;=&nbsp;Shapes.Polyline()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.Stroke&nbsp;&lt;-&nbsp;Media.Brushes.Black<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.StrokeThickness&nbsp;&lt;-&nbsp;3.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;vertex&nbsp;in&nbsp;contour.points&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.Points.Add&nbsp;vertex.AsPoint<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape&nbsp;:&gt;&nbsp;Shapes.Shape;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;shapeOfContour&nbsp;:&nbsp;Contour&nbsp;-&gt;&nbsp;Shapes.Shape</CODE></P>
+      <P>The <CODE>shapesOfState</CODE> function draws all of the contours in 
+      the current applicatiopn state including any being edited:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;shapesOfState&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;withHandles&nbsp;contour&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;yield&nbsp;shapeOfContour&nbsp;contour,&nbsp;OnContour&nbsp;contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;Seq.mapi&nbsp;(fun&nbsp;i&nbsp;point&nbsp;-&gt;&nbsp;handle&nbsp;point,&nbsp;OnHandle&nbsp;i)&nbsp;contour.points&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;points&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state.EditState&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off&nbsp;-&gt;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Editing&nbsp;contour&nbsp;-&gt;&nbsp;contour.points<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CreatingContour(point,&nbsp;contour)&nbsp;-&gt;&nbsp;point::contour.points<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingContour(from,&nbsp;at,&nbsp;contour)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[for&nbsp;point&nbsp;in&nbsp;contour.points&nbsp;-&gt;&nbsp;point&nbsp;-&nbsp;from&nbsp;+&nbsp;at]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingHandle(from,&nbsp;at,&nbsp;contour,&nbsp;i)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;move&nbsp;j&nbsp;point&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i=j&nbsp;then&nbsp;point&nbsp;+&nbsp;at&nbsp;-&nbsp;from&nbsp;else&nbsp;point<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List.mapi&nbsp;move&nbsp;contour.points<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;for&nbsp;contour&nbsp;in&nbsp;state.Contours&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;shapeOfContour&nbsp;contour,&nbsp;OnContour&nbsp;contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;withHandles&nbsp;{&nbsp;points&nbsp;=&nbsp;points&nbsp;}&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;shapesOfState&nbsp;:&nbsp;State&nbsp;-&gt;&nbsp;seq&lt;Shapes.Shape&nbsp;*&nbsp;Surface&gt;</CODE></P>
+      <P>The nested <CODE>withHandles</CODE> function draws a contour as a thick 
+      line followed by handles at each vertex coordinate. The 
+      <CODE>points</CODE> value is a list of vertices created from the current 
+      representation of the contour being edited (if any). The sequence 
+      expression then enumerates each contour on the canvas followed by the 
+      contours currently being edited (if any).</P>
+      <P>Note that this function returns pairs containing the WPF 
+      <CODE>Shape</CODE> and the <CODE>Surface</CODE> ready for the caller to 
+      register the necessary callbacks.</P>
+      <P>The following <CODE>draw</CODE> function clears the canvas before 
+      redrawing the shapes on it and using the given <CODE>mouse</CODE> function 
+      to register callbacks for mouse click events on the surface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;draw&nbsp;(canvas:&nbsp;Controls.Canvas)&nbsp;mouse&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Children.Clear()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shape,&nbsp;surface&nbsp;in&nbsp;shapesOfState&nbsp;state&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mouse&nbsp;surface&nbsp;shape<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Children.Add&nbsp;shape&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;draw&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Canvas&nbsp;-&gt;&nbsp;(Surface&nbsp;-&gt;&nbsp;Shapes.Shape&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;State&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Note how the use of a higher-order <CODE>draw</CODE> function elegantly 
+      side steps the problem of defining the <CODE>mouse</CODE> function before 
+      the <CODE>draw</CODE> function.</P>
+      <P>The following <CODE>mouseEvent</CODE> function creates a 
+      <CODE>MouseButton</CODE> message using the mouse position extracted from 
+      the event arguments and posts it using the given <CODE>post</CODE> 
+      function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mouseEvent&nbsp;post&nbsp;canvas&nbsp;button&nbsp;direction&nbsp;surface&nbsp;(e:&nbsp;Input.MouseButtonEventArgs)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p&nbsp;=&nbsp;e.GetPosition&nbsp;canvas<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MouseButton(button,&nbsp;direction,&nbsp;surface,&nbsp;{x=p.X;&nbsp;y=p.Y})<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;post;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mouseEvent&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Interaction&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IInputElement&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Mouse.Button&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Mouse.Direction&nbsp;-&gt;&nbsp;Surface&nbsp;-&gt;&nbsp;Input.MouseButtonEventArgs&nbsp;-&gt;&nbsp;'a</CODE></P>
+      <P>The following <CODE>mouse</CODE> function registers callbacks for the 
+      four mouse button state changes of interest:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mouse&nbsp;post&nbsp;canvas&nbsp;surface&nbsp;(control:&nbsp;UIElement)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.MouseLeftButtonDown.Add(mouseEvent&nbsp;post&nbsp;canvas&nbsp;Mouse.Left&nbsp;Mouse.Down&nbsp;surface)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.MouseLeftButtonUp.Add(mouseEvent&nbsp;post&nbsp;canvas&nbsp;Mouse.Left&nbsp;Mouse.Up&nbsp;surface)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.MouseRightButtonDown.Add(mouseEvent&nbsp;post&nbsp;canvas&nbsp;Mouse.Right&nbsp;Mouse.Down&nbsp;surface)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.MouseRightButtonUp.Add(mouseEvent&nbsp;post&nbsp;canvas&nbsp;Mouse.Right&nbsp;Mouse.Up&nbsp;surface);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mouse&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Interaction&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;IInputElement&nbsp;-&gt;&nbsp;Surface&nbsp;-&gt;&nbsp;UIElement&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The following <CODE>postTo</CODE> function is used to execute the 
+      application of the given function <CODE>f</CODE> to the given argument 
+      <CODE>x</CODE> on the UI thread:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;postTo&nbsp;(dispatcher:&nbsp;Threading.Dispatcher)&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;_)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;_&nbsp;=&nbsp;fun&nbsp;f&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dispatcher.BeginInvoke(new&nbsp;System.Action&lt;_&gt;(f),&nbsp;[|box&nbsp;x|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;postTo&nbsp;:&nbsp;Threading.Dispatcher&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The following <CODE>execute</CODE> function is the core of the whole 
+      application and is responsible for changing the application's state when a 
+      new user interaction is received:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;execute&nbsp;state&nbsp;interaction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state.EditState,&nbsp;interaction&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off,&nbsp;MouseButton(Mouse.Left,&nbsp;Mouse.Down,&nbsp;OnCanvas,&nbsp;point)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;EditState&nbsp;=&nbsp;CreatingContour(point,&nbsp;{&nbsp;points&nbsp;=&nbsp;[point]&nbsp;})&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Editing&nbsp;oldContour,&nbsp;MouseButton(Mouse.Left,&nbsp;Mouse.Down,&nbsp;OnContour&nbsp;newContour,&nbsp;point)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Contours&nbsp;=&nbsp;Set.add&nbsp;oldContour&nbsp;state.Contours&nbsp;|&gt;&nbsp;Set.remove&nbsp;newContour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EditState&nbsp;=&nbsp;Editing&nbsp;newContour&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Editing&nbsp;contour,&nbsp;MouseButton(Mouse.Left,&nbsp;Mouse.Down,&nbsp;OnCanvas,&nbsp;point)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Contours&nbsp;=&nbsp;Set.add&nbsp;contour&nbsp;state.Contours<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EditState&nbsp;=&nbsp;Off&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off,&nbsp;MouseButton(Mouse.Left,&nbsp;Mouse.Down,&nbsp;OnContour&nbsp;contour,&nbsp;point)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Contours&nbsp;=&nbsp;Set.remove&nbsp;contour&nbsp;state.Contours<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EditState&nbsp;=&nbsp;DraggingContour(point,&nbsp;point,&nbsp;contour)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Editing&nbsp;contour,&nbsp;MouseButton(Mouse.Left,&nbsp;Mouse.Down,&nbsp;OnHandle&nbsp;i,&nbsp;point)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Contours&nbsp;=&nbsp;Set.remove&nbsp;contour&nbsp;state.Contours<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EditState&nbsp;=&nbsp;DraggingHandle(point,&nbsp;point,&nbsp;contour,&nbsp;i)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Editing&nbsp;contour,&nbsp;DeleteKey&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;EditState&nbsp;=&nbsp;Off&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CreatingContour(oldPoint,&nbsp;contour),&nbsp;MouseMove&nbsp;point&nbsp;when&nbsp;point&nbsp;&lt;&gt;&nbsp;oldPoint&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;EditState&nbsp;=&nbsp;CreatingContour(point,&nbsp;contour)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CreatingContour(_,&nbsp;contour),&nbsp;MouseButton(Mouse.Left,&nbsp;Mouse.Down,&nbsp;OnCanvas,&nbsp;point)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;EditState&nbsp;=&nbsp;CreatingContour(point,&nbsp;point&nbsp;@@&nbsp;contour)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CreatingContour(_,&nbsp;contour),&nbsp;MouseButton(Mouse.Right,&nbsp;Mouse.Down,&nbsp;_,&nbsp;_)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;EditState&nbsp;=&nbsp;Editing&nbsp;contour&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingContour(from,&nbsp;wasAt,&nbsp;contour),&nbsp;MouseMove&nbsp;nowAt&nbsp;when&nbsp;nowAt&nbsp;&lt;&gt;&nbsp;wasAt&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;EditState&nbsp;=&nbsp;DraggingContour(from,&nbsp;nowAt,&nbsp;contour)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingContour(from,&nbsp;_,&nbsp;contour),&nbsp;MouseButton(Mouse.Left,&nbsp;Mouse.Up,&nbsp;_,&nbsp;point)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;EditState&nbsp;=&nbsp;Editing(point&nbsp;-&nbsp;from&nbsp;+&nbsp;contour)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingHandle(from,&nbsp;wasAt,&nbsp;contour,&nbsp;i),&nbsp;MouseMove&nbsp;nowAt&nbsp;when&nbsp;nowAt&nbsp;&lt;&gt;&nbsp;wasAt&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;EditState&nbsp;=&nbsp;DraggingHandle(from,&nbsp;nowAt,&nbsp;contour,&nbsp;i)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DraggingHandle(from,&nbsp;_,&nbsp;contour,&nbsp;i),&nbsp;MouseButton(Mouse.Left,&nbsp;Mouse.Up,&nbsp;_,&nbsp;at)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;move&nbsp;j&nbsp;point&nbsp;=&nbsp;if&nbsp;i=j&nbsp;then&nbsp;point&nbsp;-&nbsp;from&nbsp;+&nbsp;at&nbsp;else&nbsp;point<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;contour&nbsp;=&nbsp;Contour.mapi&nbsp;move&nbsp;contour<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Contours&nbsp;=&nbsp;Set.add&nbsp;contour&nbsp;state.Contours<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EditState&nbsp;=&nbsp;Editing&nbsp;contour&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;state;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;execute&nbsp;:&nbsp;State&nbsp;-&gt;&nbsp;Interaction&nbsp;-&gt;&nbsp;State</CODE></P>
+      <P>Each match case corresponds to a state change. The first match case 
+      starts creating a new contour when nothing is being edited and the user 
+      clicks anywhere on the canvas. The next match case changes the selection 
+      if the user clicks on one contour whilst editing another. The third stops 
+      editing a contour if the user clicks on the canvas. The fourth starts 
+      dragging an existing contour if it is clicked on when nothing is selected. 
+      And so on.</P>
+      <P>Note how the use of a state machine implemented using union types and 
+      pattern matching makes this logic as elegant as possible. One can imagine 
+      arbitrarily-complicated extensions to this being implemented in order to 
+      produce a production-quality solution.</P>
+      <P>The following <CODE>cortex</CODE> function creates an asynchronous 
+      agent that processes user interactions using the <CODE>execute</CODE> 
+      function and posts the draw function to the UI thread to redraw the 
+      current state if it has changed:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;cortex&nbsp;(canvas:&nbsp;Controls.Canvas)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;oldState&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;interaction&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;newState&nbsp;=&nbsp;execute&nbsp;oldState&nbsp;interaction<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;newState&nbsp;&lt;&gt;&nbsp;oldState&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;draw&nbsp;=&nbsp;draw&nbsp;canvas&nbsp;(mouse&nbsp;inbox.Post&nbsp;canvas)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;postTo&nbsp;canvas.Dispatcher&nbsp;draw&nbsp;newState<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;newState<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;{&nbsp;Contours&nbsp;=&nbsp;Set.empty;&nbsp;EditState&nbsp;=&nbsp;Off&nbsp;});;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;cortex&nbsp;:&nbsp;Controls.Canvas&nbsp;-&gt;&nbsp;MailboxProcessor&lt;Interaction&gt;</CODE></P>
+      <P>Finally, the main program creates a <CODE>Canvas</CODE> (with a white 
+      background so we get mouse movements over it), a <CODE>Window</CODE>, a 
+      <CODE>cortex</CODE>, adds event handlers and starts the application:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;canvas&nbsp;=&nbsp;Controls.Canvas()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Background&nbsp;&lt;-&nbsp;Media.Brushes.White<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;window&nbsp;=&nbsp;Window(Content=canvas,&nbsp;Title="Vector&nbsp;Graphics&nbsp;Editor")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cortex&nbsp;=&nbsp;cortex&nbsp;canvas<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mouse&nbsp;cortex.Post&nbsp;canvas&nbsp;OnCanvas&nbsp;window<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.MouseMove.Add(fun&nbsp;e&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p&nbsp;=&nbsp;e.GetPosition&nbsp;canvas<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MouseMove&nbsp;{x=p.X;&nbsp;y=p.Y}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;cortex.Post)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.KeyDown.Add(fun&nbsp;e&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;e.Key&nbsp;=&nbsp;Input.Key.Delete&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cortex.Post&nbsp;DeleteKey)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.SizeChanged.Add(fun&nbsp;e&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Width&nbsp;&lt;-&nbsp;e.NewSize.Width<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Height&nbsp;&lt;-&nbsp;e.NewSize.Height)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(window)&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <H2>Summary</H2>
+      <P>This article has shown how union types and pattern matching are 
+      powerful language features for the implementation of state machines 
+      including user interface logic. Decomposing a GUI application into UI and 
+      worker agents communicating via message passing is a powerful abstraction 
+      for GUI programming that is ideally suited to F#.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of GUI 
+      progamming and state machines.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2011</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20vector%20graphics%20editor_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

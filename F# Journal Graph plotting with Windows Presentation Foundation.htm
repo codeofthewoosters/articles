@@ -1,0 +1,577 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/wpf_graph.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Graph plotting with Windows Presentation 
+Foundation</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Graph plotting with Windows Presentation 
+Foundation</TITLE>     <LINK href="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Graph plotting with Windows Presentation Foundation</H1>
+      <P>The advent of the .NET Framework 3.0 brings an exciting new technology 
+      to the Windows platform for the first time: hardware-accelerated vector 
+      graphics as part of Windows Presentation Foundation. This part of 
+      Microsoft's standard library allows programmers to define 
+      resolution-independent vector graphics in the form of arbitrary paths and 
+      shapes and visualize them in an interactive GUI. This article describes 
+      how these features can be used in F# programs and builds a simple graph 
+      plotter as an example.</P>
+      <H2>Introducing Windows Presentation Foundation</H2>
+      <P>Windows Presentation Foundation (WPF) is a key component of the .NET 
+      Framework 3.0, providing richer and more compelling applications including 
+      traditional graphical user interfaces alongside 2D and 3D graphics, 
+      multimedia, animation, dynamic sketching, rich documents, speech 
+      recognition and many more features.</P>
+      <P>However, the vast majority of tutorial information currently available 
+      about WPF has two major shortcomings in the context of F#:</P>
+      <P>
+      <UL>
+        <LI>Assumes static content, aimed at the layout of graphical user 
+        interfaces for ordinary Windows applications, when F# users will often 
+        be interested in creating sophisticated dynamic content computed 
+        on-the-fly by F# programs.</LI>
+        <LI>Assumes the creation of standalone applications with no use of 
+        threading when F# users will more often be interested in multithreaded 
+        WPF-based GUI applications spawned from and running concurrently with F# 
+        interactive sessions.</LI></UL>
+      <P></P>
+      <P>This and future F#.NET Journal articles will address these issues by 
+      describing how WPF can be used from F# programmatically and 
+      concurrently.</P>
+      <H2>Static content for Windows Presentation Foundation</H2>
+      <P>Perhaps the single most valued aspect of WPF is the creation of 
+      next-generation GUIs for Windows Vista and beyond, such as the layout of 
+      controls for the following example rich-UI application:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/wpf_example.jpg"> 
+                  </P>
+      <P></P>
+      <P>The static content defining the layout of such a user interface is 
+      typically written and stored in Extensible Application Markup Language 
+      (XAML) files, an XML-based format designed specifically for WPF.</P>
+      <P>However, many important user interfaces require the use of arbitrary 
+      computation, either because the layout of the interface is significantly 
+      more complicated (e.g. visualizations of 3D MRI scans) or because the 
+      content is inherently functional. A graph plotter is a simple example of 
+      such an interface because the graph axes and contents require some 
+      computation. These applications are best written in a conventional 
+      programming language using WPF's programmatic API.</P>
+      <H2>Threading in Windows Presentation Foundation</H2>
+      <P>In the context of threading, the MSDN documentation for WPF says:</P>
+      <P>
+      <P style="font-style: italic; margin-right: 5%; margin-left: 5%;">"Windows 
+      Presentation Foundation (WPF) is designed to save developers from the 
+      difficulties of threading. As a result, the majority of WPF developers 
+      won't have to write an interface that uses more than one thread. Because 
+      multithreaded programs are complex and difficult to debug, they should be 
+      avoided when single-threaded solutions exist." -                <A href="http://msdn2.microsoft.com/en-us/library/ms741870.aspx">http://msdn2.microsoft.com/en-us/library/ms741870.aspx</A> 
+                  </P>
+      <P></P>
+      <P>In other words, WPF is designed to make it easy for C# programmers to 
+      write GUI applications with a minimal use of threads. This is an admirable 
+      goal but is in direct conflict with elegant use of WPF from an F# 
+      interactive session because such applications must be run concurrently or 
+      they will block the F# interactive session. This would make the session 
+      unusable until the GUI application completes which is, of course, not 
+      acceptable.</P>
+      <P>In fact, a consequence of evading threading issues in WPF is a lack of 
+      documentation and advice surrounding the use of threaded WPF applications, 
+      particularly those designed to run concurrently as a background task (e.g. 
+      spawned from a main F# interactive session). Consequently, it is 
+      absolutely essential to pay the utmost attention to threading issues when 
+      writing F# programs that are designed to be run from F# interactive 
+      sessions. This article endeavours to describe the many potential pitfalls 
+      that await F# programmers using WPF!</P>
+      <H2>Using Windows Presentation Foundation in F# programs</H2>
+      <P>Setting up an F# program to use Windows Presentation Foundation could 
+      not be easier. You simply provide the appropriate include path to the DLLs 
+      and reference the relevant DLLs themselves:</P>
+<PRE>&gt; #light;;
+&gt; #I @"C:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0";;
+&gt; #r @"WindowsBase.dll";;
+&gt; #r @"PresentationCore.dll";;
+&gt; #r @"PresentationFramework.dll";;</PRE>
+      <P>Windows Presentation Foundation augments the              
+      <CODE>System.Windows</CODE> namespace with a hierarchy of new namespaces 
+      and definitions. This example program uses definitions from the following 
+      namespaces:           </P>
+<PRE>&gt; open System;;
+&gt; open System.Windows;;
+&gt; open System.Windows.Media;;</PRE>
+      <P>The remainder of this article describes the construction of windows 
+      that view vector graphics content, the generation of vector graphics 
+      content and, finally, the design of concurrent WPF applications that work 
+      reliably both as standalone compiled applications and when spawned from F# 
+      interactive sessions.</P>
+      <H2>Windows, Visuals, Drawings and DrawingVisuals</H2>
+      <P>The              <CODE>System.Windows.Form</CODE> class from Windows 
+      Forms is now superceded by the              
+      <CODE>System.Windows.Window</CODE> class for Windows Presentation 
+      Foundation.           </P>
+      <P>The new              <CODE>System.Windows.Media.Visual</CODE> class 
+      encapsulates the low-level infrastructure required to draw into a window. 
+      The derived class              
+      <CODE>System.Windows.Media.DrawingVisual</CODE> can be used to render 
+      vector graphics.           </P>
+      <P>A class derived from the              <CODE>Window</CODE> may be used 
+      to render a              <CODE>DrawingVisual</CODE> by adding the visual 
+      as both a visual and logical child to itself using its              
+      <CODE>AddVisualChild</CODE> and              <CODE>AddLogicalChild</CODE> 
+      members, respectively, and overriding the              
+      <CODE>VisualChildrenCount</CODE> property and              
+      <CODE>GetVisualChild</CODE> member to return one and the value of the 
+      visual, respectively. The following derived class              
+      <CODE>VisualWindow</CODE> does exactly this:           </P>
+<PRE>&gt; type VisualWindow(visual) as this =
+    inherit Window(Title="Graph plotter", Width=600., Height=650.)
+    
+    do
+      this.ResizeMode &lt;- ResizeMode.NoResize
+      this.AddVisualChild visual
+      this.AddLogicalChild visual
+      this.KeyDown.Add(fun e -&gt; if e.Key = Input.Key.Escape then this.Close())
+    
+    override w.VisualChildrenCount = 1
+    
+    override w.GetVisualChild(i) =
+      if i=0 then visual else raise Not_found;;
+type VisualWindow = class
+                      inherit Window
+                    end
+                    with
+                      new : visual:Visual -&gt; VisualWindow
+                    end</PRE>
+      <P>This definition of the              <CODE>VisualWindow</CODE> class has 
+      some interesting properties:           </P>
+      <P>
+      <UL>
+        <LI>This class uses an implicit constructor, taking the                  
+        <CODE>visual</CODE> value of the abstract base class                  
+        <CODE>Visual</CODE> .               </LI>
+        <LI>The first line of this class definition names the new object         
+                 <CODE>this</CODE> when it is constructed, in order to provide 
+        access to its own properties and members within the body of its 
+        definition.               </LI>
+        <LI>The base class                  <CODE>Window</CODE> that our         
+                 <CODE>VisualWindow</CODE> derives from is constructed in the 
+        second line, including setting the window title and size using the       
+                   <CODE>Title</CODE> ,                  <CODE>Width</CODE> and  
+                        <CODE>Height</CODE> properties. Note that WPF uses 
+        floating point size measurements because it can handle 
+        resolution-independent graphics.               </LI>
+        <LI>The initialization calls are made inside a                  
+        <CODE>do</CODE> block, including adding a new callback for the           
+               <CODE>KeyDown</CODE> event that closes the window if the escape 
+        key is pressed.               </LI></UL>
+      <P></P>
+      <P>This class can now be used to create windows that visualize vector 
+      graphics.</P>
+      <H2>Drawing text</H2>
+      <P>As a powerful and culture-agnostic library, WPF allows a variety of 
+      different writing styles to be used for text. This even includes the 
+      ability to render text from scripts that are drawn from right to left. To 
+      create a simple vector graphic representing an English              
+      <CODE>string</CODE> (such as a number in the case of our graph plotter), 
+      it is useful to have a function that fills in suitable defaults. The 
+      following              <CODE>text</CODE> function does exactly this:       
+          </P>
+<PRE>  let text string =
+    FormattedText(string,
+		  System.Globalization.CultureInfo.GetCultureInfo("en-us"),
+		  FlowDirection.LeftToRight,
+		  Typeface("Verdana"),
+		  15.,
+		  Brushes.White);;
+val text : string -&gt; FormattedText</PRE>
+      <P>Note how the              <CODE>new</CODE> keyword is not required when 
+      constructing an object of the              <CODE>FormattedText</CODE> 
+      class. In fact, the              <CODE>new</CODE> keyword is only 
+      recommended in F# for classes that implement the              
+      <CODE>IDisposable</CODE> interface. In latter examples, this makes the 
+      code substantially more concise, e.g. when constructing many objects of 
+      the              <CODE>Point</CODE> class.           </P>
+      <H2>Building a PathGeometry</H2>
+      <P>The              <CODE>PathGeometry</CODE> class encapsulates a 
+      sequence of open or closed              <CODE>PathFigure</CODE> objects. 
+      In this case, each              <CODE>PathGeometry</CODE> will only 
+      contain a single              <CODE>PathFigure</CODE> and each             
+       <CODE>PathFigure</CODE> will only contain a sequence of straight-line 
+      segments (as opposed to elliptic arcs and cubic Bezier curves). So the 
+      following helper function              <CODE>line</CODE> can be used to 
+      construct a              <CODE>PathGeometry</CODE> for a line loop that 
+      may or may not be closed:           </P>
+<PRE>&gt; let line is_closed ((sx, sy), segs) =
+    let segs =
+      { for x, y in segs -&gt;
+	  LineSegment(Point(x, y), true) :&gt; PathSegment }
+    PathGeometry([PathFigure(Point(sx, sy), segs, is_closed)]);;
+val line : bool -&gt; (float * float) * #seq&lt;float * float&gt; -&gt; PathGeometry</PRE>
+      <P>There are two main points of interest about the implementation of this 
+      function:</P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>segs</CODE> argument is superceded by a 
+        value that is created using a sequence comprehension. This make no 
+        assumptions about the                  <CODE>segs</CODE> argument and, 
+        consequently, F# infers the type of                  <CODE>segs</CODE> 
+        to be any sequence, i.e. any subset of the                  
+        <CODE>seq</CODE> type which is denoted                  
+        <CODE>#seq</CODE> .               </LI>
+        <LI>The                  <CODE>PathFigure</CODE> constructor requires 
+        the start coordinate to be specified independently from the rest of the 
+        path and, consequently, the path must contain at least one point. The 
+        type                  <CODE>'a * 'a seq</CODE> is used to represent a 
+        sequence with at least one element. This is an excellent way to leverage 
+        static type checking to ensure that a sufficient number of values are 
+        passed to a function and have the compiler automatically verify this 
+        rather than having to resort to run-time tests.               </LI></UL>
+      <P></P>
+      <H2>Linear interpolation</H2>
+      <P>The following helper function is a numerically robust alternative to 
+      the old floating point range comprehension provided by F#:</P>
+<PRE>&gt; let interp n x0 x1 =
+    { for i in 0 .. n-1 -&gt;
+        x0 + float i / float(n-1) * (x1 - x0) };;
+val interp : int -&gt; float -&gt; float -&gt; seq&lt;float&gt;</PRE>
+      <P>This function is useful in many different circumstances and will be 
+      used to interpolate the              <I>x</I> coordinates across the graph 
+      in this case. The F# standard library will doubtless provide its own 
+      implementation in the future.           </P>
+      <H2>Labelling axes</H2>
+      <P>One of the hidden complexities in a graph plotter is the mathematical 
+      description of how the ticks on each axis can be laid out esthetically. 
+      For most graphs and charts, this is typically done by rounding the spacing 
+      of ticks to the nearest integer multiple of 1, 2 or 5 times the nearest 
+      power of 10 and spacing ticks out from the origin.</P>
+      <P>The following function does precisely this by rounding the              
+      <CODE>optimal</CODE> number to one of the nearest              
+      <CODE>multiples</CODE> of a power of the              <CODE>base</CODE> 
+      number:           </P>
+<PRE>&gt; let closest multiples base optimal =
+    let multiplier = base ** floor(log optimal / log base)
+    let mutable min_d = base * base * multiplier
+    let mutable closest = 0.0
+    let mutable min_n = base * base
+  
+    for multiple in multiples do
+      let difference = abs(optimal - multiple * multiplier)
+      if difference &lt; min_d then
+	min_d &lt;- difference
+	closest &lt;- multiple * multiplier
+      if multiple &lt; min_n then min_n &lt;- multiple
+  
+    if abs(optimal - min_n * base * multiplier) &lt;  abs(optimal - closest) then
+      min_n * base * multiplier
+    else
+      closest;;
+val closest : #seq&lt;float&gt; -&gt; float -&gt; float -&gt; float</PRE>
+      <P>For the common case of decimal, we supply the multiples 1, 2 and 5 and 
+      the base 10:</P>
+<PRE>&gt; let closest10 = closest [1.; 2.; 5.] 10.;;
+val closest10 : (float -&gt; float)</PRE>
+      <P>Alternatives including base 12 for months of the year and multiples of 
+      pi for trigonometric functions.</P>
+      <P>This function is easily tested in the interactive session:</P>
+<PRE>&gt; List.map closest10 [0.123; 0.234; 0.456];
+val it : float list = [0.1; 0.2; 0.5]</PRE>
+      <P>The following function spreads roughly              <CODE>n</CODE> 
+      ticks uniformly within the range from              <CODE>x0</CODE> to      
+              <CODE>x1</CODE> at esthetic positions:           </P>
+<PRE>&gt; let ticks_of_range n x0 x1 =
+    let d = (x1 - x0) / float(n - 1) |&gt; closest10
+    let x0 = ceil(x0 / d) * d
+    let x1 = floor(x1 / d) * d
+    interp (int((x1 - x0) / d + 0.5) + 1) x0 x1;;
+val ticks_of_range : int -&gt; float -&gt; float -&gt; seq&lt;float&gt;</PRE>
+      <P>This              <CODE>ticks_of_range</CODE> function will be used to 
+      generate tick coordinates spread across both axes.           </P>
+      <H2>Drawing the axes and curve</H2>
+      <P>In WPF, the style used to stroke a path is encapsulated in the          
+          <CODE>Pen</CODE> class and the style used to fill the stroke 
+      (typically a flat color) can be obtained from the              
+      <CODE>Brushes</CODE> class.           </P>
+      <P>We now stumble upon the first major pitfall that awaits the F# 
+      programmer using WPF. A seasoned F# programmer would expect fills, strokes 
+      and even entire scene graphs to be represented by simple values and, 
+      consequently, be easy to use and, in particular, have no thread-related 
+      intricacies. However, the current WPF implementation silently ties each 
+      construction of the              <CODE>Pen</CODE> class to the thread that 
+      it was created on and crashes programs with errors at run-time if a        
+            <CODE>Pen</CODE> defined on one thread is accidentially referred to 
+      from another thread.           </P>
+      <P>Consequently, it is critically important that the construction of the 
+      WPF              <CODE>Pen</CODE> class is deferred so that objects of 
+      this class are only constructed as the scene graph is defined on the 
+      rendering thread. This is a very subtle difference in terms of the F# code 
+      required and is easily overlooked. More importantly, thread-related 
+      accidents often culminate in obscure and undocumented error messages that 
+      point to irrelevant code, such as the following:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/wpf_thread_error.gif"> 
+                  </P>
+      <P></P>
+      <P>This error message can be obtained by the seemingly innocuous 
+      definition of a              <CODE>Pen</CODE> (e.g. representing a white 
+      3-pixel wide stroke) on the main thread:           </P>
+<PRE>&gt; let my_pen = Pen(Brushes.White, 3.0)   // DANGER!!!;;
+val my_pen : Pen</PRE>
+      <P>and then trying to use this pen on a separate rendering thread spawned 
+      from an F# interactive session.</P>
+      <P>Note that these thread related issues are entirely incidental 
+      complexity created by the designers of WPF. There is no logical reason for 
+      values representing styles, such as objects of the              
+      <CODE>Pen</CODE> class, to be tied to a thread. Indeed, pushing such 
+      complexity into even the simplest constructs in a library stifles 
+      performance by preventing the user and compiler from performing many 
+      effective high-level optimizations such as automatically hoisting constant 
+      values and hash consing allocations.           </P>
+      <P>An idiomatic functional solution would use entirely immutable data 
+      structures to compose such values and the result would be trivially 
+      thread-safe as a consequence and, therefore, rendering-related threading 
+      issues really would be irrelevant for users. Like many graphical 
+      applications, this is actually an excellent example where the use of a 
+      functional style and, in particular, immutable data structures would make 
+      programs much more concise, efficient and reliable.</P>
+      <P>Consequently, we parameterize all drawing functions over all of the WPF 
+      values they use including objects of the              <CODE>Pen</CODE> 
+      class. The following functions draws a tick on the horizontal and vertical 
+      axes, respectively:           </P>
+<PRE>&gt; let delta = 3.;;
+val delta : float</PRE>
+<PRE>&gt; let htick pen (x, y) v (dc : DrawingContext) =
+    let text = sprintf "%.3g" v |&gt; text
+    dc.DrawGeometry(null, pen, line false ((x, y + delta), [x, y]))
+    dc.DrawText(text, Point(x - text.Width / 2.0, y + 3. * delta));;
+val htick : Pen -&gt; float * float -&gt; float -&gt; DrawingContext -&gt; unit</PRE>
+<PRE>&gt; let vtick pen (x, y) v (dc : DrawingContext) =
+    let text = sprintf "%.3g" v |&gt; text
+    dc.DrawGeometry(null, pen, line false ((x - delta, y), [x, y]))
+    dc.DrawText(text, Point(x - 3. * delta - text.Width, y - text.Height / 2.0));;
+val vtick : Pen -&gt; float * float -&gt; float -&gt; DrawingContext -&gt; unit</PRE>
+      <P>These are our first functions to use a WPF              
+      <CODE>DrawingContext</CODE> : a stateful object that captures 
+      immediate-mode rendering commands. In other words, you create a            
+        <CODE>DrawingContext</CODE> for a              <CODE>Visual</CODE> and 
+      call members such as              <CODE>DrawGeometry</CODE> and            
+        <CODE>DrawText</CODE> to dictate what should be drawn before using the   
+                 <CODE>Visual</CODE> for rendering, e.g. by passing it to our    
+                <CODE>VisualWindow</CODE> constructor defined above. This is the 
+      essence of WPF's programmatic interface for rendering.           </P>
+      <P>An idiomatic functional alternative would declaratively compose a 
+      single data structure representing the scene and pass this for rendering. 
+      An advantage of impure functional programming languages like F# is that 
+      the distinction between the heavily imperative immediate-mode rendering 
+      and the purely-functional declarative approach can be blurred by treating 
+      the functions that draw pieces of scene as values, declaratively composing 
+      such functions into a data structure that conveys the same information and 
+      combines the benefits of both styles. However, it is still essential to 
+      parameterize these functions over all WPF values to avoid the 
+      thread-related problems discussed earlier.</P>
+      <P>The following              <CODE>draw_axes</CODE> function draws two 
+      lines and all of the ticks on both the horizontal and vertical axes, again 
+      using the specified              <CODE>pen</CODE> line style:           
+      </P>
+<PRE>&gt; let draw_axes pen s x0 x1 y0 y1 (dc : DrawingContext) =
+    let x_axis = min (max 0. y0) y1
+    let y_axis = min (max 0. x0) x1
+    dc.DrawGeometry(null, pen, line false ((s x0 x_axis), [s x1 x_axis]))
+    dc.DrawGeometry(null, pen, line false ((s y_axis y0), [s y_axis y1]))
+    for x in ticks_of_range 5 x0 x1 do
+      htick pen (s x x_axis) x dc
+    for y in ticks_of_range 6 y0 y1 do
+      vtick pen (s y_axis y) y dc;;
+val draw_axes :
+  Pen -&gt; (float -&gt; float -&gt; float * float) -&gt; float -&gt; float -&gt; float -&gt; float -&gt;
+  DrawingContext -&gt; unit</PRE>
+      <P>The              <CODE>x_axis</CODE> and              
+      <CODE>y_axis</CODE> variables give the              <I>y</I> and           
+         <I>x</I> coordinates of the              <I>x</I> - and              
+      <I>y</I> -axes, respectively. If the axes lie off the graph then they are 
+      placed at the extremity of the graph.           </P>
+      <P>Two calls to              <CODE>DrawGeometry</CODE> are used to draw 
+      the two axes. The open              <CODE>PathGeometry</CODE> geometries 
+      of each line are created using the              <CODE>line</CODE> 
+      function. List literals allows the end points to be specified concisely in 
+      the source code.           </P>
+      <P>The              <CODE>htick</CODE> and              <CODE>vtick</CODE> 
+      functions are used to draw the ticks and labels on the axes.           
+</P>
+      <P>This              <CODE>draw_axes</CODE> function will produce a 
+      graphical result similar to the following:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/graph_axes.gif"> 
+                  </P>
+      <P></P>
+      <P>The following              <CODE>draw_curve</CODE> function draws a 
+      sequence of 255 lines along the curve of the function              
+      <CODE>y</CODE> that is being graphed:           </P>
+<PRE>&gt; let draw_curve pen s x0 x1 y (dc : DrawingContext) =
+    interp 256 x0 x1
+    |&gt; Seq.map (fun x -&gt; s x (y x))
+    |&gt; List.of_seq
+    |&gt; function
+	| [] -&gt; ()
+	| s::xys -&gt; dc.DrawGeometry(null, pen, line false (s, xys));;
+val draw_curve :
+  Pen -&gt; (float -&gt; 'a -&gt; float * float) -&gt; float -&gt; float -&gt; (float -&gt; 'a) -&gt;
+  DrawingContext -&gt; unit</PRE>
+      <P>This              <CODE>draw_curve</CODE> function will produce a 
+      graphical result similar to the following:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/graph_curve.gif"> 
+                  </P>
+      <P></P>
+      <P>Note that the curve as plotted by this              
+      <CODE>draw_curve</CODE> function extends beyond the bounds of the graph, 
+      which is not desired.           </P>
+      <H2>Creating pens safely</H2>
+      <P>The following function can be used to create objects of the             
+       <CODE>Pen</CODE> class that represent stroked lines with a width of 3 and 
+      rounded line joins and ends:           </P>
+<PRE>&gt; let pen brush =
+    let pen = Pen(brush, 3.)
+    pen.EndLineCap &lt;- PenLineCap.Round
+    pen.LineJoin &lt;- PenLineJoin.Round
+    pen;;
+val pen : #Brush -&gt; Pen</PRE>
+      <P>The              <CODE>brush</CODE> passed to this              
+      <CODE>pen</CODE> function describes the style used to fill the stroke, 
+      typically a flat color.           </P>
+      <P>Note that this              <CODE>pen</CODE> function is never called 
+      from the main thread: only from the rendering thread that is spawned later 
+      (by the              <CODE>plot</CODE> function).           </P>
+      <H2>Clipping</H2>
+      <P>The following higher-order              <CODE>clip</CODE> function 
+      pushes a clip region onto the              <CODE>DrawingContext</CODE> for 
+      the duration of the call to its function argument              
+      <CODE>f</CODE> :           </P>
+<PRE>&gt; let clip (dc : DrawingContext) region f =
+    dc.PushClip region
+    try f dc finally
+    dc.Pop();;
+val clip : DrawingContext -&gt; #Geometry -&gt; (DrawingContext -&gt; 'a) -&gt; 'a</PRE>
+      <P>This style of wrapping state changes in a higher-order function is 
+      often very useful. In this case, we have ensured that the              
+      <CODE>Pop</CODE> member will be invoked correctly.           </P>
+      <H2>Graph plotting function</H2>
+      <P>The following function opens a              <CODE>DrawingContext</CODE> 
+      for the given              <CODE>Visual</CODE> and uses it to draw the 
+      axes and curve of graph, clipping the curve to the bounds of the graph 
+      using the higher-order              <CODE>clip</CODE> function:           
+      </P>
+<PRE>&gt; let graph y x0 x1 y0 y1 (visual : DrawingVisual) =
+    use dc = visual.RenderOpen()
+    let s x y = 100. + (x - x0) / (x1 - x0) * 400., 500. - (y - y0) / (y1 - y0) * 400.
+    draw_axes (pen Brushes.White) s x0 x1 y0 y1 dc
+    draw_curve (pen Brushes.Red) s x0 x1 y
+    |&gt; clip dc (line true (s x0 y0, [s x1 y0; s x1 y1; s x0 y1]));;
+val graph :
+  (float -&gt; float) -&gt; float -&gt; float -&gt; float -&gt; float -&gt; DrawingVisual -&gt; unit</PRE>
+      <P>This function accepts a              <CODE>DrawingVisual</CODE> called  
+                  <CODE>visual</CODE> and calls its              
+      <CODE>RenderOpen</CODE> member to obtain a              
+      <CODE>DrawingContext</CODE> that is then used to capture calls to its      
+              <CODE>DrawGeometry</CODE> and              <CODE>DrawText</CODE> 
+      members made by the              <CODE>draw_axes</CODE> and              
+      <CODE>draw_curve</CODE> functions.           </P>
+      <P>Note the              <CODE>use</CODE> binding that exploits the        
+            <CODE>IDisposable</CODE> interface to automatically close the        
+            <CODE>DrawingVisual</CODE> at the end of its scope, i.e. at the end 
+      of this function.           </P>
+      <P>The nested              <CODE>s</CODE> function scales graph 
+      coordinates into window coordinates, placing the graph in the region (100, 
+      100) to (500, 500). Note that              <I>y</I> coordinates go 
+      downwards in WPF.           </P>
+      <H2>Interactive graph plotting</H2>
+      <P>The              <CODE>graph</CODE> function can already be used to 
+      fill a              <CODE>Visual</CODE> with a graph before feeding the    
+                <CODE>Visual</CODE> to the              
+      <CODE>VisualWindow</CODE> contructor to create a single-threaded 
+      visualization. However, spawning a graph from an interactive session 
+      without blocking the session which the GUI runs requires the WPF 
+      application to be spawned on a new thread.           </P>
+      <P>The following              <CODE>plot</CODE> function wraps this 
+      functionality, allowing graphs to be spawned interactively as well as from 
+      compiled programs:           </P>
+<PRE>&gt; open System.Threading;;
+&gt; open System.Windows.Threading;;</PRE>
+<PRE>&gt; let plot f x0 x1 y0 y1 =
+    let thread =
+      Thread(fun () -&gt;
+	let app = Application()
+	let visual = DrawingVisual()
+	graph f x0 x1 y0 y1 visual
+	VisualWindow(visual :&gt; Visual)
+	|&gt; app.Run
+	|&gt; ignore)
+    thread.SetApartmentState ApartmentState.STA
+    thread.Start();;
+val plot : (float -&gt; float) -&gt; float -&gt; float -&gt; float -&gt; float -&gt; unit</PRE>
+      <P>This function spawns a separate thread in single-threaded apartment 
+      state for the visualization. This new thread creates a new WPF application 
+      context              <CODE>app</CODE> and then creates a new              
+      <CODE>VisualWindow</CODE> in this application before calling the           
+         <CODE>Run</CODE> member of the application to run the GUI application 
+      until it is completes (i.e. until it is closed).           </P>
+      <H2>Example use</H2>
+      <P>This graph plotter is very easy to use from an F# interactive 
+      session:</P>
+<PRE>&gt; plot (fun x -&gt; x**3.0 - x - 1.0) -2. 2. -4. 3.;;</PRE>
+      <P>This spawns a concurrent visualization of the given cubic:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/graph_plotter.gif"> 
+                  </P>
+      <P></P>
+      <H2>Further reading</H2>
+      <P>For tutorial and reference material about Windows Presentation 
+      Foundation, including a thorough description of all of the topics covered 
+      here, we recommend the excellent book:</P>
+      <P>
+      <UL>
+        <LI>"Windows Presentation Foundation Unleashed" by Adam Nathan (SAMS, 
+        ISBN 0-672-32891-7)</LI></UL>
+      <P></P>
+      <P>Future F#.NET Journal articles will revisit Windows Presentation 
+      Foundation as well as the other exciting new components in the .NET 
+      Framework 3.0.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Graph%20plotting%20with%20Windows%20Presentation%20Foundation_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

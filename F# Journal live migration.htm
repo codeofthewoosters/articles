@@ -1,0 +1,154 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/livemigration.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20live%20migration_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20live%20migration_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20live%20migration_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20live%20migration_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20live%20migration_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Live migration</H1>
+      <P>An interesting application of agent-based programming is the ability to 
+      implement virtual agents that are capable of running concrete server 
+      applications and then allow the servers to be migrated between agents 
+      seamlessly. This article describes the design and implementation of a 
+      simple program that demonstrates the effect by allowing a trivial server 
+      to be live migrated from one agent to another by instructing the agent to 
+      suspend the server, send the server's state to another agent and resume 
+      the server's execution at the remote location.</P>
+      <H2>Introduction</H2>
+      <P>The world is becoming increasingly virtualized, with multiple operating 
+      systems running inside hypervisors on a single physical machine and 
+      services being virtualized in clouds. In all cases, the basic idea is to 
+      provide an interface that appears to be a concrete environment for a 
+      program to run inside but that is actually a virtual environment generated 
+      by another program.</P>
+      <P>Virtualization can be achieved in agent-based programming by hosting a 
+      number of agents that are each capable of hosting a server application. In 
+      the general case, the agents would be capable of communicating over the 
+      network in order to live migrate a server between different physical 
+      machines and a global directory would be provided to allow any given 
+      server to be located. The solution described in this article is a 
+      simplified version that allows a single server to be live migrated between 
+      a number of agents running in-process.</P>
+      <H2>Message types</H2>
+      <P>This live migration example uses two main layers of messages. The inner 
+      layer consists of the commands that the virtualized server can 
+execute:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;'state&nbsp;serverCmd&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;of&nbsp;('state&nbsp;-&gt;&nbsp;'state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Query&nbsp;of&nbsp;AsyncReplyChannel&lt;'state&gt;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'state&nbsp;serverCmd&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;of&nbsp;('state&nbsp;-&gt;&nbsp;'state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Query&nbsp;of&nbsp;AsyncReplyChannel&lt;'state&gt;</CODE></P>
+      <P>The <CODE>Apply</CODE> message conveys a function that replaces a 
+      current server state with a new state. The use of a function here is 
+      adequate for this example but it is unwise to serialize functions for 
+      transmission across a network, particularly if different versions of the 
+      program might be running at either end of the connection.</P>
+      <P>The <CODE>Query</CODE> message allows a caller to obtain the state of 
+      the server. Again, a distributed application might want to provide a more 
+      fine-grained query service in order to cut down on network traffic.</P>
+      <P>The outer layer consists of the commands that the agent hosts can 
+      execute, which includes server commands that can be executed when the 
+      agent is hosting a server:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;'state&nbsp;agentCmd&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ServerCmd&nbsp;of&nbsp;'state&nbsp;serverCmd<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MigrateTo&nbsp;of&nbsp;('state&nbsp;agentCmd&nbsp;-&gt;&nbsp;unit)&nbsp;*&nbsp;AsyncReplyChannel&lt;unit&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Start&nbsp;of&nbsp;'state&nbsp;*&nbsp;AsyncReplyChannel&lt;unit&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Kill;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'state&nbsp;agentCmd&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ServerCmd&nbsp;of&nbsp;'state&nbsp;serverCmd<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MigrateTo&nbsp;of&nbsp;('state&nbsp;agentCmd&nbsp;-&gt;&nbsp;unit)&nbsp;*&nbsp;AsyncReplyChannel&lt;unit&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Start&nbsp;of&nbsp;'state&nbsp;*&nbsp;AsyncReplyChannel&lt;unit&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Kill</CODE></P>
+      <P>The <CODE>ServerCmd</CODE> message conveys a command for execution by 
+      the server that the agent is running.</P>
+      <P>The <CODE>MigrateTo</CODE> message instructs the agent to suspend the 
+      server that it is running and send its state to another agent where it is 
+      to be resumed.</P>
+      <P>The <CODE>Start</CODE> message is the internal message sent by the 
+      agent that received the <CODE>MigrateTo</CODE> message to the destination 
+      agent. This message could also be used to spawn a new server on an idle 
+      agent.</P>
+      <P>The <CODE>Kill</CODE> message can be used to shut down an agent 
+      remotely.</P>
+      <P>This concludes the message types. Each agent is either running a server 
+      with a given current state or is idling. Rather than using an option type, 
+      we use the following <CODE>status</CODE> type to convey the status of an 
+      agent:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;'state&nbsp;status&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Running&nbsp;of&nbsp;'state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sleeping;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'state&nbsp;status&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Running&nbsp;of&nbsp;'state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sleeping</CODE></P>
+      <P>Finally, we define two different priorities of log message:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;log&nbsp;=&nbsp;Info&nbsp;|&nbsp;Warn;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;log&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Info<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Warn</CODE></P>
+      <P>The remainder of the program consists of variable and function 
+      definitions.</P>
+      <H2>Virtual agent</H2>
+      <P>The following <CODE>serve</CODE> function is the core logic of the 
+      server. In this case, the logic is trivial with the <CODE>Apply</CODE> 
+      message updating the server's state and the <CODE>Query</CODE> message 
+      returning the current state before continuing execution with the same 
+      state.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;serve&nbsp;state&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;f&nbsp;-&gt;&nbsp;f&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Query&nbsp;reply&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reply.Reply&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;serve&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;serverCmd&nbsp;-&gt;&nbsp;'a</CODE></P>
+      <P>The following <CODE>mkAgent</CODE> function creates a new agent capable 
+      of hosting a server:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mkAgent&nbsp;log&nbsp;initialState&nbsp;=&nbsp;new&nbsp;MailboxProcessor&lt;_&gt;(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;state&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state,&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Running&nbsp;state,&nbsp;ServerCmd&nbsp;cmd&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Processing&nbsp;command&nbsp;for&nbsp;server"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(Running(serve&nbsp;state&nbsp;cmd))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Running&nbsp;state,&nbsp;MigrateTo(post,&nbsp;reply)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Migrating&nbsp;server..."<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;post(Start(state,&nbsp;reply))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;Sleeping<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sleeping,&nbsp;Start(state,&nbsp;reply)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Acknowledge&nbsp;server&nbsp;started"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reply.Reply()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Migration&nbsp;complete"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(Running&nbsp;state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Running&nbsp;_&nbsp;as&nbsp;state,&nbsp;Start&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Warn&nbsp;"Attempt&nbsp;to&nbsp;start&nbsp;server&nbsp;on&nbsp;a&nbsp;busy&nbsp;agent"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sleeping&nbsp;as&nbsp;state,&nbsp;ServerCmd&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Warn&nbsp;"Attempt&nbsp;to&nbsp;process&nbsp;command&nbsp;on&nbsp;sleeping&nbsp;agent"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sleeping&nbsp;as&nbsp;state,&nbsp;MigrateTo&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Warn&nbsp;"Attempt&nbsp;to&nbsp;migrate&nbsp;server&nbsp;from&nbsp;sleeping&nbsp;agent"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_,&nbsp;Kill&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Kill"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;state&nbsp;-&gt;&nbsp;return!&nbsp;loop&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;initialState);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mkAgent&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(log&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;int&nbsp;status&nbsp;-&gt;&nbsp;MailboxProcessor&lt;int&nbsp;agentCmd&gt;</CODE></P>
+      <P>The given <CODE>log</CODE> function is used to record events. The 
+      <CODE>initialState</CODE> value is used to convey the initial state of the 
+      agent. An alternative design might always start an agent in the 
+      <CODE>Sleeping</CODE> state and then send in the <CODE>Start</CODE> 
+      message to boot a server on an agent.</P>
+      <P>The seven match cases in the core of the agent logic are used to handle 
+      different combinations of agent state and incoming message. All but one of 
+      these recurse the <CODE>loop</CODE> function in order to continue 
+      processing messages. As usual, we protect against programmer error by 
+      explicitly returning the state of the agent in an option type. This forces 
+      all match cases to return a value of this type, making it impossible to 
+      forget to call <CODE>loop</CODE>. The returned option type is then handled 
+      in a much smaller piece of code containing a single recursive call. Also, 
+      the <CODE>return!</CODE> construct is used to tail recurse (rather than 
+      <CODE>do!</CODE>) in order to avoid leaking space.</P>
+      <H2>Example</H2>
+      <P>The framework for live migrating servers between agents described above 
+      may now be demonstrated.</P>
+      <P>We begin by defining a globally-synchronized <CODE>log</CODE> function 
+      that prints the priority and text of a log message:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;log&nbsp;priority&nbsp;text&nbsp;=&nbsp;lock&nbsp;stdout&nbsp;(fun&nbsp;()&nbsp;-&gt;&nbsp;printfn&nbsp;"%A:&nbsp;%s"&nbsp;priority&nbsp;text);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;log&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>This is one of the few cases where it is permissible to use a lock 
+      directly in high-level concurrent code.</P>
+      <P>The following <CODE>test</CODE> function starts an array of agents, 
+      sends three commands to the server running on the first agent, live 
+      migrates the server from the first to the second agent and then sends it 
+      another three commands before killing the agents:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;test&nbsp;(agent:&nbsp;_&nbsp;MailboxProcessor&nbsp;[])&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;server&nbsp;=&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;agent&nbsp;in&nbsp;agent&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Running&nbsp;test"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cmd&nbsp;server&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;(sprintf&nbsp;"State&nbsp;of&nbsp;server&nbsp;on&nbsp;agent&nbsp;%d&nbsp;is&nbsp;%A"&nbsp;server&nbsp;state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;3&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.[server].Post(ServerCmd(Apply(cmd&nbsp;server)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dest&nbsp;=&nbsp;(server&nbsp;+&nbsp;1)&nbsp;%&nbsp;agent.Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;(sprintf&nbsp;"Migrating&nbsp;from&nbsp;%d&nbsp;to&nbsp;%d"&nbsp;server&nbsp;dest)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.[server].PostAndReply(fun&nbsp;reply&nbsp;-&gt;&nbsp;MigrateTo(agent.[dest].Post,&nbsp;reply))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Migration&nbsp;complete"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;server&nbsp;=&nbsp;dest<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;3&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.[server].Post(ServerCmd(Apply(cmd&nbsp;server)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Killing&nbsp;agents"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;agent&nbsp;in&nbsp;agent&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.Post&nbsp;Kill<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;test&nbsp;:&nbsp;MailboxProcessor&lt;int&nbsp;agentCmd&gt;&nbsp;[]&nbsp;-&gt;&nbsp;Async&lt;unit&gt;</CODE></P>
+      <P>This test code may be called as followed:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Creating&nbsp;agents"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;agent1&nbsp;=&nbsp;mkAgent&nbsp;log&nbsp;(Running&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;agent2&nbsp;=&nbsp;mkAgent&nbsp;log&nbsp;(Sleeping)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;test&nbsp;[|agent1;&nbsp;agent2|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;log&nbsp;Info&nbsp;"Test&nbsp;complete"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stdin.ReadLine()&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;|&gt;&nbsp;Async.RunSynchronously;;</CODE></P>
+      <P>This generates the following output, showing that the server is being 
+      controlled and live migrated as expected:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Creating&nbsp;agents<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Running&nbsp;test<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Migrating&nbsp;from&nbsp;0&nbsp;to&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Processing&nbsp;command&nbsp;for&nbsp;server<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;State&nbsp;of&nbsp;server&nbsp;on&nbsp;agent&nbsp;0&nbsp;is&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Processing&nbsp;command&nbsp;for&nbsp;server<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;State&nbsp;of&nbsp;server&nbsp;on&nbsp;agent&nbsp;0&nbsp;is&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Processing&nbsp;command&nbsp;for&nbsp;server<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;State&nbsp;of&nbsp;server&nbsp;on&nbsp;agent&nbsp;0&nbsp;is&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Migrating&nbsp;server...<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Acknowledge&nbsp;server&nbsp;started<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Migration&nbsp;complete<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Migration&nbsp;complete<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Processing&nbsp;command&nbsp;for&nbsp;server<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;State&nbsp;of&nbsp;server&nbsp;on&nbsp;agent&nbsp;1&nbsp;is&nbsp;3<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Processing&nbsp;command&nbsp;for&nbsp;server<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;State&nbsp;of&nbsp;server&nbsp;on&nbsp;agent&nbsp;1&nbsp;is&nbsp;4<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Processing&nbsp;command&nbsp;for&nbsp;server<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;State&nbsp;of&nbsp;server&nbsp;on&nbsp;agent&nbsp;1&nbsp;is&nbsp;5<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Killing&nbsp;agents<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Kill<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Kill<BR>&nbsp;&nbsp;&nbsp;&nbsp;Info:&nbsp;Test&nbsp;complete</CODE></P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a simple 
+      program that allows a server to be live migrated while it is running from 
+      one host agent to another. This functionality could be used in a variety 
+      of distributed applications.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of concurrent 
+      and distributed programming.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20live%20migration_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

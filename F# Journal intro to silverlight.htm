@@ -1,0 +1,155 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0081)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/silverlight.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20intro%20to%20silverlight_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20intro%20to%20silverlight_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20intro%20to%20silverlight_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20intro%20to%20silverlight_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20intro%20to%20silverlight_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Introduction to Silverlight</H1>
+      <P>Microsoft's Silverlight allows .NET programs to be run directly in a 
+      compliant browser and all major browsers can support Silverlight. This 
+      articles describes how self-contained interactive Silverlight programs can 
+      be written entirely in the comfort of the F# programming language an 
+      easily to deployed to any web server (not necessarily Windows based) as an 
+      easy and efficient way to bring dynamic content to a website.</P>
+      <H2>Introduction</H2>
+      <P>In order to develop Silverlight applications it is necessary to install 
+      Visual Studio 2010 and the Silverlight 4 Toolkit:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20intro%20to%20silverlight_files/installer.png"></P>
+      <P>The easiest way to get started developing Silverlight programs written 
+      entirely in the F# programming language is to install the "F# Silverlight 
+      Application" template from the on-line templates available from within 
+      Visual Studio 2010:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20intro%20to%20silverlight_files/installtemplate.png"></P>
+      <P>Note that there is currently a bug is the template that causes a 
+      "contains no templates" error. Ignore this but remember to restart Visual 
+      Studio in order to gain access to the new template.</P>
+      <P>Create a new project using the FSharpSilverlightApp template:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20intro%20to%20silverlight_files/chooseproject.png"></P>
+      <P>The new project contains two source code files. The <CODE>App.fs</CODE> 
+      file contains the entry point that Silverlight invokes and it sets the 
+      <CODE>RootVisual</CODE> to <CODE>FSharpSilverlightApp.MainPage()</CODE> by 
+      default:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;//DO&nbsp;NOT&nbsp;Change&nbsp;the&nbsp;name&nbsp;of&nbsp;this&nbsp;namespace!<BR>&nbsp;&nbsp;&nbsp;&nbsp;//Visual&nbsp;Studio&nbsp;will&nbsp;fail&nbsp;to&nbsp;recognise&nbsp;the&nbsp;new&nbsp;namespace&nbsp;and&nbsp;you'll&nbsp;break&nbsp;stuff!<BR>&nbsp;&nbsp;&nbsp;&nbsp;namespace&nbsp;SilverlightApp<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows.Controls<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;App()&nbsp;as&nbsp;this&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inherit&nbsp;Application()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;//Remember&nbsp;to&nbsp;change&nbsp;the&nbsp;namespace&nbsp;on&nbsp;Main&nbsp;page&nbsp;here&nbsp;if&nbsp;you&nbsp;change&nbsp;it&nbsp;in&nbsp;MainPage.fs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Startup.AddHandler(fun&nbsp;o&nbsp;e&nbsp;-&gt;&nbsp;this.RootVisual&nbsp;&lt;-&nbsp;FSharpSilverlightApp.MainPage())</CODE></P>
+      <P>The <CODE>RootVisual</CODE> should be set to an instance of the object 
+      of the <CODE>Controls.UserControl</CODE> class that is used to display 
+      Silverlight content. In the template's example, the definition of the 
+      class that inherits from <CODE>Controls.UserControl</CODE> is given in the 
+      <CODE>MainPage.fs</CODE> file.</P>
+      <P>By default, the <CODE>MainPage.fs</CODE> file contains the following 
+      code:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;//Change&nbsp;anything&nbsp;you&nbsp;like&nbsp;in&nbsp;here&nbsp;-&nbsp;theres&nbsp;no&nbsp;magic&nbsp;that&nbsp;makes&nbsp;this&nbsp;work&nbsp;in&nbsp;VS,&nbsp;so&nbsp;you're&nbsp;safe!<BR>&nbsp;&nbsp;&nbsp;&nbsp;namespace&nbsp;FSharpSilverlightApp<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows.Controls<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows.Media<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows.Media.Imaging<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MainPage()&nbsp;as&nbsp;this&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inherit&nbsp;UserControl()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Grid()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Content&nbsp;&lt;-&nbsp;grid<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add(<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TextBlock(<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Text="Hello&nbsp;from&nbsp;F#",&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FontSize=64.0,&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HorizontalAlignment=HorizontalAlignment.Center,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;VerticalAlignment&nbsp;=&nbsp;VerticalAlignment.Center<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;))</CODE></P>
+      <P>This code defines a <CODE>MainPage</CODE> class that inherits from the 
+      Silverlight <CODE>Controls.UserControl</CODE> class and sets its own 
+      content to contain a <CODE>Grid</CODE> with a single 
+      <CODE>TextBlock</CODE> in it in order to display "Hello from F#". Running 
+      this project (e.g. by pressing F5) should display the following 
+window:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20intro%20to%20silverlight_files/HelloFromFSharp.png"></P>
+      <P>Although this looks and feels like a WPF application, it is actually 
+      running in an embedded browser. This is easily seen by digging into the 
+      <CODE>FSharpSilverlightApp1\bin</CODE> directory in the Visual Studio 
+      solution and opening the <CODE>FSharpSilverlightAppTestPage.html</CODE> 
+      file in a browser:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20intro%20to%20silverlight_files/HelloFromFSharpInBrowser.png"></P>
+      <P>In fact, all that is required to place this Silverlight program on any 
+      website is to copy the <CODE>FSharpSilverlightApp1.xap</CODE> file to the 
+      website and refer to it from an HTML page as the test page generated by 
+      Visual Studio does:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&lt;div&nbsp;id="silverlightControlHost"&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;object&nbsp;data="data:application/x-silverlight-2,"&nbsp;type="application/x-silverlight-2"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;width="100%"&nbsp;height="100%"&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;param&nbsp;name="source"&nbsp;value="FSharpSilverlightApp1.xap"/&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;param&nbsp;name="onError"&nbsp;value="onSilverlightError"&nbsp;/&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;param&nbsp;name="background"&nbsp;value="white"&nbsp;/&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;param&nbsp;name="minRuntimeVersion"&nbsp;value="4.0.50826.0"&nbsp;/&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;param&nbsp;name="autoUpgrade"&nbsp;value="true"&nbsp;/&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;a&nbsp;href="http://go.microsoft.com/fwlink/?LinkID=149156&amp;v=4.0.50826.0"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;style="text-decoration:none"&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;img&nbsp;src="http://go.microsoft.com/fwlink/?LinkId=161376"&nbsp;alt="Get&nbsp;Microsoft&nbsp;Silverlight"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;style="border-style:none"/&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/object&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;iframe&nbsp;id="_sl_historyFrame"&nbsp;style="visibility:hidden;height:0px;width:0px;border:0px"&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&lt;/iframe&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&lt;/div&gt;</CODE></P>
+      <P>The remainder of this article considers the translation of some 
+      existing WPF applications to Silverlight.</P>
+      <H2>Conway's Game of Life</H2>
+      <P>Our F# News blog has previously listed a simple 32-line F# program that 
+      uses Windows Presentation Foundation to visualize Conway's Game of Life, 
+      similar to the following:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;count&nbsp;(a:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;x&nbsp;y&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m,&nbsp;n&nbsp;=&nbsp;a.[0].Length,&nbsp;a.Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;c&nbsp;=&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x=x-1&nbsp;to&nbsp;x+1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;y=y-1&nbsp;to&nbsp;y+1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&gt;=0&nbsp;&amp;&amp;&nbsp;x&lt;m&nbsp;&amp;&amp;&nbsp;y&gt;=0&nbsp;&amp;&amp;&nbsp;y&lt;n&nbsp;&amp;&amp;&nbsp;a.[x].[y]&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;&lt;-&nbsp;c&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;a.[x].[y]&nbsp;then&nbsp;c-1&nbsp;else&nbsp;c<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rule&nbsp;(a:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;x&nbsp;y&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;a.[x].[y],&nbsp;count&nbsp;a&nbsp;x&nbsp;y&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;2&nbsp;|&nbsp;_,&nbsp;3&nbsp;-&gt;&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows<BR>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;512<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;game&nbsp;=&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;rand.Next&nbsp;2&nbsp;=&nbsp;0))&nbsp;|&gt;&nbsp;ref<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;image&nbsp;=&nbsp;Controls.Image(Stretch=Media.Stretch.Uniform)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;format&nbsp;=&nbsp;Media.PixelFormats.Gray8<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pixel&nbsp;=&nbsp;Array.create&nbsp;(n*n)&nbsp;0uy<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;update&nbsp;_&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;game&nbsp;:=&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;i&nbsp;-&gt;&nbsp;Array.init&nbsp;n&nbsp;(rule&nbsp;!game&nbsp;i))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;y=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pixel.[x+y*n]&nbsp;&lt;-&nbsp;if&nbsp;(!game).[x].[y]&nbsp;then&nbsp;255uy&nbsp;else&nbsp;0uy<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image.Source&nbsp;&lt;-<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.Imaging.BitmapSource.Create(n,&nbsp;n,&nbsp;1.0,&nbsp;1.0,&nbsp;format,&nbsp;null,&nbsp;pixel,&nbsp;n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.CompositionTarget.Rendering.Add&nbsp;update<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Window(Content=image,&nbsp;Title="Game&nbsp;of&nbsp;Life")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;(Application()).Run&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <P>The <CODE>count</CODE> and <CODE>rule</CODE> functions implement the 
+      game logic, creating the next board from the current board. An 
+      <CODE>Image</CODE> control with a <CODE>BitmapSource</CODE> is used to 
+      visualize the matrix of cells on the board.</P>
+      <P>This program is not only remarkably easy to translate from WPF to 
+      Silverlight but it actually benefits from the translation thanks to 
+      Silverlight's better support for writeable bitmaps. The translation begins 
+      by placing this code in an explicit module, required because our F# 
+      project contains more than one source file:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;GameOfLife</CODE></P>
+      <P>The <CODE>count</CODE> and <CODE>rule</CODE> functions are 
+      identical:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;count&nbsp;(a:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;x&nbsp;y&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m,&nbsp;n&nbsp;=&nbsp;a.[0].Length,&nbsp;a.Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;c&nbsp;=&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x=x-1&nbsp;to&nbsp;x+1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;y=y-1&nbsp;to&nbsp;y+1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&gt;=0&nbsp;&amp;&amp;&nbsp;x&lt;m&nbsp;&amp;&amp;&nbsp;y&gt;=0&nbsp;&amp;&amp;&nbsp;y&lt;n&nbsp;&amp;&amp;&nbsp;a.[x].[y]&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;&lt;-&nbsp;c&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;a.[x].[y]&nbsp;then&nbsp;c-1&nbsp;else&nbsp;c<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rule&nbsp;(a:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;x&nbsp;y&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;a.[x].[y],&nbsp;count&nbsp;a&nbsp;x&nbsp;y&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;(2&nbsp;|&nbsp;3)&nbsp;|&nbsp;false,&nbsp;3&nbsp;-&gt;&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;false</CODE></P>
+      <P>Again, we open the <CODE>System.Windows</CODE> namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows</CODE></P>
+      <P>Note that this is now referring to the Silverlight library instead of 
+      the Windows Presentation Library.</P>
+      <P>Finally, we define a <CODE>MainPage</CODE> class that inherits from the 
+      Silverlight <CODE>UserControl</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MainPage()&nbsp;as&nbsp;this&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inherit&nbsp;Controls.UserControl()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;512<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;game&nbsp;=&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;rand.Next&nbsp;2&nbsp;=&nbsp;0))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;image&nbsp;=&nbsp;Media.Imaging.WriteableBitmap(n,&nbsp;n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.CompositionTarget.Rendering.Add(fun&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;game&nbsp;&lt;-&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;i&nbsp;-&gt;&nbsp;Array.init&nbsp;n&nbsp;(rule&nbsp;game&nbsp;i))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pixel&nbsp;=&nbsp;image.Pixels<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;y=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pixel.[x&nbsp;+&nbsp;y*n]&nbsp;&lt;-&nbsp;if&nbsp;game.[x].[y]&nbsp;then&nbsp;0xffffffff&nbsp;else&nbsp;0xff000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image.Invalidate())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Content&nbsp;&lt;-&nbsp;Controls.Image(Source&nbsp;=&nbsp;image).</CODE></P>
+      <P>In this case, the class has local variables <CODE>rand</CODE>, 
+      <CODE>n</CODE>, <CODE>game</CODE> and <CODE>image</CODE>. The main 
+      difference compared with the WPF-based version is that <CODE>image</CODE> 
+      is now a <CODE>WriteableBitmap</CODE>. An <CODE>Image</CODE> control is 
+      still used to wrap <CODE>image</CODE> when it is set as the content for 
+      the <CODE>MainPage</CODE> class at the end of the constructor.</P>
+      <P>The <CODE>Pixels</CODE> property of the <CODE>WriteableBitmap</CODE> is 
+      used to obtain the bitmap as an <CODE>int</CODE> array. Although less 
+      expressive, this is substantially easier to use than the WPF equivalent 
+      because there is no longer any need to deal with bitmap formats and so on. 
+      Moreover, performance is substantially better in Silverlight than in WPF. 
+      The pixels are set in the array and the <CODE>Invalidate</CODE> method is 
+      invoked to have the bitmap redrawn. The "game loop" is, again, executed 
+      once per frame by the <CODE>CompositionTarget</CODE> event.</P>
+      <H2>Summary</H2>
+      <P>This article has covered the basics of installing and developing 
+      Silverlight applications in the F# programming language, culminating in 
+      the development of a simple graphical program that can be run in any major 
+      browser with Silverlight installed. Translation is generally simple for 
+      graphical applications although there are some important discrepancies. 
+      For example, the WPF <CODE>FlowDocument</CODE> used in our article editor 
+      does not exist in Silverlight, images and bitmaps are handled differently 
+      and some basic constructs such as the <CODE>Vector</CODE> and 
+      <CODE>Matrix</CODE> types are missing.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of Silverlight. 
+      Also, demos from the F#.NET Journal are being translated to use 
+      Silverlight and hosted on the main sales page.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20intro%20to%20silverlight_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

@@ -1,0 +1,516 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0087)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/bytecode_compiler.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Run-time code generation using 
+System.Reflection.Emit</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Run-time code generation using 
+System.Reflection.Emit</TITLE>     <LINK href="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Run-time code generation using System.Reflection.Emit</H1>
+      <P>The .NET platform represents a radical departure from the previous 
+      generation of native-code compiled languages. Whereas languages such as 
+      C++ and Fortran have distinct compilation and execution phases, the .NET 
+      platform deliberately blurs this distinction with run-time compilation of 
+      a distributable platform-independent Common Intermediate Language (CIL). 
+      This article examines the use of run-time code generation from F# using 
+      the System.Reflection.Emit namespace to implement a compiler for a simple 
+      bytecode language.</P>
+      <H2>Introduction</H2>
+      <P>A previous F#.NET Journal article covered a bytecode interpreter for 
+      the minimal "BF" language. This article will combine that same bytecode 
+      language with the run-time code generation capabilities of the .NET 
+      platform to create a JIT compiler for the BF language.</P>
+      <P>Let us begin by briefly revising the eight primitive operations in the 
+      BF language in terms of the C code equivalent:</P>
+      <P>
+      <TABLE style="width: 95%; text-align: center;">
+        <TBODY>
+        <TR>
+          <TD>Bytecode</TD>
+          <TD>C equivalent</TD></TR>
+        <TR>
+          <TD><CODE>&lt;</CODE>                 </TD>
+          <TD><CODE>++p;</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>&gt;</CODE>                 </TD>
+          <TD><CODE>--p;</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>+</CODE>                 </TD>
+          <TD><CODE>++*p;</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>-</CODE>                 </TD>
+          <TD><CODE>--*p;</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>.</CODE>                 </TD>
+          <TD><CODE>putchar(*p);</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>,</CODE>                 </TD>
+          <TD><CODE>*p = getchar();</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>[</CODE>                 </TD>
+          <TD><CODE>while (*p) {</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>]</CODE>                 </TD>
+          <TD><CODE>};</CODE>                 </TD></TR></TBODY></TABLE>
+      <P></P>
+      <P>The              <CODE>System.Reflection.Emit.OpCodes</CODE> class 
+      lists over 100 CIL bytecode operations that can be emitted by a code 
+      generator. As a stack-based bytecode, CIL operations pop their arguments 
+      from the stack and push their results onto the stack.           </P>
+      <P>For the purposes of this article we shall restrict ourselves to 
+      instruction blocks within a single function that handle 32-bit integers, 
+      bytes and an array. This will require the following op codes:</P>
+      <P>
+      <UL>
+        <LI><B>Ldloc</B> pops an index from the stack and loads the local 
+        variable at that index.               </LI>
+        <LI><B>Ldarg</B> pops an index from the stack and loads the function 
+        argument at the index.               </LI>
+        <LI><B>Ldelem_I1</B> pops the index and then the array and loads from 
+        the given                  <CODE>int8 array</CODE> the element at the 
+        given index.               </LI>
+        <LI><B>Ldc_I4</B> pushes an                  <CODE>int32</CODE> 
+        constant.               </LI>
+        <LI><B>Add</B> pops two arguments, adds them and pushes the result       
+                </LI>
+        <LI><B>Stloc</B>  pops a value and then an index from the stack and 
+        stores the value in the local variable at that index               </LI>
+        <LI><B>Stelem_I1</B> pops a value, an index and then an array and stores 
+        the value in the given                  <CODE>int8 array</CODE> at the 
+        given index.               </LI>
+        <LI><B>Call</B> applies the given function (which consumes its arguments 
+        from the stack)               </LI>
+        <LI><B>Br</B> always branches to the given label               </LI>
+        <LI><B>Beq</B> pops two arguments and branches to the given label only 
+        if the arguments are equal.               </LI></UL>
+      <P></P>
+      <P>The first step in writing a compiler is to translate the operations of 
+      the source language (BF) into the operations of the target language (CIL). 
+      This can only be done in the context of some design for our compilation 
+      scheme. In this case, we shall translate entire BF programs into a single 
+      function with a single local variable, the pointer index              
+      <CODE>p</CODE> , with the BF heap represented by a              <CODE>int8 
+      array</CODE> that is passed to the single function as its single argument. 
+      Consequently,              <CODE>p</CODE> is the local variable at index 0 
+      and              <CODE>d</CODE> is the function argument at index 0.       
+          </P>
+      <P>Let us now translate the BF primitives into CIL:</P>
+      <P>
+      <TABLE style="width: 95%; text-align: center;">
+        <TBODY>
+        <TR>
+          <TD>Bytecode</TD>
+          <TD>LLVM IR equivalent</TD></TR>
+        <TR>
+          <TD><CODE>&lt;</CODE>                 </TD>
+          <TD style="text-align: left;"><CODE>Ldloc 0                     <BR>
+            Ldc_I4 (-1)                     <BR>Add                     <BR>
+            Stloc 0                   </CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>&gt;</CODE>                 </TD>
+          <TD style="text-align: left;"><CODE>Ldloc 0                     <BR>
+            Ldc_I4 1                     <BR>Add                     <BR>Stloc 0 
+                              </CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>+</CODE>                 </TD>
+          <TD style="text-align: left;"><CODE>Ldarg 0                     <BR>
+            Ldloc 0                     <BR>Ldarg 0                     <BR>
+            Ldloc 0                     <BR>Ldelem_I1                     <BR>
+            Ldc_I4 1                     <BR>Add                     <BR>
+            Stelem_I1                   </CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>-</CODE>                 </TD>
+          <TD style="text-align: left;"><CODE>Ldarg 0                     <BR>
+            Ldloc 0                     <BR>Ldarg 0                     <BR>
+            Ldloc 0                     <BR>Ldelem_I1                     <BR>
+            Ldc_I4 (-1)                     <BR>Add                     <BR>
+            Stelem_I1                   </CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>.</CODE>                 </TD>
+          <TD style="text-align: left;"><CODE>Ldarg 0                     <BR>
+            Ldloc 0                     <BR>Ldelem_I1                     <BR>
+            Call putchar                   </CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>,</CODE>                 </TD>
+          <TD style="text-align: left;"><CODE>Ldarg 0                     <BR>
+            Ldloc 0                     <BR>Call getchar                     
+            <BR>Stelem_I1                   </CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>[</CODE>                 </TD>
+          <TD style="text-align: left;"><CODE>Br test                     <BR>
+            .test                     <BR>Ldarg 0                     <BR>Ldloc 
+            0                     <BR>Ldelem_I1                     <BR>Ldc_I4 0 
+                                <BR>Beq rest                     <BR>..          
+                       <BR>Br test                     <BR>.rest                 
+              </CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>]</CODE>                 </TD>
+          <TD style="text-align: left;"><CODE></CODE></TD></TR></TBODY></TABLE>
+      <P></P>
+      <P>Compiling BF bytecode into CIL can be as simple as writing a simple 
+      pattern match in a              <CODE>compile</CODE> function that reads 
+      each bytecode operation and then makes the appropriate calls to the        
+            <CODE>Emit</CODE> member of a              <CODE>ILGenerator</CODE> 
+      object. However, this ad-hoc approach to compiler implementation leaves a 
+      lot to be desired. Specifically, even the above hand translation of BF 
+      bytecode operations into CIL can be heavily factored. Aggressive factoring 
+      helps to simplify code bases and greatly improves maintainability for the 
+      future.           </P>
+      <P>In this case, we find that the              <CODE>&lt;</CODE> and       
+             <CODE>&gt;</CODE> operations have trivial CIL representations. The 
+      value of              <CODE>p</CODE> is loaded with a              
+      <CODE>Ldloc</CODE> call with zero index. Then an integer is loaded, an 
+      addition (or subtraction) performed and the resulting value is written 
+      over the value of              <CODE>p</CODE> using the              
+      <CODE>Stloc</CODE> instruction.           </P>
+      <P>However, the              <CODE>+</CODE> and              
+      <CODE>-</CODE> operations have a much more interesting structure. 
+      Specifically, they both begin by pushing the array              
+      <CODE>d</CODE> and then              <CODE>p</CODE> and then pushing       
+             <CODE>d</CODE> and then              <CODE>p</CODE> again. The 
+      reason is that the first two pushes are preparing for the store into       
+             <CODE>d.[p]</CODE> that occurs at the end of this operation. This 
+      may be represented diagrammatically as follows:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/incr.png"> 
+                  </P>
+      <P></P>
+      <P>So the template for the last operation performed, the store, requires 
+      that the template for the inner operation (computing the subexpression     
+               <CODE>d.[p] + 1</CODE> ) be injected between other instructions. 
+      So any factoring of the naive              <CODE>compile</CODE> function 
+      must be able to handle this eventuality. Fortunately, closures make this 
+      easy.           </P>
+      <H2>Controlled evaluation using closures</H2>
+      <P>The expression-based equivalent of the              <CODE>+</CODE> 
+      operation is:           </P>
+<PRE>d.[p] &lt;- d.[p] + 1</PRE>
+      <P>As we have seen, the store instruction              <CODE>&lt;-</CODE>  
+      must emit code both before and after the code is emitted for the value     
+               <CODE>d.[p] + 1</CODE> being stored. A simple and effective 
+      solution to this problem is to represent sequences of instructions as 
+      closures that call the              <CODE>Emit</CODE> member to emit the 
+      instructions they represent only when the closure is applied. This is      
+              <I>deferred evaluation</I> .           </P>
+      <P>For example, we can represent the store instruction using a definition 
+      like the following (F#-like pseudocode):</P>
+<PRE>&gt; let store_d f =
+    Ldarg 0
+    Ldloc 0
+    f()
+    Stelem_I1;;
+val store_d : (unit -&gt; unit) -&gt; unit</PRE>
+      <P>The function argument              <CODE>f</CODE> to this              
+      <CODE>store_d</CODE> function is responsible for emitting instructions 
+      that leave the value to be stored in              <CODE>d</CODE> on the 
+      stack.           </P>
+      <P>Persuing this idea might result in the following definitions:</P>
+<PRE>&gt; let load_p() =
+    Ldloc 0;;
+val load_p : unit -&gt; unit</PRE>
+<PRE>&gt; let load_d() =
+    OpCodes.Ldarg 0
+    load_p()
+    Ldelem_I1;;
+val load_d : unit -&gt; unit</PRE>
+<PRE>&gt; let int (n: int) () =
+    Ldc_I4 n;;
+val int : int -&gt; unit -&gt; unit</PRE>
+<PRE>&gt; let ( + ) f g () =
+    f()
+    g()
+    Add;;
+val ( + ) : (unit -&gt; unit) -&gt; (unit -&gt; unit) -&gt; unit -&gt; unit</PRE>
+<PRE>&gt; let store_p f =
+    f()
+    OpCodes.Stloc 0;;
+val store_p : (unit -&gt; unit) -&gt; unit</PRE>
+<PRE>&gt; let store_d f =
+    OpCodes.Ldarg 0
+    load_p()
+    f()
+    Stelem_I1;;
+val store_d : (unit -&gt; unit) -&gt; unit</PRE>
+      <P>With these definitions we can not only write individual translations 
+      much more clearly and succinctly in an expression-based form but the same 
+      patterns can be factored and repeated. For example, the increment          
+          <CODE>d.[p] &lt;- d.[p] + 1</CODE> may now be written:           </P>
+<PRE>store_p(load_p + int 1)</PRE>
+      <P>Deferring the evaluation of the F# code responsible for emitting CIL 
+      instructions by wrapping them in closures in this way is an incredibly 
+      powerful design pattern that greatly simplifies run-time code generation 
+      in F#.</P>
+      <H2>Compiling loops</H2>
+      <P>Compiling the looping construct of the BF language is the other 
+      non-trivial aspect of our compiler. Specifically, this looping construct 
+      is equivalent to a              <CODE>while</CODE> loop that performs a 
+      predicate test and repeats the body of the loop only if              
+      <CODE>d.[p] &lt;&gt; 0</CODE> otherwise the remainder of the program is 
+      executed:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/loop1.png"> 
+                  </P>
+      <P></P>
+      <P>Code for the loops is generated as follows. Two labels are created: a 
+      "test" label for the predicate test and loop body and a "rest" label for 
+      the remainder of the program after the end of the loop. An initial branch 
+      is made to the predicate test. The predicate              <CODE>d.[p] = 
+      0</CODE> is tested and, if              <CODE>true</CODE> , branches to 
+      the "rest" label otherwise computation falls through to the loop body 
+      which ends with a branch back to the predicate.           </P>
+      <P>The implementation of this is most easily written using a double 
+      recursion. Specifically, the              <CODE>compile</CODE> function 
+      always recurses to try to translate another BF bytecode operation but 
+      emitting the code for the looping construct also calls the              
+      <CODE>compile</CODE> function recursively in order to emit the code for 
+      the body of the loop, after the predicate test and before the branch back 
+      to the test. Consequently, it is essential that the              
+      <CODE>compile</CODE> function not only stops when the end of the input is 
+      reached but also when the end of a loop, i.e. the              
+      <CODE>]</CODE> bytecode operation is reached. This way the call from the 
+      corresponding              <CODE>[</CODE> operation will fill in the body 
+      and start filling in the rest of the program.           </P>
+      <H2>Direct implementation</H2>
+      <P>We enable the #light syntax option as usual:</P>
+<PRE>&gt; #light;;</PRE>
+      <P>We shall open the following namespace in order to get easy access to 
+      the definitions pertaining to run-time CIL generation:</P>
+<PRE>&gt; open System.Reflection.Emit;;</PRE>
+      <P>The              <CODE>putchar</CODE> operation of the BF bytecode 
+      language may be represented as a call to the appropriate overload of the 
+      built-in              <CODE>System.Console.Write</CODE> function:          
+       </P>
+<PRE>&gt; let putchar = typeof&lt;System.Console&gt;.GetMethod("Write", [|typeof&lt;byte&gt;|]);;
+val putchar : System.Reflection.MethodInfo</PRE>
+      <P>Similarly, the              <CODE>getchar</CODE> operation is a call to 
+      the built-in              <CODE>System.Console.Read</CODE> function:       
+          </P>
+<PRE>&gt; let getchar = typeof&lt;System.Console&gt;.GetMethod("Read");;
+val getchar : System.Reflection.MethodInfo</PRE>
+      <P>These              <CODE>MethodInfo</CODE> values are used with the     
+               <CODE>Call</CODE> opcode to invoke these functions from our 
+      generated code.           </P>
+      <P>The actual F# code responsible for delaying the emitting of CIL 
+      instructions follows the design laid out above almost exactly. The only 
+      notable exception is that we choose to wrap the emitting code in closures 
+      that accept an object of the class              <CODE>ILGenerator</CODE> 
+      instead of the value of the type unit used above. This is, of course, 
+      because the encapsulated code needs some context in order to emit the 
+      instructions.           </P>
+      <P>The              <CODE>load_p</CODE> function will emit an instruction 
+      to load the current value of              <CODE>p</CODE> :           </P>
+<PRE>&gt; let load_p (il: ILGenerator) =
+    il.Emit(OpCodes.Ldloc_0);;
+val load_p : ILGenerator -&gt; unit</PRE>
+      <P>The              <CODE>load_d</CODE> function will emit instructions to 
+      load the current value of              <CODE>d</CODE> which includes 
+      loading              <CODE>p</CODE> :           </P>
+<PRE>&gt; let load_d (il: ILGenerator) =
+    il.Emit(OpCodes.Ldarg_0)
+    load_p il
+    il.Emit(OpCodes.Ldelem_I1);;
+val load_d : ILGenerator -&gt; unit</PRE>
+      <P>Note how the              <CODE>load_d</CODE> function accepts an 
+      argument              <CODE>il</CODE> of the type              
+      <CODE>ILGenerator</CODE> and passes it to the              
+      <CODE>load_p</CODE> function.           </P>
+      <P>The              <CODE>int</CODE> function will emit an instruction to 
+      push a 32-bit int onto the stack:           </P>
+<PRE>&gt; let int (n: int) (il: ILGenerator) =
+    il.Emit(OpCodes.Ldc_I4, n);;
+val int : int -&gt; ILGenerator -&gt; unit</PRE>
+      <P>Note how partially applying this function with only the              
+      <CODE>n</CODE> argument and not the              <CODE>il</CODE> argument 
+      allows us to represent the code to emit a given integer.           </P>
+      <P>The              <CODE>+</CODE> operator is replaced with a version 
+      that accepts two deferred computations              <CODE>f</CODE> and     
+               <CODE>g</CODE> . When the              <CODE>( + )</CODE> 
+      function is evaluated, each of              <CODE>f</CODE> and             
+       <CODE>g</CODE> are evaluated by applying the              <CODE>il</CODE> 
+      value before emitting the              <CODE>Add</CODE> CIL instruction to 
+      add their results:           </P>
+<PRE>&gt; let ( + ) f g (il: ILGenerator) =
+    f il
+    g il
+    il.Emit(OpCodes.Add);;
+val ( + ) :
+  (ILGenerator -&gt; unit) -&gt; (ILGenerator -&gt; unit) -&gt; ILGenerator -&gt; unit</PRE>
+      <P>The              <CODE>store_p</CODE> function evaluates its argument 
+      and then emits the store CIL instruction:           </P>
+<PRE>&gt; let store_p f (il: ILGenerator) =
+    f il
+    il.Emit(OpCodes.Stloc_0);;
+val store_p : (ILGenerator -&gt; unit) -&gt; ILGenerator -&gt; unit</PRE>
+      <P>The              <CODE>store_d</CODE> function loads the array          
+          <CODE>d</CODE> and then              <CODE>p</CODE> and then evaluates 
+      its argument              <CODE>f</CODE> to get the value that is to be 
+      stored before calling the CIL store instruction:           </P>
+<PRE>&gt; let store_d f (il: ILGenerator) =
+    il.Emit(OpCodes.Ldarg_0)
+    load_p il
+    f il
+    il.Emit(OpCodes.Stelem_I1);;
+val store_d : (ILGenerator -&gt; unit) -&gt; ILGenerator -&gt; unit</PRE>
+      <P>The              <CODE>apply</CODE> function evaluates an argument 
+      before emitting the CIL call instruction to invoke a function:           
+      </P>
+<PRE>&gt; let apply (f : System.Reflection.MethodInfo) xs (il: ILGenerator) =
+    for x in xs do
+      x il
+    il.Emit(OpCodes.Call, f);;
+val apply :
+  System.Reflection.MethodInfo -&gt; (ILGenerator -&gt; unit) -&gt; ILGenerator -&gt; unit</PRE>
+      <P>Note that the invoked function may or may not leave results on the 
+      stack so this can be used both to invoke purely side-effecting functions 
+      like              <CODE>putchar</CODE> as well as functions that return a 
+      value like              <CODE>getchar</CODE> .           </P>
+      <P>In the context of these definitions, the core              
+      <CODE>compile</CODE> function that implements the guts of our compiler 
+      becomes remarkably simple:           </P>
+<PRE>&gt; let rec compile (il: ILGenerator) read =
+    let c = read()
+    match c with
+    | Some '&gt;' -&gt; store_p(load_p + int 1) il
+    | Some '&lt;' -&gt; store_p(load_p + int(-1)) il
+    | Some '+' -&gt; store_d(load_d + int 1) il
+    | Some '-' -&gt; store_d(load_d + int(-1)) il
+    | Some '.' -&gt; apply putchar [load_d] il
+    | Some ',' -&gt; store_d(apply getchar []) il
+    | Some '[' -&gt;
+        let test = il.DefineLabel()
+        let rest = il.DefineLabel()
+        il.Emit(OpCodes.Br, test)</PRE>
+<PRE>        il.MarkLabel(test)
+        load_d il
+        int 0 il
+        il.Emit(OpCodes.Beq, rest)
+        compile il read
+        il.Emit(OpCodes.Br, test)</PRE>
+<PRE>        il.MarkLabel(rest)
+    | _ -&gt; ()
+    match c with
+    | Some ']' | None -&gt; ()
+    | _ -&gt; compile il read;;
+val compile : ILGenerator -&gt; (unit -&gt; char option) -&gt; unit</PRE>
+      <P>This reads a character using the given              <CODE>read</CODE> 
+      function, uses one              <CODE>match</CODE> block to emit the 
+      necessary instructions and then uses another              
+      <CODE>match</CODE> block to recurse in order to compile more BF bytecode 
+      operations if necessary.           </P>
+      <P>There are two important things to note about this function:</P>
+      <P>
+      <OL>
+        <LI>The match case for the                  <CODE>[</CODE> bytecode 
+        operation includes a recursive call to the                  
+        <CODE>compile</CODE> function that is used to emit the body of the loop  
+                     </LI>
+        <LI>Both the end of a BF loop (the                  <CODE>]</CODE> 
+        bytecode) and empty input result in this function returning without 
+        recursing.               </LI></OL>
+      <P></P>
+      <P>The following              <CODE>main</CODE> function reads a BF 
+      program from a file and compiles it into a              
+      <CODE>DynamicMethod</CODE> :           </P>
+<PRE>&gt; let main (filename : string) =
+    let dm = DynamicMethod("bf", null, [|typeof&lt;int8 array&gt;|])
+    let il = dm.GetILGenerator()
+    let p = il.DeclareLocal(typeof&lt;int&gt;)
+    il.Emit(OpCodes.Ldc_I4, 0)
+    il.Emit(OpCodes.Stloc_0)
+    use reader = new System.IO.StreamReader(filename)
+    let read() =
+      if reader.EndOfStream then None else reader.Read() |&gt; char |&gt; Some
+    compile il read
+    il.Emit(OpCodes.Ret)
+    dm;;
+val main : string -&gt; DynamicMethod</PRE>
+      <P>Code declaring the local variable              <CODE>p</CODE> and 
+      initializing it to zero is emitted before the              
+      <CODE>compile</CODE> function is called and the              
+      <CODE>Ret</CODE> CIL instruction is emitted afterwards to return from the 
+      function.           </P>
+      <P>The following statements use a WPF open file dialog box to let the user 
+      choose which BF program to compile and run, compiles the BF program into a 
+      dynamic .NET method, allocates a 64k heap for the BF program and invokes 
+      the dynamic method with the heap to execute the compiled BF program:</P>
+<PRE>&gt; do
+    let dialog = Microsoft.Win32.OpenFileDialog()
+    let result = dialog.ShowDialog()
+    if result.HasValue &amp;&amp; result.Value then
+      let dm = main dialog.FileName
+      let d = Array.create 65536 0y
+      dm.Invoke(null, [| box d |]) |&gt; ignore;;</PRE>
+      <P>Remarkably, this entire native-code compiler for a foreign programming 
+      language weighs in at under 100 lines of F# source code. Even more 
+      impressive, the performance is good!</P>
+      <H2>Results</H2>
+      <P>The single most important reason for creating a compiler rather than an 
+      interpreter is the performance of program execution. We may compare the 
+      performance of this JIT compiler for the BF language to the equivalent 
+      interpreter described in the previous F#.NET Journal article. As expected, 
+      we find that computationally-intensive BF programs can be executed more 
+      quickly using this compiler.</P>
+      <P>In this case we find that the performance of both the Mandelbrot and 
+      Hanoi benchmarks is considerably improved by the use of run-time code 
+      generation and compilation compared to straightforward interpreting:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/perf.png"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has shown how the run-time code generation capabilities of 
+      the .NET platform combine with the benefits of the F# programming language 
+      to make it incredibly easy to write high-performance optimizing native 
+      code compilers that offer substantial performance improvements.</P>
+      <P>In particular, the use of functional programming was instrumental in 
+      the elegant construction of our compiler. Computations were deferred using 
+      first-class functions with almost no overhead thanks to syntactic support 
+      for currying, yielding a remarkably clear and concise compiler 
+      implementation.</P>
+      <P>Run-time code generation has many other applications in addition to 
+      conventional compiler writing. Regular expression matching is one 
+      application already covered by .NET. The generation of FFT codelets for 
+      efficient discrete Fourier transforms is another 
+  application.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Run-time%20code%20generation%20using%20System_Reflection_Emit_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

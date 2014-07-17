@@ -1,0 +1,406 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0077)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/directx.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Introducing DirectX</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Introducing%20DirectX_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Introducing%20DirectX_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Introducing%20DirectX_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Introducing DirectX</TITLE>     <LINK href="F%23%20Journal%20Introducing%20DirectX_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Introducing%20DirectX_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Introducing%20DirectX_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Introducing%20DirectX_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Introducing%20DirectX_files/left.gif">      
+         </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Introducing DirectX</H1>
+      <P>The .NET platform contains library interfaces to almost all of the 
+      functionality bundled with the Windows platform. Hardware-accelerated 
+      graphics are no exception and Managed DirectX (             <B>MDX</B> ) 
+      for .NET provides a high-level and type-safe interface to the DirectX API. 
+                </P>
+      <H2>Overview</H2>
+      <P>A basic DirectX renderer creates a Windows form and places a single 
+      control in it called a DirectX device.</P>
+      <P>DirectX devices encapsulate the canvas, parameters (e.g. whether or not 
+      a depth-buffer and multi-sampling are provided) and texture and geometry 
+      data.</P>
+      <P>The              <CODE>Paint</CODE> event of the form containing the 
+      DirectX device will ensure that the device is correctly configured before 
+      conveying rendering information to DirectX using function calls and .NET 
+      data structures (primarily arrays). Once the transfer of information is 
+      complete, the result is              <I>presented</I> on the canvas.       
+          </P>
+      <P>The way the results are presented (rendered) is determined by the       
+             <I>present parameters</I> that were given to the DirectX device. 
+      DirectX (including MDX) is unusually low-level and it exposes invalidation 
+      of the current device (e.g. when the window is enlarged and the canvas is 
+      no longer large enough to cover it) via device              <I>resets</I> 
+      and              <I>losses</I> that must be handled by all programs that 
+      use DirectX.           </P>
+      <P>Once the information required for rendering has been conveyed to 
+      DirectX via a series of calls, the              <CODE>Present</CODE> 
+      member of the DirectX device is called to display the result.           
+      </P>
+      <P>The creation of a form and device, and the handling of events can be 
+      achieved in two different ways in F#. The C#-style approach of deriving a 
+      new class from a Windows form that encapsulated the DirectX device that it 
+      uses and overrides the necessary events is currently considered idiomatic 
+      for the .NET platform. However, the F# language also allows us to use 
+      first class events, add handlers to existing classes and use a different 
+      approach to encapsulation. In this article, we shall use the latter 
+      approach, which is idiomatic F# and leads to flatter, clearer and shorter 
+      programs. As we shall see, the ability to factor out higher-order 
+      functions is of critical importance with this approach.</P>
+      <H2>References</H2>
+      <P>In order to use MDX, an F# program must begin with references to the 
+      appropriate DLLs. The              <CODE>#I</CODE> directive instructs F# 
+      to add the given directory to its search path:           </P>
+<PRE>&gt; #I @"C:\WINDOWS\Microsoft.NET\DirectX for Managed Code\1.0.2902.0";;</PRE>
+      <P>In this case, we are searching for the latest release of MDX at the 
+      time of writing.</P>
+      <P>Now we can refer to the three relevant DLLs:</P>
+<PRE>&gt; #r "Microsoft.DirectX.dll";;
+&gt; #r "Microsoft.DirectX.Direct3D.dll";;
+&gt; #r "Microsoft.DirectX.Direct3DX.dll";;</PRE>
+      <P>The first two provide core DirectX functionality and the last one adds 
+      some useful utility functions.</P>
+      <P>When compiling to a standalone executable rather than running 
+      interactively, there can also be a requirement for the              
+      <CODE>Microsoft.VisualC.dll</CODE> . This is most easily added via the     
+               <CODE>Project</CODE> dialog.           </P>
+      <H2>Namespaces</H2>
+      <P>Programs that use DirectX typically make us of a variety of definitions 
+      from various namespaces, so it is useful to open the most common ones:</P>
+<PRE>&gt; open System;;
+&gt; open Drawing;;
+&gt; open Windows.Forms;;
+&gt; open Microsoft.DirectX;;
+&gt; open Direct3D;;</PRE>
+      <H2>Present parameters</H2>
+      <P>The properties of a DirectX device are encapsulated in a class called   
+                 <CODE>PresentParameters</CODE> that must be created and 
+      initialized appropriately such that it can be passed to the device upon 
+      creation and when the device is reset.           </P>
+      <P>A simple              <CODE>PresentParameters</CODE> may be created as 
+      follows:           </P>
+<PRE>&gt; let present_params =
+    let p = new PresentParameters()
+    p.Windowed &lt;- true
+    p.SwapEffect &lt;- SwapEffect.Discard
+    p.EnableAutoDepthStencil &lt;- true
+    p.AutoDepthStencilFormat &lt;- DepthFormat.D24S8
+    [|p|];;
+val present_params : PresentParameters array</PRE>
+      <P>The              <CODE>PresentParameters</CODE> class is an object 
+      oriented representation of the optional arguments that can be passed to a 
+      DirectX device. This design pattern is typical of object oriented 
+      languages and is seen throughout .NET. In particular, we request a 24-bit 
+      depth buffer and 8-bit stencil buffer for this device.           </P>
+      <H2>Device creation</H2>
+      <P>A DirectX device may be created from a given form and with the given 
+      present parameters using the following funciton:</P>
+<PRE>&gt; let make_device (form : #Form) =
+    let flags = CreateFlags.SoftwareVertexProcessing
+    new Device(0, DeviceType.Hardware, form, flags, present_params);;
+val make_device : #Form -&gt; Device</PRE>
+      <P>Note that              <CODE>form</CODE> argument is annotated with the 
+      type              <CODE>#Form</CODE> , denoting any subtype of the         
+           <CODE>Form</CODE> class. This is useful if we intend to create a new 
+      class that derives from the existing              <CODE>Form</CODE> class 
+      and we want to pass it as the argument              <CODE>form</CODE> here 
+      without having to upcast it to the              <CODE>Form</CODE> type.    
+             </P>
+      <H2>Painting</H2>
+      <P>By default, Windows blanks every form to a background gray color before 
+      rendering its contents. When we know that the              
+      <CODE>Paint</CODE> method will overwrite the whole of the client rectangle 
+      of the form and we will be doing animation, it is necessary to prevent 
+      Windows from drawing the background in order to prevent flickering.        
+         </P>
+      <P>There are two solutions. The conventional C# solution often recommended 
+      in existing literature is to call the              <CODE>SetStyle</CODE> 
+      member of the form during construction, with something like this:          
+       </P>
+<PRE>this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.Opaque, true);</PRE>
+      <P>However, the designers of MDX made the              
+      <CODE>SetStyle</CODE> member private, so it cannot be accessed from 
+      outside the class, i.e. using idiomatic F# code.           </P>
+      <P>A neater alternative is to create a small class derived from            
+        <CODE>Form</CODE> that simply overrides the              
+      <CODE>PaintBackground</CODE> event with a no-op:           </P>
+<PRE>&gt; type Viewer() = class
+    inherit Form()
+    override form.OnPaintBackground _ = ()
+  end;;
+type Viewer =
+  class
+    inherit Form
+  end
+  with
+    new : unit -&gt; Viewer
+  end</PRE>
+      <P>Any paint event attached to an object of the              
+      <CODE>Viewer</CODE> class must redraw every pixel.           </P>
+      <P>The task of ensuring that the DirectX device is properly initialized 
+      and wrapping the drawing calls with appropriate              
+      <CODE>BeginScene</CODE> and              <CODE>EndScene</CODE> calls is 
+      neatly encapsulated in a generic higher-order function that can be 
+      specialized to the appropriate renderer and attached to the paint event of 
+      a              <CODE>Viewer</CODE> object:           </P>
+<PRE>&gt; let paint (form : #Form) render (device : Device) _ =
+    try
+      device.TestCooperativeLevel()
+      device.BeginScene()
+      render device
+      device.EndScene()
+      device.Present()
+      form.Invalidate()
+    with
+      | :? DeviceLostException -&gt; ()
+      | :? DeviceNotResetException -&gt;
+          device.Reset(resent_params);;
+val paint : #Form -&gt; (Device -&gt; unit) -&gt; Device -&gt; 'b -&gt; unit</PRE>
+      <P>The usual DirectX calls required to describe and present a scene are 
+      wrapped in an exception handler. Two kinds of exception are handled and in 
+      both cases the notation              <CODE>:?</CODE> is used to denote a 
+      run-time type test against classes of exception provided by DirectX. This 
+      is typical when dealing with exceptions defined by .NET rather than native 
+      F# exceptions like              <CODE>Not_found</CODE> . In this case, the 
+      call to              <CODE>TestCooperativeLevel</CODE> is the potential 
+      source of exceptions. This call is used to ensure that the DirectX device 
+      is appropriately initialized and ready. As the exceptions only occur when 
+      things go wrong (exceptional circumstances), the performance overhead of 
+      exceptions does not slow down normal rendering.           </P>
+      <H2>Creating a Viewer</H2>
+      <P>The various calls requires to construct a              
+      <CODE>Viewer</CODE> object can be wrapped in a higher-order function that 
+      is parameterized of the              <CODE>render</CODE> function required 
+      by the              <CODE>paint</CODE> function:           </P>
+<PRE>&gt; let make_viewer title render =
+    let form = new Viewer(Text=title, Visible=true)
+    form.MinimumSize &lt;- form.Size
+    let device = make_device form
+    form.Paint.Add(paint form render device)
+    form.Resize.Add(fun _ -&gt; form.Invalidate())
+    form.KeyDown.Add(fun e -&gt; if e.KeyCode = Keys.Escape then form.Close())
+    form.Invalidate();;
+val make_viewer : string -&gt; (Device -&gt; unit) -&gt; Viewer</PRE>
+      <P>This function begins by creating a new              <CODE>Viewer</CODE> 
+      object and setting some properties to give the form a title and display it 
+      immediately. The minimum size of the form is set to the current size 
+      because DirectX crashes if a device is shrunk to zero area. A DirectX 
+      device is then created for the window. The              <CODE>paint</CODE> 
+      function is attached to the              <CODE>Paint</CODE> event. By 
+      default, the contents of a window are not redisplayed when the window is 
+      shrunk, so we override this default behaviour by invalidating the form in 
+      the              <CODE>Resize</CODE> event. A handler is added to close 
+      then form if the escape key is pressed when the form has the focus. 
+      Finally, the form in invalidated to force a redisplay.           </P>
+      <H2>First example</H2>
+      <P>This boilerplate code is sufficiently encompassing that we can now 
+      create a minimal DirectX demo.</P>
+      <P>The following              <CODE>render</CODE> function simply clears 
+      the display to a single color:           </P>
+<PRE>&gt; let render (device : Device) =
+    device.Clear(ClearFlags.Target, Color.Coral, 1.f, 0);;
+val render : Device -&gt; unit</PRE>
+      <P>This function may be given to the              <CODE>make_viewer</CODE> 
+      function to create a simple visualization:           </P>
+<PRE>&gt; let form = make_viewer "Blank" render;;
+val form : Viewer</PRE>
+      <P>When evaluated in an interactive session, the following Window is 
+      created:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Introducing%20DirectX_files/mdx1.gif"> 
+                  </P>
+      <P></P>
+      <P>At the time of writing, there are some problems with the use of DirectX 
+      visualizations from F# interactive sessions that require some redundant 
+      user input to be provided before the visualization will be completely 
+      created. Most likely, you will need to press Enter several times after the 
+      above code is entered.</P>
+      <P>The remainder of this article discusses how F# programs can generate 
+      graphics using DirectX.</P>
+      <H2>Buffers</H2>
+      <P>3D visualizations will require a depth buffer. The code above requested 
+      a 24-bit depth buffer, which is ample for most visualizations.</P>
+      <P>There are three relevant buffers:</P>
+      <P>
+      <UL>
+        <LI>Target buffer: this is the actual pixel content displayed on 
+        screen</LI>
+        <LI>Depth buffer: stores the depth fo each pixel in the scene, allowing 
+        the renderer to cull obscured objects.</LI>
+        <LI>Stencil buffer: allows a small integer to be accumulated in each 
+        pixel and used to filter rendering.</LI></UL>
+      <P></P>
+      <P>A single value representing all three buffers may be written:</P>
+<PRE>&gt; let all_buffers =
+    ClearFlags.Target ||| ClearFlags.ZBuffer ||| ClearFlags.Stencil;;
+val all_buffers : ClearFlags</PRE>
+      <H2>Vectors and Matrices</H2>
+      <P>DirectX provides its own implementation of vectors and matrices. The 
+      representation used is known as 4D homogeneous coordinates and the use of 
+      a fourth dimension allows 3D translations to be represented by a matrix as 
+      well as the usual skews, rotations and scalings. A 32-bit float is used to 
+      represent each number in a vector or matrix and this corresponds to the    
+                <CODE>float32</CODE> type in F#.           </P>
+      <P>Vectors are represented by the              <CODE>Vector3</CODE> class 
+      and matrices are represented by the              <CODE>Matrix</CODE> 
+      class.           </P>
+      <H2>Vertices</H2>
+      <P>DirectX also provides definitions for vertices in the              
+      <CODE>CustomVertex</CODE> class. There are several possible definitions 
+      and some include color data whereas others include texture data for each 
+      vertex.           </P>
+      <P>We shall use a definition that allows position, surface normal and 
+      color data to be supplied for each vertex, with the alias:</P>
+<PRE>&gt; type Vertex = CustomVertex.PositionNormalColored;;</PRE>
+      <P>As vertex positions are more numerous than surface normals (which are 
+      shared by flat surfaces) which are in turn more numerous than colors 
+      (often shared by entire meshes), it is useful to write a constructor in 
+      curried form that allows colors and then normals to be partially 
+      applied:</P>
+<PRE>&gt; let vertex3 (c : Color) (n : Vector3) (p : Vector3) =
+    new Vertex(p.X, p.Y, p.Z, n.X, n.Y, n.Z, c.ToArgb());;
+val vertex3 : Color -&gt; float32 * float32 * float32 -&gt; float32 * float32 * float32 -&gt; Vertex</PRE>
+      <P>We may also wish to create 2D vertices:</P>
+<PRE>&gt; let vertex2 (c : Color) (x, y) =
+    new Vertex(x, y, 0.f, 0.f, 0.f, -1.f, c.ToArgb());;
+val vertex2 : Color -&gt; float32 * float32 -&gt; Vertex</PRE>
+      <P>Scenes can be visualized using a variety of different projections. The 
+      two most common projections are orthographic for 2D and perspective for 
+      3D.</P>
+      <H2>Projection</H2>
+      <P>Projections are most easily handled in F# using a combinator that wraps 
+      a              <CODE>render</CODE> function with the code required to 
+      initialize the projection. In this case, we shall create combinators 
+      called              <CODE>show2d</CODE> and              
+      <CODE>show3d</CODE> to help visualize 2D and 3D scenes, respectively.      
+           </P>
+      <H3>Orthographic</H3>
+      <P>The following              <CODE>show2d</CODE> combinator provides 
+      orthographic projections for 2D graphics:           </P>
+<PRE>&gt; let show2d render (device : Device) =
+    let near = -1.f
+    let far = 1.f
+    let vp = device.Viewport
+    device.Transform.Projection &lt;-
+      Matrix.OrthoLH(float32 vp.Width, float32 vp.Height, near, far)
+    device.Clear(all_buffers, Color.White, far, 0)
+    device.RenderState.Lighting &lt;- false
+    device.RenderState.CullMode &lt;- Cull.None
+    render device;;
+val show2d : (Device -&gt; unit) -&gt; Device -&gt; unit</PRE>
+      <P>Note that we are careful to turn off lighting and back-face culling 
+      because these are generally undesirable in 2D.</P>
+      <P>The area projected by this function is centered at the origin and has 
+      dimensions measured in pixels.</P>
+      <H3>Perspective Projection</H3>
+      <P>The following              <CODE>aspect</CODE> function computes the 
+      aspect ratio of the current display:           </P>
+<PRE>&gt; let aspect (vp : Viewport) =
+    float32 vp.Width / float32 vp.Height;;
+val aspect : Viewport -&gt; float32</PRE>
+      <P>This is used by the following              <CODE>perspective</CODE> 
+      function to set a perspective projection:           </P>
+<PRE>&gt; let perspective aspect near far camera target up (t : Transforms) =
+    t.Projection &lt;- Matrix.PerspectiveFovLH(0.8f, aspect, near, far)
+    t.View &lt;- Matrix.LookAtLH(camera, target, up);;
+val perspective : float32 -&gt; float32 -&gt; float32 -&gt; Vector3 -&gt; Vector3 -&gt; Vector3 -&gt; Transforms -&gt; unit</PRE>
+      <P>A default field-of-vision (             <B>FOV</B> ) of 0.8 is used.    
+             </P>
+      <P>The following              <CODE>show3d</CODE> combinator uses the      
+              <CODE>aspect</CODE> and              <CODE>perspective</CODE> 
+      functions to render with a 3D perspective projection:           </P>
+<PRE>&gt; let show3d render (device : Device) =
+    let far = 100.f
+    let camera = new Vector3(-1.f, 2.f, -4.f)
+    let target = new Vector3(0.f, 0.f, 0.f)
+    let up = new Vector3(0.f, 1.f, 0.f)
+    perspective (aspect device.Viewport) 0.01f far camera target up device.Transform
+    device.Clear(all_buffers, Color.White, far, 0)
+    device.Lights.[0].Direction &lt;- new Vector3(1.f, -1.f, 2.f)
+    device.Lights.[0].Enabled &lt;- true
+    render device;;
+val show3d : (Device -&gt; unit) -&gt; Device -&gt; unit</PRE>
+      <P>A default view is used, with a camera position, target position and 
+      upward direction for the camera. A default light is also placed in the 
+      scene.</P>
+      <H2>Rendering primitives</H2>
+      <P>DirectX allows a variety of primitives to be rendered, including 
+      points, lines and triangles. The simplest way to render primitives is by 
+      supplying vertex data in the form of a              <CODE>Vertex 
+      array</CODE> to the              <CODE>DrawUserPrimitives</CODE> function. 
+                </P>
+      <P>In the case of triangles, this can be productively encapsulated by the 
+      following function:</P>
+<PRE>&gt; let draw_triangles (device : Device) (vertex : Vertex array) =
+    if vertex &lt;&gt; [||] then
+      device.VertexFormat &lt;- Vertex.Format
+      let prim = PrimitiveType.TriangleList
+      let n = Array.length vertex / 3
+      device.DrawUserPrimitives(prim, n, vertex);;
+val draw_triangles : Device -&gt; Vertex array -&gt; unit</PRE>
+      <P>We are careful to avoid calling the              
+      <CODE>DrawUserPrimitives</CODE> function with an empty vertex array as the 
+      current DirectX implementation crashes.           </P>
+      <P>The use of other primitives, index arrays and static vertex arrays will 
+      be covered in future journal articles.</P>
+      <H2>Second example</H2>
+      <P>The following function draws a single triangle using the              
+      <CODE>draw_triangles</CODE> function:           </P>
+<PRE>&gt; let triangle = [|-100.f, -100.f; 0.f, 100.f; 100.f, -100.f|];;
+val triangle : (float32 * float32) array
+&gt; let render_triangle (device : Device) =
+    Array.map (vertex2 Color.BurlyWood) triangle
+    |&gt; draw_triangles device;;
+val render_triangle : Device -&gt; unit</PRE>
+      <P>This              <CODE>triangle</CODE> function can be used as the     
+               <CODE>render</CODE> function with the              
+      <CODE>show3d</CODE> combinator.           </P>
+      <P>A form visualizing the triangle drawn by this function can be spawned 
+      from an F# interactive session using a single line of code:</P>
+<PRE>&gt; let form = make_viewer "Triangle" (show2d render_triangle);;
+val form : Viewer</PRE>
+      <P>This displays the following result:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Introducing%20DirectX_files/mdx2.gif"> 
+                  </P>
+      <P></P>
+      <P>Future articles will build upon this code base to create more 
+      sophisticated visualizations.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Introducing%20DirectX_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

@@ -1,0 +1,152 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/quickhull.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20quick%20hull_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20quick%20hull_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20quick%20hull_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20quick%20hull_files/title.gif"> 
+    </TD>
+    <TD><IMG src="F%23%20Journal%20quick%20hull_files/left.gif"> 
+</TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Computational geometry: quick hull</H1>
+      <P>Computing the convex hull of a set of points is a challenge of 
+      fundamental importance in computational geometry. Other tasks such as 
+      Delaunay triangulation can be built upon a convex hull algorithm and then 
+      tasks such as Ruppert's algorithm may be built upon those. This article 
+      describes the design and implementation of the quickhull algorithm in just 
+      10 lines of F# code before going on to build a WPF-based GUI application 
+      that can be used to manipulate a convex hull interactively.</P>
+      <H2>Introduction</H2>
+      <P>The quickhull algorithm for computing convex hulls gets its name from 
+      the conceptually similar quicksort algorithm. Like quicksort, quickhull 
+      picks pivots in order to partition the problem into smaller subsets and, 
+      therefore, the resulting call graph naturally forms a tree. Instead of 
+      sorting a subsequence, the basic recursive step of quickhull is to build a 
+      dome on a base edge: given a base edge, the triangle formed by adding the 
+      furthest possible point from the base produces two new candidate base 
+      edges; each of those may have a dome constructed on it, and the process 
+      continues until we have built a dome-like section of the convex hull in 
+      between the points on the original base edge. In particular, all of the 
+      points inside the new triangle may be culled from further consideration, 
+      giving quickhull excellent performance characteristics.</P>
+      <P>This kind of recursive divide-and-conquer algorithm is the bread and 
+      butter of F# programming and nothing is more gratifying that developing an 
+      interactive graphical application that demonstrates exactly what is being 
+      computed. Therefore, we shall begin by developing a tiny computational 
+      kernel, quickhull in just 10 lines of code, before going on to develop a 
+      WPF application that is useful for both testing and teaching.</P>
+      <H2>Quickhull implementation</H2>
+      <P>We begin by referencing the .NET assemblies necessary to use Windows 
+      Presentation Foundation and opening the <CODE>System.Windows</CODE> 
+      namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Xaml.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\<BR>&nbsp;&nbsp;&nbsp;&nbsp;System.Xaml.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationCore.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\<BR>&nbsp;&nbsp;&nbsp;&nbsp;PresentationCore.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationFramework.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\<BR>&nbsp;&nbsp;&nbsp;&nbsp;PresentationFramework.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"WindowsBase.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\<BR>&nbsp;&nbsp;&nbsp;&nbsp;WindowsBase.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>Although this section is devoted to the computational aspect of the 
+      program we shall use the WPF <CODE>Vector</CODE> type to represent vectors 
+      in order to simplify our solution.</P>
+      <P>The following <CODE>hsplit</CODE> function finds the point from 
+      <CODE>points</CODE> that is furthest from the base line from 
+      <CODE>p1</CODE> to <CODE>p2</CODE> and recurses until no more than one 
+      point remains:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;hsplit&nbsp;points&nbsp;(p1:&nbsp;Vector,&nbsp;p2:&nbsp;Vector)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dist&nbsp;p&nbsp;=&nbsp;Vector.CrossProduct(p1&nbsp;-&nbsp;p,&nbsp;p2&nbsp;-&nbsp;p)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;packed&nbsp;=&nbsp;points&nbsp;|&gt;&nbsp;Array.filter&nbsp;(fun&nbsp;p&nbsp;-&gt;&nbsp;dist&nbsp;p&nbsp;&gt;&nbsp;0.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;packed.Length&nbsp;&lt;&nbsp;2&nbsp;then&nbsp;Seq.append&nbsp;[|p1|]&nbsp;packed&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pm&nbsp;=&nbsp;points&nbsp;|&gt;&nbsp;Seq.maxBy&nbsp;dist<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.append&nbsp;(hsplit&nbsp;packed&nbsp;(p1,&nbsp;pm))&nbsp;(hsplit&nbsp;packed&nbsp;(pm,&nbsp;p2));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;hsplit&nbsp;:&nbsp;Vector&nbsp;[]&nbsp;-&gt;&nbsp;Vector&nbsp;*&nbsp;Vector&nbsp;-&gt;&nbsp;seq&lt;Vector&gt;</CODE></P>
+      <P>The following <CODE>quickHull</CODE> function uses the points with the 
+      minimum and maximum <CODE>x</CODE>-coordinates to form the initial hull 
+      and then calls the <CODE>hsplit</CODE> function twice to construct the 
+      hulls on either side of the line between these points:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;quickHull&nbsp;(points:&nbsp;Vector&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;minx&nbsp;=&nbsp;points&nbsp;|&gt;&nbsp;Array.minBy&nbsp;(fun&nbsp;p&nbsp;-&gt;&nbsp;p.X)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;maxx&nbsp;=&nbsp;points&nbsp;|&gt;&nbsp;Array.maxBy&nbsp;(fun&nbsp;p&nbsp;-&gt;&nbsp;p.X)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.append&nbsp;(hsplit&nbsp;points&nbsp;(minx,&nbsp;maxx))&nbsp;(hsplit&nbsp;points&nbsp;(maxx,&nbsp;minx));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;quickHull&nbsp;:&nbsp;Vector&nbsp;[]&nbsp;-&gt;&nbsp;seq&lt;Vector&gt;</CODE></P>
+      <P>We can test our program on an example point cloud but, first, we 
+      provide a more user-friendly function for pretty printing values of the 
+      WPF <CODE>Vector</CODE> type in an F# interactive session:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;fsi.AddPrinter(fun&nbsp;(r:&nbsp;Vector)&nbsp;-&gt;&nbsp;sprintf&nbsp;"%g,&nbsp;%g"&nbsp;r.X&nbsp;r.Y);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>This will allow us to see the output more clearly. We shall use the 
+      following example set of points:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;points&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|for&nbsp;x,&nbsp;y&nbsp;in&nbsp;[3.,3.;&nbsp;2.,7.;&nbsp;0.,0.;&nbsp;8.,5.;&nbsp;4.,6.;&nbsp;5.,3.;&nbsp;9.,6.;&nbsp;10.,0.]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Vector(x,&nbsp;y)|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;points&nbsp;:&nbsp;Vector&nbsp;[]&nbsp;=&nbsp;[|3,3;&nbsp;2,7;&nbsp;0,0;&nbsp;8,5;&nbsp;4,6;&nbsp;5,3;&nbsp;9,6;&nbsp;10,0|]</CODE></P>
+      <P>The convex hull of these points is easily computed as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;quickHull&nbsp;points;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;Vector&gt;&nbsp;=&nbsp;seq&nbsp;[0,&nbsp;0;&nbsp;2,&nbsp;7;&nbsp;9,&nbsp;6;&nbsp;10,&nbsp;0]</CODE></P>
+      <P>This result can be verified by hand.</P>
+      <H2>GUI front-end</H2>
+      <P>The following creates a more substantial example set of points:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;points&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|for&nbsp;_&nbsp;in&nbsp;1..100&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x,&nbsp;y&nbsp;=&nbsp;rand.NextDouble(),&nbsp;rand.NextDouble()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;(x&nbsp;-&nbsp;0.5)&nbsp;**&nbsp;2.0&nbsp;+&nbsp;(y&nbsp;-&nbsp;0.5)&nbsp;**&nbsp;2.0&nbsp;&lt;&nbsp;0.25&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;300.&nbsp;*&nbsp;Vector(x,&nbsp;y)&nbsp;+&nbsp;Vector(100.,&nbsp;100.)|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;points&nbsp;:&nbsp;Vector&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|124.534,&nbsp;236.98;&nbsp;212.053,&nbsp;385.237;&nbsp;167.332,&nbsp;363.911;&nbsp;201.786,&nbsp;161.708;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;243.399,&nbsp;258.229;&nbsp;176.658,&nbsp;375.595;&nbsp;203.416,&nbsp;277.865;&nbsp;156.582,&nbsp;334.502;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;357.947,&nbsp;190.05;&nbsp;162.914,&nbsp;367.774;&nbsp;129.06,&nbsp;182.69;&nbsp;154.124,&nbsp;202.717;&nbsp;...</CODE></P>
+      <P>A key aspect of the GUI is the ability to drag and drop points in the 
+      point set and watch the convex hull as it is recomputed in real time. The 
+      following <CODE>drag</CODE> value is the current state of the outstanding 
+      drag operation, if any, represented by the index of the point being 
+      dragged:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;drag&nbsp;:&nbsp;int&nbsp;option&nbsp;ref&nbsp;=&nbsp;ref&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;drag&nbsp;:&nbsp;int&nbsp;option&nbsp;ref&nbsp;=&nbsp;{contents&nbsp;=&nbsp;null;}</CODE></P>
+      <P>This design follows the mantra "make illegal states unrepresentable". 
+      Alternative designs in languages where this cannot be so easily expressed 
+      tend to use one boolean variable to indicate whether or not a drag is in 
+      progress and another integer variable to convey the index when meaningful. 
+      Using data structures such as the <CODE>option</CODE> type in F# precludes 
+      the possibility of non-sensical values being created and encountered at 
+      run-time, reducing the scope for errors and the number of run-time 
+      tests.</P>
+      <P>The following <CODE>size</CODE> variable dictates the size of a point 
+      when drawn:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;size&nbsp;=&nbsp;5.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;size&nbsp;:&nbsp;float&nbsp;=&nbsp;5.0</CODE></P>
+      <P>The following <CODE>mkEllipse</CODE> function creates a WPF 
+      <CODE>Ellipse</CODE> shape and registers callbacks to handle the mouse up 
+      and mouse down events in order to start and finish drags:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mkEllipse&nbsp;i&nbsp;_&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ellipse&nbsp;=&nbsp;Shapes.Ellipse(Fill=Media.Brushes.Red,&nbsp;Width=size,&nbsp;Height=size)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ellipse.MouseDown.Add(fun&nbsp;e&nbsp;-&gt;&nbsp;drag&nbsp;:=&nbsp;Some&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ellipse.MouseUp.Add(fun&nbsp;e&nbsp;-&gt;&nbsp;drag&nbsp;:=&nbsp;None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ellipse;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mkEllipse&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;Vector&nbsp;-&gt;&nbsp;Shapes.Ellipse</CODE></P>
+      <P>The following <CODE>move</CODE> function moves one of the points and 
+      updates the visualization accordingly:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;move&nbsp;canvas&nbsp;update&nbsp;(e:&nbsp;Input.MouseEventArgs)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;!drag&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;i&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p&nbsp;=&nbsp;e.GetPosition&nbsp;canvas<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;points.[i]&nbsp;&lt;-&nbsp;Vector(p.X,&nbsp;p.Y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;update&nbsp;i;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;move&nbsp;:&nbsp;IInputElement&nbsp;-&gt;&nbsp;(int&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;Input.MouseEventArgs&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The following <CODE>point</CODE> function converts a WPF 
+      <CODE>Vector</CODE> into a WPF <CODE>Point</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;point&nbsp;(r:&nbsp;Vector)&nbsp;=&nbsp;Point(r.X,&nbsp;r.Y);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;point&nbsp;:&nbsp;Vector&nbsp;-&gt;&nbsp;Point</CODE></P>
+      <P>This <CODE>update</CODE> function sets the position of the 
+      <CODE>Ellipse</CODE> used to draw a point on the canvas and recomputes the 
+      convex hull and updates the points in the <CODE>Polygon</CODE> used to 
+      render it:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;update&nbsp;(polygon:&nbsp;Shapes.Polygon)&nbsp;(ellipses:&nbsp;_&nbsp;[])&nbsp;i&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p,&nbsp;ellipse&nbsp;=&nbsp;points.[i],&nbsp;ellipses.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Canvas.SetLeft(ellipse,&nbsp;p.X&nbsp;-&nbsp;size&nbsp;/&nbsp;2.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Canvas.SetBottom(ellipse,&nbsp;500.&nbsp;-&nbsp;p.Y&nbsp;-&nbsp;size&nbsp;/&nbsp;2.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;polygon.Points.Clear()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;quickHull&nbsp;points&nbsp;|&gt;&nbsp;Seq.iter&nbsp;(point&nbsp;&gt;&gt;&nbsp;polygon.Points.Add);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;update&nbsp;:&nbsp;Shapes.Polygon&nbsp;-&gt;&nbsp;#UIElement&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Finally, the following main section of code pulls together this 
+      functionality into a GUI composed of a single window with a 
+      <CODE>Viewbox</CODE> to scale the contents of a <CODE>Canvas</CODE> 
+      control containing one polygon for the convex hull and ellipses for the 
+      points:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;canvas&nbsp;=&nbsp;Controls.Canvas(Width=500.0,&nbsp;Height=500.0,&nbsp;Background=Media.Brushes.White)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;polygon&nbsp;=&nbsp;Shapes.Polygon(Stroke=Media.Brushes.Black,&nbsp;StrokeThickness=1.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;polygon&nbsp;|&gt;&nbsp;canvas.Children.Add&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ellipses&nbsp;=&nbsp;points&nbsp;|&gt;&nbsp;Array.mapi&nbsp;mkEllipse<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;(canvas.Children.Add&nbsp;&gt;&gt;&nbsp;ignore)&nbsp;ellipses<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;update&nbsp;=&nbsp;update&nbsp;polygon&nbsp;ellipses<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.MouseMove.Add(move&nbsp;canvas&nbsp;update)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;update&nbsp;[0..points.Length-1]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;canvas&nbsp;=&nbsp;Controls.Viewbox(Child=canvas,&nbsp;Stretch=Media.Stretch.Uniform)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Window(Content=canvas,&nbsp;Title="Convex&nbsp;hull")&nbsp;|&gt;&nbsp;Application().Run&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <P>When run, this program produces an interactive WPF application that can 
+      be used to move the points and watch the convex hull being updated in real 
+      time:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20quick%20hull_files/quickhull.png"></P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of an 
+      implementation of the quickhull algorithm and a program to visualize it in 
+      action. These two components of the final program both have many 
+      applications.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of 
+      computational geometry and interactive 
+manipulation.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20quick%20hull_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

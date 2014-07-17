@@ -1,0 +1,165 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0097)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/stronglyconnectedcomponents.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20graph%20strongly%20connected%20components_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20graph%20strongly%20connected%20components_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20graph%20strongly%20connected%20components_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20graph%20strongly%20connected%20components_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20graph%20strongly%20connected%20components_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Graph theory: Strongly-connected components</H1>
+      <P>One of the most important fundamental algorithms in graph theory is 
+      Tarjan et al.'s 1972 algorithm for computing the strongly-connected 
+      components in a graph in linear time. Strongly-connected components are 
+      subgraphs where at least one path exists from any vertex to any other 
+      vertex. This has many applications and, in particular, is the basis of 
+      many more advanced algorithms from graph theory. This article describes 
+      both imperative and purely functional implementations of this algorithm 
+      and a WPF-based GUI application that visualizes the strongly connected 
+      components of a randomly-generated graph.</P>
+      <H2>Introduction</H2>
+      <P>The algorithm for identifying strongly-connected components by Tarjan 
+      et al. is based upon repeated depth-first searches of the graph. Many 
+      algorithms that work with directed graphs begin with such a decomposition. 
+      After decomposing a graph into strongly-connected components, these 
+      algorithms attack the components separately before combining the partial 
+      solutions into a complete solution taking into account the connections 
+      between components.</P>
+      <P>A strongly-connected component is a subgraph where every vertex has a 
+      path to every other vertex. Consequently, decomposing a graph into its 
+      strongly connected components is particularly useful as a means of 
+      creating subgraphs that confine cycles.</P>
+      <H2>Imperative implementation</H2>
+      <P>The algorithm of Tarjan et al. is most easily implemented in an 
+      imperative style:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Collections.Generic;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;stronglyConnectedComponents&nbsp;(V,&nbsp;E)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;root&nbsp;=&nbsp;Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;hashcomp&nbsp;=&nbsp;Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stack&nbsp;=&nbsp;Stack()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;numdfs,&nbsp;numcomp&nbsp;=&nbsp;ref&nbsp;0,&nbsp;ref&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;pop&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;stack.Count&nbsp;&gt;&nbsp;0&nbsp;&amp;&amp;&nbsp;fst(stack.Peek())&nbsp;&gt;&nbsp;x&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y,&nbsp;w&nbsp;=&nbsp;stack.Pop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hashcomp.[w]&nbsp;&lt;-&nbsp;!numcomp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;visit&nbsp;v&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;&lt;|&nbsp;root.ContainsKey&nbsp;v&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;incr&nbsp;numdfs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;!numdfs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;root.[v]&nbsp;&lt;-&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;w&nbsp;in&nbsp;E&nbsp;v&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;visit&nbsp;w<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;&lt;|&nbsp;hashcomp.ContainsKey&nbsp;w&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;root.[v]&nbsp;&lt;-&nbsp;min&nbsp;root.[v]&nbsp;root.[w]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;root.[v]&nbsp;=&nbsp;n&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;hashcomp.[v]&nbsp;&lt;-&nbsp;!numcomp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pop&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;incr&nbsp;numcomp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stack.Push(n,&nbsp;v)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;visit&nbsp;V<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;!numcomp,&nbsp;hashcomp;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;stronglyConnectedComponents&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&lt;'a&gt;&nbsp;*&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;int&nbsp;*&nbsp;Dictionary&lt;'a,int&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>This <CODE>stronglyConnectedComponents</CODE> function accepts a graph 
+      as a tuple <CODE>(V,&nbsp;E)</CODE> where <CODE>V</CODE> is the sequence 
+      of vertices in the graph and <CODE>E</CODE> is a function that maps any 
+      vertex onto the sequence of vertices that it has edges to.</P>
+      <P>The traveral uses two dictionaries and a stack. The <CODE>root</CODE> 
+      and <CODE>hashcomp</CODE> dictionary are used to associate an indices with 
+      each vertex. Storing these <CODE>int</CODE> indices in the vertex would be 
+      significantly more efficient but this approach (known as "decorating" a 
+      data structure) is unintrusive and, therefore, more user friendly. The 
+      <CODE>stack</CODE> stores the unvisited vertices.</P>
+      <P>The nested <CODE>visit</CODE> function is used to visit each vertex in 
+      the graph, performing a depth-first search starting from each vertex in 
+      turn. The <CODE>numcomp</CODE> value gives the number of 
+      strongly-connected components found and the <CODE>hashcomp</CODE> 
+      dictionary stores a mapping from each vertex to the index of its 
+      component.</P>
+      <H2>Example</H2>
+      <P>Consider the example of a 2D planar graph, a square grid, where pairs 
+      of adjacent vertices are always joined by an edge but the orientation of 
+      the edge is flipped randomly. The size of the grid may be parameterized by 
+      a variable <CODE>n</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;n&nbsp;=&nbsp;12;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;n&nbsp;:&nbsp;int&nbsp;=&nbsp;12</CODE></P>
+      <P>The vertices of the graph are easily enumerated using a sequence 
+      expression:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;V&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;x&nbsp;in&nbsp;0..n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;y&nbsp;in&nbsp;0..n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;x,&nbsp;y&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;V&nbsp;:&nbsp;(int&nbsp;*&nbsp;int)&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[(0,&nbsp;0);&nbsp;(0,&nbsp;1);&nbsp;(0,&nbsp;2);&nbsp;(0,&nbsp;3);&nbsp;(0,&nbsp;4);&nbsp;(0,&nbsp;5);&nbsp;(0,&nbsp;6);&nbsp;(0,&nbsp;7);&nbsp;(0,&nbsp;8);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(0,&nbsp;9);&nbsp;(0,&nbsp;10);&nbsp;(0,&nbsp;11);&nbsp;(1,&nbsp;0);&nbsp;(1,&nbsp;1);&nbsp;(1,&nbsp;2);&nbsp;(1,&nbsp;3);&nbsp;(1,&nbsp;4);&nbsp;(1,&nbsp;5);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(1,&nbsp;6);&nbsp;(1,&nbsp;7);&nbsp;(1,&nbsp;8);&nbsp;(1,&nbsp;9);&nbsp;(1,&nbsp;10);&nbsp;(1,&nbsp;11);&nbsp;(2,&nbsp;0);&nbsp;(2,&nbsp;1);&nbsp;(2,&nbsp;2);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(2,&nbsp;3);&nbsp;(2,&nbsp;4);&nbsp;(2,&nbsp;5);&nbsp;(2,&nbsp;6);&nbsp;(2,&nbsp;7);&nbsp;(2,&nbsp;8);&nbsp;(2,&nbsp;9);&nbsp;(2,&nbsp;10);&nbsp;(2,&nbsp;11);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(3,&nbsp;0);&nbsp;(3,&nbsp;1);&nbsp;(3,&nbsp;2);&nbsp;(3,&nbsp;3);&nbsp;(3,&nbsp;4);&nbsp;(3,&nbsp;5);&nbsp;(3,&nbsp;6);&nbsp;(3,&nbsp;7);&nbsp;(3,&nbsp;8);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(3,&nbsp;9);&nbsp;(3,&nbsp;10);&nbsp;(3,&nbsp;11);&nbsp;(4,&nbsp;0);&nbsp;(4,&nbsp;1);&nbsp;(4,&nbsp;2);&nbsp;(4,&nbsp;3);&nbsp;(4,&nbsp;4);&nbsp;(4,&nbsp;5);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(4,&nbsp;6);&nbsp;(4,&nbsp;7);&nbsp;(4,&nbsp;8);&nbsp;(4,&nbsp;9);&nbsp;(4,&nbsp;10);&nbsp;(4,&nbsp;11);&nbsp;(5,&nbsp;0);&nbsp;(5,&nbsp;1);&nbsp;(5,&nbsp;2);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(5,&nbsp;3);&nbsp;(5,&nbsp;4);&nbsp;(5,&nbsp;5);&nbsp;(5,&nbsp;6);&nbsp;(5,&nbsp;7);&nbsp;(5,&nbsp;8);&nbsp;(5,&nbsp;9);&nbsp;(5,&nbsp;10);&nbsp;(5,&nbsp;11);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(6,&nbsp;0);&nbsp;(6,&nbsp;1);&nbsp;(6,&nbsp;2);&nbsp;(6,&nbsp;3);&nbsp;(6,&nbsp;4);&nbsp;(6,&nbsp;5);&nbsp;(6,&nbsp;6);&nbsp;(6,&nbsp;7);&nbsp;(6,&nbsp;8);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(6,&nbsp;9);&nbsp;(6,&nbsp;10);&nbsp;(6,&nbsp;11);&nbsp;(7,&nbsp;0);&nbsp;(7,&nbsp;1);&nbsp;(7,&nbsp;2);&nbsp;(7,&nbsp;3);&nbsp;(7,&nbsp;4);&nbsp;(7,&nbsp;5);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(7,&nbsp;6);&nbsp;(7,&nbsp;7);&nbsp;(7,&nbsp;8);&nbsp;(7,&nbsp;9);&nbsp;(7,&nbsp;10);&nbsp;(7,&nbsp;11);&nbsp;(8,&nbsp;0);&nbsp;(8,&nbsp;1);&nbsp;(8,&nbsp;2);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(8,&nbsp;3);&nbsp;...]</CODE></P>
+      <P>The randomly-oriented edges between these vertices may be created as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;E&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;e&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;x,&nbsp;y&nbsp;in&nbsp;V&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x&nbsp;&lt;&nbsp;n-1&nbsp;then&nbsp;yield&nbsp;(x,&nbsp;y),&nbsp;(x+1,&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;y&nbsp;&lt;&nbsp;n-1&nbsp;then&nbsp;yield&nbsp;(x,&nbsp;y),&nbsp;(x,&nbsp;y+1)&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.map&nbsp;(fun&nbsp;(u,&nbsp;v)&nbsp;-&gt;&nbsp;if&nbsp;rand.Next&nbsp;2&nbsp;=&nbsp;0&nbsp;then&nbsp;u,&nbsp;[v]&nbsp;else&nbsp;v,&nbsp;[u])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.groupBy&nbsp;fst<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.map&nbsp;(fun&nbsp;(u,&nbsp;uvs)&nbsp;-&gt;&nbsp;u,&nbsp;Seq.concat&nbsp;(Seq.map&nbsp;snd&nbsp;uvs))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;fun&nbsp;xs&nbsp;-&gt;&nbsp;Map&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;u&nbsp;-&gt;&nbsp;defaultArg&nbsp;(Map.tryFind&nbsp;u&nbsp;e)&nbsp;Seq.empty;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;E&nbsp;:&nbsp;(int&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;seq&lt;int&nbsp;*&nbsp;int&gt;)</CODE></P>
+      <P>The initial sequence expression maps over the vertices already defined 
+      creating a sequence of pairs of vertices that will be joined by edges. The 
+      <CODE>Seq.map</CODE> line converts these pairs of edges into a 
+      randomly-swapped pair associating a vertex with a singleton list 
+      containing the other vertex. The first vertex will be used as the source 
+      and the list containing the second vertex as the destination vertices. The 
+      <CODE>Seq.groupBy</CODE> function is used to group the flat sequence by 
+      the first vertex of each pair. The next <CODE>Seq.map</CODE> line 
+      concatenates the sequences of destination vertices for each source vertex. 
+      The <CODE>Map</CODE> constructor is used to create a data structure that 
+      maps source vertices onto their destination vertices efficiently. Finally, 
+      an anonymous function is returned that looks up a given vertex in the map 
+      and returns either the sequence of destination vertices for it or the 
+      empty sequence if it was not found.</P>
+      <P>The strongly connected components of our example graph may be computed 
+      as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;nComponents,&nbsp;componentOfVertex&nbsp;=&nbsp;stronglyConnectedComponents&nbsp;(V,&nbsp;E);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;componentOfVertex&nbsp;:&nbsp;Dictionary&lt;(int&nbsp;*&nbsp;int),int&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dict<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[((3,&nbsp;0),&nbsp;0);&nbsp;((2,&nbsp;0),&nbsp;1);&nbsp;((0,&nbsp;2),&nbsp;2);&nbsp;((0,&nbsp;1),&nbsp;3);&nbsp;((1,&nbsp;1),&nbsp;4);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1,&nbsp;0),&nbsp;5);&nbsp;((0,&nbsp;0),&nbsp;6);&nbsp;((1,&nbsp;2),&nbsp;7);&nbsp;((2,&nbsp;1),&nbsp;8);&nbsp;((5,&nbsp;4),&nbsp;9);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((4,&nbsp;5),&nbsp;10);&nbsp;((9,&nbsp;4),&nbsp;11);&nbsp;((8,&nbsp;6),&nbsp;12);&nbsp;((9,&nbsp;5),&nbsp;13);&nbsp;((10,&nbsp;5),&nbsp;13);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((10,&nbsp;6),&nbsp;13);&nbsp;((9,&nbsp;6),&nbsp;13);&nbsp;((8,&nbsp;5),&nbsp;14);&nbsp;((6,&nbsp;7),&nbsp;15);&nbsp;((0,&nbsp;9),&nbsp;16);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((0,&nbsp;8),&nbsp;17);&nbsp;((0,&nbsp;6),&nbsp;18);&nbsp;((0,&nbsp;7),&nbsp;19);&nbsp;((3,&nbsp;7),&nbsp;20);&nbsp;((4,&nbsp;10),&nbsp;21);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1,&nbsp;3),&nbsp;22);&nbsp;((2,&nbsp;3),&nbsp;22);&nbsp;((2,&nbsp;2),&nbsp;22);&nbsp;((3,&nbsp;2),&nbsp;22);&nbsp;((3,&nbsp;3),&nbsp;22);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((4,&nbsp;3),&nbsp;22);&nbsp;((5,&nbsp;3),&nbsp;22);&nbsp;((6,&nbsp;3),&nbsp;22);&nbsp;((6,&nbsp;4),&nbsp;22);&nbsp;...]</CODE></P>
+      <H2>Visualization</H2>
+      <P>The first thing we need to visualize the strongly connected components 
+      of a graph is a sequence of visibly-different colors to highlight the 
+      components with. The following <CODE>pastelShades</CODE> definition 
+      creates such a sequence:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;pastelShades&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;past&nbsp;=&nbsp;ResizeArray[[|255;&nbsp;0;&nbsp;0|];&nbsp;[|0;&nbsp;0;&nbsp;0|]]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dist&nbsp;=&nbsp;Array.fold2&nbsp;(fun&nbsp;d&nbsp;c1&nbsp;c2&nbsp;-&gt;&nbsp;d&nbsp;+&nbsp;pown&nbsp;(c1&nbsp;-&nbsp;c2)&nbsp;2)&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.init&nbsp;100&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;Array.init&nbsp;3&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;rand.Next&nbsp;128&nbsp;+&nbsp;rand.Next&nbsp;128))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.maxBy&nbsp;(fun&nbsp;c&nbsp;-&gt;&nbsp;Seq.maxBy&nbsp;(dist&nbsp;c)&nbsp;past)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;Media.SolidColorBrush(Media.Color.FromRgb(byte&nbsp;c.[0],&nbsp;byte&nbsp;c.[1],&nbsp;byte&nbsp;c.[2]))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;past.Add&nbsp;c&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;pastelShades&nbsp;:&nbsp;seq&lt;Media.SolidColorBrush&gt;</CODE></P>
+      <P>When enumerated, this sequence initializes a random number generator 
+      and an extensible array <CODE>past</CODE> of previously-generated colors 
+      before beginning the process of generating new colors. One hundred trial 
+      colors are created by adding two random numbers to obtain the red, green 
+      and blue components. Two random numbers are added because this biases the 
+      distribution toward the center of the range, giving esthetic pastel 
+      shades. The <CODE>dist</CODE> function is used to find the distance in RGB 
+      space from each proposed new color to each previously-generated color. The 
+      <CODE>Seq.maxBy</CODE> function is then used to find the proposed new 
+      color furthest from any of the previously-generated colors and this color 
+      is emitted.</P>
+      <P>The visualization will draw the vertices of the graph as circles and 
+      the edges as lines between them with arrowheads to signify direction. Both 
+      require the radius of the circles to be known:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;radius&nbsp;=&nbsp;0.2;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;radius&nbsp;:&nbsp;float&nbsp;=&nbsp;0.2</CODE></P>
+      <P>The following <CODE>draw</CODE> function draws a square behind each 
+      vertex in the color associated with its strongly-connected component, then 
+      a red circle for each vertex and finally three lines for each edge and 
+      arrowhead:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;draw&nbsp;(canvas:&nbsp;Controls.Canvas)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;brush&nbsp;=&nbsp;Seq.take&nbsp;nComponents&nbsp;pastelShades&nbsp;|&gt;&nbsp;Array.ofSeq<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x,&nbsp;y&nbsp;as&nbsp;v&nbsp;in&nbsp;V&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rect&nbsp;=&nbsp;Shapes.Rectangle(Width=1.01,&nbsp;Height=1.01)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rect.Fill&nbsp;&lt;-&nbsp;brush.[componentOfVertex.[v]]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;x&nbsp;=&nbsp;float&nbsp;x&nbsp;+&nbsp;0.5<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Canvas.SetLeft(rect,&nbsp;f&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Canvas.SetTop(rect,&nbsp;f&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Children.Add&nbsp;rect&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x,&nbsp;y&nbsp;as&nbsp;v&nbsp;in&nbsp;V&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ellipse&nbsp;=&nbsp;Shapes.Ellipse(Width=radius*2.0,&nbsp;Height=radius*2.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ellipse.Fill&nbsp;&lt;-&nbsp;Media.Brushes.Red<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ellipse.ToolTip&nbsp;&lt;-&nbsp;componentOfVertex.[v]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;x&nbsp;=&nbsp;float&nbsp;x&nbsp;+&nbsp;1.0&nbsp;-&nbsp;radius<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Canvas.SetLeft(ellipse,&nbsp;f&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Canvas.SetTop(ellipse,&nbsp;f&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Children.Add&nbsp;ellipse&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x0,&nbsp;y0&nbsp;as&nbsp;v&nbsp;in&nbsp;V&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x1,&nbsp;y1&nbsp;in&nbsp;E&nbsp;v&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;x&nbsp;=&nbsp;float&nbsp;x&nbsp;+&nbsp;1.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;u,&nbsp;v&nbsp;=&nbsp;Vector(f&nbsp;x0,&nbsp;f&nbsp;y0),&nbsp;Vector(f&nbsp;x1,&nbsp;f&nbsp;y1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;d&nbsp;=&nbsp;v&nbsp;-&nbsp;u<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d.Normalize()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;u,&nbsp;v&nbsp;=&nbsp;u&nbsp;+&nbsp;radius&nbsp;*&nbsp;d,&nbsp;v&nbsp;-&nbsp;radius&nbsp;*&nbsp;d<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;Vector(d.Y,&nbsp;-d.X)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n.Normalize()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;u,&nbsp;v&nbsp;in&nbsp;[u,&nbsp;v;&nbsp;v,&nbsp;v&nbsp;-&nbsp;0.05*(2.0*d&nbsp;+&nbsp;n);&nbsp;v,&nbsp;v&nbsp;-&nbsp;0.05*(2.0*d&nbsp;-&nbsp;n)]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;line&nbsp;=&nbsp;Shapes.Line(X1=u.X,&nbsp;Y1=u.Y,&nbsp;X2=v.X,&nbsp;Y2=v.Y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line.Stroke&nbsp;&lt;-&nbsp;Media.Brushes.Black<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line.StrokeThickness&nbsp;&lt;-&nbsp;0.03<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line.StrokeEndLineCap&nbsp;&lt;-&nbsp;Media.PenLineCap.Round<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;line.StrokeStartLineCap&nbsp;&lt;-&nbsp;Media.PenLineCap.Round<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Children.Add&nbsp;line<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;draw&nbsp;:&nbsp;Controls.Canvas&nbsp;-&gt;&nbsp;Controls.Canvas</CODE></P>
+      <P>The program may be run as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;canvas&nbsp;=&nbsp;Controls.Canvas(Width=float&nbsp;n&nbsp;+&nbsp;1.0,&nbsp;Height=float&nbsp;n&nbsp;+&nbsp;1.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;viewbox&nbsp;=&nbsp;Controls.Viewbox(Stretch=Media.Stretch.Uniform,&nbsp;Child=draw&nbsp;canvas)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Title="Strongly&nbsp;connected&nbsp;components",&nbsp;Content=viewbox))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <H2>Purely functional implementation</H2>
+      <P>The algorithm to compute the strongly connected components of a graph 
+      may be translated into the purely functional style, with no mutation, but 
+      the result is actually less elegant. In order to mimic the mutable state 
+      from the imperative implementation, we encapsulate each of the variables 
+      in a record type that can be carried around more easily:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'a&nbsp;accu&nbsp;when&nbsp;'a:&nbsp;comparison&nbsp;=&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;root:&nbsp;Map&lt;'a,&nbsp;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mapcomp:&nbsp;Map&lt;'a,&nbsp;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stack:&nbsp;(int&nbsp;*&nbsp;'a)&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;numdfs:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;numcomp:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;}</CODE></P>
+      <P>The algorithm may then be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stronglyConnectedComponents&nbsp;(V,&nbsp;E)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;pop&nbsp;x&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;{&nbsp;stack&nbsp;=&nbsp;(y,&nbsp;w)::stack&nbsp;}&nbsp;as&nbsp;accu&nbsp;when&nbsp;y&nbsp;&gt;&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pop&nbsp;x&nbsp;{&nbsp;accu&nbsp;with&nbsp;mapcomp&nbsp;=&nbsp;Map.add&nbsp;w&nbsp;accu.numcomp&nbsp;accu.mapcomp;&nbsp;stack=stack&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;accu&nbsp;-&gt;&nbsp;accu<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;visit&nbsp;accu&nbsp;v&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Map.containsKey&nbsp;v&nbsp;accu.root&nbsp;then&nbsp;accu&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;accu&nbsp;=&nbsp;{&nbsp;accu&nbsp;with&nbsp;numdfs&nbsp;=&nbsp;accu.numdfs&nbsp;+&nbsp;1&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;accu.numdfs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;accu&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;({&nbsp;accu&nbsp;with&nbsp;root&nbsp;=&nbsp;Map.add&nbsp;v&nbsp;n&nbsp;accu.root&nbsp;},&nbsp;E&nbsp;v)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;||&gt;&nbsp;Seq.fold&nbsp;(fun&nbsp;accu&nbsp;w&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;accu&nbsp;=&nbsp;visit&nbsp;accu&nbsp;w<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;accu.mapcomp.ContainsKey&nbsp;w&nbsp;then&nbsp;accu&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;accu&nbsp;with&nbsp;root&nbsp;=&nbsp;Map.add&nbsp;v&nbsp;(min&nbsp;accu.root.[v]&nbsp;accu.root.[w])&nbsp;accu.root&nbsp;})<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;accu.root.[v]&nbsp;=&nbsp;n&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;accu&nbsp;=&nbsp;pop&nbsp;n&nbsp;{&nbsp;accu&nbsp;with&nbsp;mapcomp&nbsp;=&nbsp;Map.add&nbsp;v&nbsp;accu.numcomp&nbsp;accu.mapcomp&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;accu&nbsp;with&nbsp;numcomp&nbsp;=&nbsp;accu.numcomp&nbsp;+&nbsp;1&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;accu&nbsp;with&nbsp;stack&nbsp;=&nbsp;(n,&nbsp;v)::accu.stack&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;accu&nbsp;=&nbsp;{&nbsp;root&nbsp;=&nbsp;Map.empty;&nbsp;mapcomp&nbsp;=&nbsp;Map.empty;&nbsp;stack&nbsp;=&nbsp;[];&nbsp;numdfs&nbsp;=&nbsp;0;&nbsp;numcomp&nbsp;=&nbsp;0&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;accu&nbsp;=&nbsp;Seq.fold&nbsp;visit&nbsp;accu&nbsp;V<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;accu.numcomp,&nbsp;accu.mapcomp</CODE></P>
+      <P>However, this does not necessarily reflect poorly on the purely 
+      functional programming style because our original algorithm was designed 
+      to be written imperatively. When considered more abstractly, it may well 
+      be possible to factor this algorithm elegantly into a much shorter 
+      solution. Such research is beyond the scope of this article though.</P>
+      <H2>Summary</H2>
+      <P>This article has described an algorithm for computing the 
+      strongly-connected components of a graph and a WPF-based GUI application 
+      that visualizes these components for an interesting example graph.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of graph 
+      algorithms and WPF-based visualization.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20graph%20strongly%20connected%20components_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

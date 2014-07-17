@@ -1,0 +1,305 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0080)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/networkviz.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Force-based network visualization</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Force-based%20network%20visualization_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Force-based%20network%20visualization_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Force-based%20network%20visualization_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Force-based network visualization</TITLE>     
+<LINK href="F%23%20Journal%20Force-based%20network%20visualization_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Force-based%20network%20visualization_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Force-based%20network%20visualization_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Force-based%20network%20visualization_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Force-based%20network%20visualization_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Force-based network visualization</H1>
+      <P>Visualizing a graph or network of interconnected nodes is a fascinating 
+      and important challenge with a wide variety of practical applications. 
+      This article looks at a simple but effective force-based approach to the 
+      visualization of networks and uses Windows Presentation Foundation (WPF) 
+      to display the results in real-time as they emerge. The result is a 
+      compelling interactive animation of the layout algorithm as it 
+      progresses.</P>
+      <H2>Introduction</H2>
+      <P>A graph or network is a set of nodes connected by edges. Networks 
+      appear in many forms such as road networks, links between web pages, atoms 
+      bonded in a molecule, social networks and so on. In many cases, the 
+      ability to visualize such a network is extremely valuable. Such 
+      visualizations are usually topological, i.e. a visualization of the 
+      network of bonds in a molecule is unlikely to portray the 
+      three-dimensional structure of the molecule accurately.</P>
+      <P>This article uses a dynamical approach to network visualization by 
+      modelling a soft-core repulsion to push nodes apart with an extra 
+      attractive force to pull linked nodes together. The ratio of the forces is 
+      controllable, allowing the user to determine how strongly the network 
+      topology dictates the resulting structure.</P>
+      <P>The ability to write word-sized values, specifically a reference to an 
+      array, is exploited to allow the UI thread to take a snapshot of the state 
+      of the visualization without requiring any synchronization.</P>
+      <H2>Implementation</H2>
+      <P>We begin by referencing the DLLs required to use Windows Presentation 
+      Foundation:</P>
+<PRE>&gt; #r "PresentationCore.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\PresentationCore.dll'</PRE>
+<PRE>&gt; #r "PresentationFramework.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\PresentationFramework.dll'</PRE>
+<PRE>&gt; #r "WindowsBase.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\WindowsBase.dll'</PRE>
+      <P>We open the following namespaces for the UI code:</P>
+<PRE>&gt; open System.Windows;;</PRE>
+<PRE>&gt; open System.Windows.Media;;</PRE>
+      <P>In this case, we shall visualize a network containing a fixed number of 
+      nodes but, in practice, the network could be obtained from anywhere (e.g. 
+      a web crawler):</P>
+<PRE>&gt; let mutable nodes =
+    let n = 200
+    let rand = System.Random()
+    [|for i in 0..n-1 -&gt;
+        let t = float i / float n * 2.0 * System.Math.PI
+        50.0 * Vector(1.0 + cos t, 1.0 + sin t)|];;
+val mutable nodes : Vector array =
+  [|100,50; 99.9753280182866,51.5705379539064;
+    99.9013364214136,53.1395259764657; 99.778098230154,54.7054156659257;
+    99.6057350657239,56.2666616782152; 99.3844170297569,57.8217232520115;
+    ...|]</PRE>
+      <P>The edges linked nodes together are represented by a matrix of booleans 
+      that, in this case, we shall initialize randomly:</P>
+<PRE>&gt; let edges =
+    let n = nodes.Length
+    let edges = Array2D.create n n false
+    let rand = System.Random()
+    for i in 1..n-1 do
+      let j = rand.Next(i-1)
+      edges.[i, j] &lt;- true
+      edges.[j, i] &lt;- true
+    edges;;
+val edges : bool [,] =
+  [[false; true; true; false; true; false; false; false; false; false; false;
+    false; false; true; false; false; false; false; false; false; false; false;
+    false; false; false; true; false; false; false; false; false; false; false;
+   ...]</PRE>
+      <P>WPF provides a              <CODE>Rect</CODE>  structure that can be 
+      used to represent a rectangle and can be updated to include new points 
+      using the              <CODE>Union</CODE> member, and the              
+      <CODE>Viewbox</CODE> control can be used to stretch content to fill the 
+      available space. However, the underlying              <CODE>Rect</CODE> 
+      structure is incapable of representing an empty area so it always includes 
+      the origin by default and, consequently, the              
+      <CODE>Viewbox</CODE> control always makes the origin visible even if the 
+      content is nowhere near the origin. Thus, we shall use our own             
+       <CODE>bound</CODE> function to compute the bound of a set of points 
+      without including the origin:           </P>
+<PRE>&gt; let bound (rs: Vector []) =
+    let mutable x0 = infinity
+    let mutable y0 = infinity
+    let mutable x1 = -infinity
+    let mutable y1 = -infinity
+    for r in rs do
+      x0 &lt;- min x0 r.X
+      y0 &lt;- min y0 r.Y
+      x1 &lt;- max x1 r.X
+      y1 &lt;- max y1 r.Y
+    x0, y0, x1, y1;;
+val bound : Vector [] -&gt; float * float * float * float</PRE>
+      <P>The following              <CODE>ratio</CODE> is a mutable reference to 
+      a              <CODE>float</CODE> that can be adjusted by the user (to 
+      control the influence of the topology on the visualization):           
+</P>
+<PRE>&gt; let ratio = ref 0.0;;
+val ratio : float ref = {contents = 0.0;}</PRE>
+      <P>Note that we require the ability to update this value atomically so we 
+      use a mutable reference via              <CODE>ref</CODE> because a 
+      reference is a single word and can be updated atomically. In contrast, 
+      marking the              <CODE>ratio</CODE> variable as              
+      <CODE>mutable</CODE> would allow the 64-bit              
+      <CODE>float</CODE> value to be modified in-place which would not be atomic 
+      and, therefore, the worker thread might read a half-written value.         
+        </P>
+      <P>The following              <CODE>work</CODE> function will be applied 
+      on a background worker thread:           </P>
+<PRE>&gt; let work () =
+    while true do
+      let n = nodes.Length
+      let forces = Array.create nodes.Length (Vector(0., 0.))
+      for i=0 to n-2 do
+        for j=i+1 to n-1 do
+          let p1, p2 = nodes.[i], nodes.[j]
+          let d = p2 - p1
+          let s = d.Length
+          let is = 100.0 / s
+          let f = is * is - 2.0 * is
+          let bond s = exp(!ratio * s)
+          let f = f + if edges.[i,j] then -bond s else 0.0
+          let d = f * d
+          forces.[i] &lt;- forces.[i] - d
+          forces.[j] &lt;- forces.[j] + d
+      let max_force = forces |&gt; Array.fold (fun f r -&gt; if r.Length &gt; f then r.Length else f) 0.0
+      let rs = Array.map2 ( + ) nodes (Array.map (( * ) (0.03 / max_force)) forces)
+      let x0, y0, x1, y1 = bound rs
+      nodes &lt;- rs |&gt; Array.map (fun r -&gt; Vector(r.X - x0, r.Y - y0));;
+val work : unit -&gt; unit</PRE>
+      <P>This function loops indefinitely, computing and applying forces to push 
+      the nodes around.</P>
+      <P>Two nested loops are used to apply forces between every pair of nodes. 
+      A soft-core force is applied to all pairs, to settle them into a 
+      configuration with uniformly-separated nearest neighbors. A attractive 
+      force that grows exponentially with the separation is applied between all 
+      linked nodes to pull them together.</P>
+      <P>The maximum force on any node is computed and used the scale the other 
+      forces to ensure that each step is sufficiently small, producing an 
+      attractive animation and improving numerical robustness.</P>
+      <P>Finally, a new              <CODE>nodes</CODE> array is computed and 
+      written over the old array. Note that this is writing a single word-sized 
+      pointer and, therefore, is an atomic operation. Thus, the UI thread will 
+      be able to atomically read the global              <CODE>nodes</CODE> 
+      safely.           </P>
+      <P>The following              <CODE>size</CODE> value is used to set the 
+      size of the nodes and thickness of the edges when drawn:           </P>
+<PRE>&gt; let size = 1.0;;
+val size : float = 1.0</PRE>
+      <P>Both the ellipses used to draw the nodes and lines used to draw the 
+      edges will require the same set of styles so we introduce the following    
+                <CODE>style</CODE> function to set the style of any subtype of   
+                 <CODE>Shapes.Shape</CODE> :           </P>
+<PRE>&gt; let style (shape: Shapes.Shape) =
+    shape.Stroke &lt;- Brushes.Black
+    shape.StrokeThickness &lt;- size / 8.0
+    shape.Fill &lt;- Brushes.Red
+    shape;;
+val style : Shapes.Shape -&gt; Shapes.Shape</PRE>
+      <P>The following              <CODE>line</CODE> function creates a         
+           <CODE>Shape</CODE> that is a single straight line between two points: 
+                </P>
+<PRE>&gt; let line x1 y1 x2 y2 =
+    Shapes.Line(X1=x1, Y1=y1, X2=x2, Y2=y2)
+    |&gt; style;;
+val line : float -&gt; float -&gt; float -&gt; float -&gt; Shapes.Shape</PRE>
+      <P>The following              <CODE>viz</CODE> function updates the 
+      visualization by taking a snapshot of the nodes and generating a           
+         <CODE>Canvas</CODE> containing lines and circles:           </P>
+<PRE>&gt; let viz (box: Controls.Viewbox) _ =
+    let nodes = nodes
+    let _, _, x1, y1 = bound nodes
+    let canvas = Controls.Canvas(Width=x1, Height=y1)
+    let n = nodes.Length
+    for i=0 to n-2 do
+      for j=i+1 to n-1 do
+        if edges.[i,j] then
+          let p1, p2 = nodes.[i], nodes.[j]
+          line p1.X p1.Y p2.X p2.Y |&gt; canvas.Children.Add |&gt; ignore
+    for p in nodes do
+      let path = Shapes.Ellipse(Width=size, Height=size) |&gt; style
+      path.RenderTransform &lt;- TranslateTransform(p.X - size/2.0, p.Y - size/2.0)
+      canvas.Children.Add path |&gt; ignore
+    box.Child &lt;- canvas;;
+val viz : Controls.Viewbox -&gt; 'a -&gt; unit</PRE>
+      <P>A new              <CODE>Canvas</CODE> is constructed and filled each 
+      time this function is invoked. Although this is wasteful, this function 
+      will only be called every screen refresh.           </P>
+      <P>The seemingly-redundant              <CODE>let nodes = nodes</CODE> 
+      creates a local variable from the global              <CODE>nodes</CODE> 
+      variable. This has the effect of copying the array by reference and is an 
+      atomic operation because reference types occupy a single word. Thus, this 
+      creates a local reference to a snapshot of the nodes that can then be read 
+      safely without having to worry about the worker thread concurrently 
+      updating the elements of the array.           </P>
+      <P>A pair of nested loops detect linked nodes and adds lines to the canvas 
+      representing the edges between them. A single loop then adds a circle to 
+      the canvas for each node. Finally, the              <CODE>Child</CODE> 
+      property of the              <CODE>Viewbox</CODE> is set to the new        
+            <CODE>Canvas</CODE> .           </P>
+      <P>The main program ensures that the main thread is run in Single-Threaded 
+      Apartment (STA) mode, starts the background worker thread, creates and 
+      initializes the GUI elements, registers a callback to the              
+      <CODE>viz</CODE> function to update the canvas every screen refresh and 
+      starts the application running:           </P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    let worker = System.Threading.Thread work
+    worker.IsBackground &lt;- true
+    worker.Start()
+    let box = Controls.Viewbox(Stretch=Media.Stretch.Uniform, Margin=Thickness 11.)
+    CompositionTarget.Rendering.Add(viz box)
+    let panel = Controls.DockPanel()
+    let slider = Controls.Slider()
+    slider.Minimum &lt;- 0.0
+    slider.Maximum &lt;- 6.0
+    slider.Value &lt;- !ratio
+    slider.ValueChanged.Add(fun _ -&gt; ratio := slider.Value)
+    Controls.DockPanel.SetDock(slider, Controls.Dock.Top)
+    panel.Children.Add slider |&gt; ignore
+    panel.Children.Add box |&gt; ignore
+    Window(Content=panel, Title="Network Visualization")
+    |&gt; (Application()).Run
+    |&gt; ignore;;</PRE>
+      <H2>Results</H2>
+      <P>When run, the program described above creates a window with a slider 
+      and a real-time visualization. The nodes are initially laid out around a 
+      circle and gradually settle into circular formation according to the 
+      attractive and repulsive default pair potential:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Force-based%20network%20visualization_files/circular.gif"> 
+                  </P>
+      <P></P>
+      <P>Dragging the slider to the right introduces progressively stronger 
+      attractive forces between linked nodes. Once settled with the slider at 
+      maximum, we obtain a spikey layout where the dominant force is the 
+      attraction between linked nodes:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Force-based%20network%20visualization_files/pointy.gif"> 
+                  </P>
+      <P></P>
+      <P>This layout is dictated primarily by the topology of the network but 
+      there is a trade-off between this and the improved clarity of a uniform 
+      representation. Thus, dragging the slider partway back allows the user to 
+      control the spread of the nodes and an esthetic compromise can be 
+      reached:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Force-based%20network%20visualization_files/happy.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article used a simple dynamical simulation of nodes interacting 
+      via pair potentials to create controllable visualizations of arbitrary 
+      networks. The results show that this simple program can be used to 
+      visualize quite complicated networks.</P>
+      <P>Future F#.NET Journal articles will revisit the subject real-time 
+      interactive visualization.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Force-based%20network%20visualization_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

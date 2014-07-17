@@ -1,0 +1,237 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0073)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/bdd.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20behaviour%20driven%20development_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20behaviour%20driven%20development_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20behaviour%20driven%20development_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20behaviour%20driven%20development_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20behaviour%20driven%20development_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Testing: Behaviour-Driven Development with F#</H1>
+      <P>Of the many approaches taken to testing, Behaviour-Driven Development 
+      (BDD) is unusual in aiming to provide human-readable tests that can be 
+      used by non-technical people. The objective is to write the tests in a 
+      high-level language, as close to plain English as possible with data 
+      provided in the form of bullet-point lists or tables, that are interpreted 
+      by the machine in order to drive a production system and verify its 
+      behaviour. Naturally, F# is ideal in this situation because the challenge 
+      is essentially to implement an interpreter for a Domain Specific Language 
+      (DSL), the task that this family of languages were specifically bred for. 
+      This articles walks through a complete sample including Gherkin parser, 
+      interpreter and harnesses for the NUnit testing framework and F# 
+      interactive.</P>
+      <H2>Parsing Gherkin</H2>
+      <P>We begin by defining a suite of active patterns to parse a useful 
+      subset of the Gherkin language.</P>
+      <P>The following <CODE>Regex</CODE> active pattern checks the given string 
+      against the given regular expression (augmented with the <CODE>^</CODE> 
+      and <CODE>$</CODE> special characters to ensure that the pattern fills the 
+      entire string):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Regex|_|)&nbsp;re&nbsp;str&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;re&nbsp;=&nbsp;System.Text.RegularExpressions.Regex("^"&nbsp;+&nbsp;re&nbsp;+&nbsp;"$")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m&nbsp;=&nbsp;re.Match&nbsp;str<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;m.Success&nbsp;then&nbsp;None&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(Regex&nbsp;[&nbsp;for&nbsp;i&nbsp;in&nbsp;1&nbsp;..&nbsp;m.Groups.Count-1&nbsp;-&gt;&nbsp;m.Groups.[i].Value&nbsp;]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Regex|_|&nbsp;)&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;string&nbsp;list&nbsp;option</CODE></P>
+      <P>For example, the following defines a <CODE>digits</CODE> string that 
+      contains a regular expression matching one or more digits:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;digits&nbsp;=&nbsp;"[0-9]+";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;digits&nbsp;:&nbsp;string&nbsp;=&nbsp;"[0-9]+"</CODE></P>
+      <P>And a <CODE>dollars</CODE> string containing a regular expression that 
+      matches a dollar sign following by a sequence of digits that are extracted 
+      as a group:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;dollars&nbsp;=&nbsp;"\\$("&nbsp;+&nbsp;digits&nbsp;+&nbsp;")";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;dollars&nbsp;:&nbsp;string&nbsp;=&nbsp;"\$([0-9]+)"</CODE></P>
+      <P>The <CODE>Regex</CODE> active pattern may then be used to extract the 
+      digits after a dollar sign as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(Regex&nbsp;dollars&nbsp;[n])&nbsp;=&nbsp;"$1234";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;n&nbsp;:&nbsp;string&nbsp;=&nbsp;"1234"</CODE></P>
+      <P>This <CODE>Regex</CODE> active pattern has a wide variety of uses 
+      beyond the application described here.</P>
+      <P>In order to parse the Gherkin language, we begin by extracting tables 
+      that are delimited by pipe symbols at the start and end of the line and 
+      between each column. The following <CODE>Table</CODE> active pattern 
+      extracts a table if there is one or returns <CODE>None</CODE> 
+      otherwise:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Table|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"\\|(.*)\\|"&nbsp;[row]::Table(table,&nbsp;xs)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;row&nbsp;=&nbsp;[for&nbsp;elt&nbsp;in&nbsp;row.Split[|'|'|]&nbsp;-&gt;&nbsp;elt.Trim()]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;table&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;rows&nbsp;-&gt;&nbsp;Some(row::rows),&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;Some[row],&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs&nbsp;-&gt;&nbsp;None,&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Table|&nbsp;)&nbsp;:&nbsp;string&nbsp;list&nbsp;-&gt;&nbsp;string&nbsp;list&nbsp;list&nbsp;option&nbsp;*&nbsp;string&nbsp;list</CODE></P>
+      <P>The body of a scenario is broken down into sequences of "given", "when" 
+      and "then" sentences. We begin by parsing the "then" sequences at the end 
+      of a scenario, each of which is optionally followed by a table:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Thens|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"[aA]nd&nbsp;(.*)"&nbsp;[t]::Table(table,&nbsp;Thens(ts,&nbsp;xs))&nbsp;-&gt;&nbsp;(t,&nbsp;table)::ts,&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs&nbsp;-&gt;&nbsp;[],&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Thens|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;list&nbsp;-&gt;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*&nbsp;string&nbsp;list</CODE></P>
+      <P>Next, we parse the "when" sentences with their optional tables followed 
+      by a sequence of "then" statements:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Whens|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"[aA]nd&nbsp;(.*)"&nbsp;[w]::Table(table,&nbsp;Whens(ws,&nbsp;ts,&nbsp;xs))&nbsp;-&gt;&nbsp;(w,&nbsp;table)::ws,&nbsp;ts,&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"Then&nbsp;(.*)"&nbsp;[t]::Table(table,&nbsp;Thens(ts,&nbsp;xs))&nbsp;-&gt;&nbsp;[],&nbsp;(t,&nbsp;table)::ts,&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;invalidArg&nbsp;"whens"&nbsp;"No&nbsp;thens"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::_&nbsp;-&gt;&nbsp;invalidArg&nbsp;"whens"&nbsp;x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Whens|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;list&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*&nbsp;string&nbsp;list</CODE></P>
+      <P>Note that we prohibit "when" sentences with no following "then" 
+      sentences, raising an exception in this case.</P>
+      <P>The "given" sentences may then be parsed as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Givens|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(Regex&nbsp;"Given&nbsp;(.*)"&nbsp;[g]&nbsp;|&nbsp;Regex&nbsp;"[aA]nd&nbsp;(.*)"&nbsp;[g])::Table(table,&nbsp;Givens((gs,&nbsp;ws,&nbsp;ts),&nbsp;xs))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((g,&nbsp;table)::gs,&nbsp;ws,&nbsp;ts),&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"When&nbsp;(.*)"&nbsp;[w]::Table(table,&nbsp;Whens(ws,&nbsp;ts,&nbsp;xs))&nbsp;-&gt;&nbsp;([],&nbsp;(w,&nbsp;table)::ws,&nbsp;ts),&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;invalidArg&nbsp;"givens"&nbsp;"No&nbsp;whens&nbsp;or&nbsp;thens"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::_&nbsp;-&gt;&nbsp;invalidArg&nbsp;"givens"&nbsp;x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Givens|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;list&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list)&nbsp;*&nbsp;string&nbsp;list</CODE></P>
+      <P>This returns a tuple of the "given", "when" and "then" sentences and 
+      their optional tables.</P>
+      <P>Each scenario begins "Scenario:" followed by the name of the scenario 
+      and, from the next line, three sequences of sentences that form the body 
+      of the scenario. The following <CODE>Scenarios</CODE> active pattern 
+      parses a sequence of scenarios, raising an exception if any unparsed lines 
+      remain:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Scenarios|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"Scenario:&nbsp;(.*)"&nbsp;[name]::Givens(body,&nbsp;Scenarios&nbsp;scenarios)&nbsp;-&gt;&nbsp;(name,&nbsp;body)::scenarios<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs&nbsp;-&gt;&nbsp;invalidArg&nbsp;"Scenarios"&nbsp;(String.concat&nbsp;"\n"&nbsp;xs);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Scenarios|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;list&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list))&nbsp;list</CODE></P>
+      <P>Finally, an entire feature file begins with a line containing 
+      "Feature:" followed by the name of the feature and then the scenarios 
+      themselves:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Feature|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"Feature:&nbsp;([^\\n]*)"&nbsp;[featureName]::Scenarios&nbsp;scenarios&nbsp;-&gt;&nbsp;featureName,&nbsp;scenarios<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;s&nbsp;-&gt;&nbsp;invalidArg&nbsp;"parseFeature"&nbsp;"Feature&nbsp;file&nbsp;is&nbsp;expected&nbsp;to&nbsp;begin&nbsp;with&nbsp;'Feature:&nbsp;...'";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Feature|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;list&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list))&nbsp;list&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>These active patterns are a quick and easy way to parse a useful subset 
+      of the Gherkin language, capable of testing real production code.</P>
+      <H2>Application for testing</H2>
+      <P>We also need some kind of application to be tested. In this case, we 
+      shall write a simple program that simulates the actions of an ATM, such as 
+      dispensing cash and debiting bank accounts.</P>
+      <P>A bank card is either valid or invalid:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;cardState&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Valid<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Invalid;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;cardState&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Valid<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Invalid</CODE></P>
+      <P>The state for a test consists of the current bank balance in the user's 
+      account, the state of their card, the cash available for dispensing in the 
+      machine and the amount to be debited from the account:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;balance:&nbsp;decimal;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cardState:&nbsp;cardState;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stock:&nbsp;decimal;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;debit:&nbsp;decimal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{balance:&nbsp;decimal;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cardState:&nbsp;cardState;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stock:&nbsp;decimal;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;debit:&nbsp;decimal;}</CODE></P>
+      <P>In this case, the user is capable of issuing a single kind of 
+      instruction to our system:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;instruction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Request&nbsp;of&nbsp;decimal;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;instruction&nbsp;=&nbsp;|&nbsp;Request&nbsp;of&nbsp;decimal</CODE></P>
+      <P>Finally, the result is the set of outcomes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;result&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;InsufficientCreditInAccount<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;InsufficientMoneyInATM<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Dispensed&nbsp;of&nbsp;decimal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CardReturned<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CardRetained;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;result&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;InsufficientCreditInAccount<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;InsufficientMoneyInATM<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Dispensed&nbsp;of&nbsp;decimal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CardReturned<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CardRetained</CODE></P>
+      <P>The actions of our system will be implemented by the following simple 
+      function in this case:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;handleRequest&nbsp;(state:&nbsp;state,&nbsp;results:&nbsp;result&nbsp;list)&nbsp;instruction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state,&nbsp;instruction&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;{&nbsp;cardState&nbsp;=&nbsp;Valid&nbsp;},&nbsp;Request&nbsp;debit&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state.balance&nbsp;&gt;=&nbsp;debit,&nbsp;state.stock&nbsp;&gt;=&nbsp;debit&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;true&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;balance&nbsp;=&nbsp;state.balance&nbsp;-&nbsp;debit&nbsp;},<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dispensed&nbsp;debit&nbsp;::&nbsp;CardReturned&nbsp;::&nbsp;results<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;false,&nbsp;(true&nbsp;|&nbsp;false)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state,&nbsp;CardReturned&nbsp;::&nbsp;InsufficientCreditInAccount&nbsp;::&nbsp;results<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;false&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state,&nbsp;CardReturned&nbsp;::&nbsp;InsufficientMoneyInATM&nbsp;::&nbsp;results<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;{&nbsp;cardState&nbsp;=&nbsp;Invalid&nbsp;},&nbsp;Request&nbsp;debit&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state,&nbsp;CardRetained&nbsp;::&nbsp;results;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;handleRequest&nbsp;:&nbsp;state&nbsp;*&nbsp;result&nbsp;list&nbsp;-&gt;&nbsp;instruction&nbsp;-&gt;&nbsp;state&nbsp;*&nbsp;result&nbsp;list</CODE></P>
+      <P>In practice, this approach is often used to test thousands of lines of 
+      F# code at a time.</P>
+      <H2>Test harness</H2>
+      <P>Now we need to build the test harness itself. Unlike most test 
+      harnesses, this is actually responsible for interpreting a high-level 
+      language. We begin by defining the type of a collection of sentences:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;sentences&nbsp;=&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;sentences&nbsp;=&nbsp;(string&nbsp;*&nbsp;string&nbsp;list&nbsp;list&nbsp;option)&nbsp;list</CODE></P>
+      <P>Each scenario provides the following information:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;scenario&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;featureName:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scenarioName:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;givens:&nbsp;sentences;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;whens:&nbsp;sentences;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thens:&nbsp;sentences<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;scenario&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{featureName:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scenarioName:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;givens:&nbsp;sentences;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;whens:&nbsp;sentences;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thens:&nbsp;sentences;}</CODE></P>
+      <P>The <CODE>scenarioOfFeatures</CODE> function converts the plain text 
+      representation of a feature file into a list of scenarios:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;scenariosOfFeature&nbsp;(feature:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(Parse.Feature(featureName,&nbsp;scenarios))&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;line&nbsp;in&nbsp;feature.Split[|'\n'|]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;line&nbsp;=&nbsp;line.Trim()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;line&nbsp;&lt;&gt;&nbsp;""&nbsp;then&nbsp;yield&nbsp;line&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;name,&nbsp;(givens,&nbsp;whens,&nbsp;thens)&nbsp;in&nbsp;scenarios&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;featureName&nbsp;=&nbsp;featureName;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scenarioName&nbsp;=&nbsp;name;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;givens&nbsp;=&nbsp;givens;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;whens&nbsp;=&nbsp;whens;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thens&nbsp;=&nbsp;thens<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;scenariosOfFeature&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;scenario&nbsp;list</CODE></P>
+      <P>Note the use of the <CODE>Feature</CODE> active pattern.</P>
+      <P>The following active pattern removes the commas from a string before 
+      converting it to the built-in <CODE>decimal</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Dollars|_|)&nbsp;(s:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try&nbsp;Some(Dollars(decimal(s.Replace(",",&nbsp;""))))&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Dollars|_|&nbsp;)&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;decimal&nbsp;option</CODE></P>
+      <P>The following <CODE>interpretGiven</CODE> function interprets a given 
+      statement and takes the necessary action on the given state, returning a 
+      new state:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;interpretGiven&nbsp;state&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;account&nbsp;balance&nbsp;is&nbsp;\\$([,0-9]+)"&nbsp;[Dollars&nbsp;balance],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;balance&nbsp;=&nbsp;balance&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;card&nbsp;is&nbsp;valid"&nbsp;[],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;cardState&nbsp;=&nbsp;Valid&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;card&nbsp;is&nbsp;invalid"&nbsp;[],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;cardState&nbsp;=&nbsp;Invalid&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;machine&nbsp;contains&nbsp;\\$([,0-9]+)"&nbsp;[Dollars&nbsp;stock],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;stock&nbsp;=&nbsp;stock&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;line&nbsp;-&gt;&nbsp;invalidArg&nbsp;(sprintf&nbsp;"Failed&nbsp;to&nbsp;interpret&nbsp;Given&nbsp;%A"&nbsp;line)&nbsp;"line";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;interpretGiven&nbsp;:&nbsp;state&nbsp;-&gt;&nbsp;string&nbsp;*&nbsp;'a&nbsp;option&nbsp;-&gt;&nbsp;state</CODE></P>
+      <P>Note the discrepancy between this functional style of BDD 
+      implementation and the traditional solution that relies upon mutable 
+      global state. The functional style has some important benefits. Firstly, 
+      mutable global state makes it easy for one test to affect the next by 
+      corrupting the state. This is impossible with the functional style because 
+      the state does not even exist between tests. Secondly, the functional 
+      style makes it trivial to accumulate not only the current state but also 
+      all previous states and the actions that created them. In the context of 
+      testing, where the application is often behaving incorrectly, the ability 
+      to "travel back in time" by inspecting old states can greatly accelerate 
+      the identification and fixing of bugs.</P>
+      <P>The following <CODE>interpretWhen</CODE> function interprets the only 
+      kind of "when" statement supported in this case, a user requesting money 
+      from an ATM:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;interpretWhen&nbsp;instructions&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;Account&nbsp;Holder&nbsp;requests&nbsp;\\$([,0-9]+)"&nbsp;[Dollars&nbsp;debit],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Request&nbsp;debit&nbsp;::&nbsp;instructions<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;line&nbsp;-&gt;&nbsp;invalidArg&nbsp;(sprintf&nbsp;"Failed&nbsp;to&nbsp;interpret&nbsp;When&nbsp;%A"&nbsp;line)&nbsp;"line";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;interpretWhen&nbsp;:&nbsp;instruction&nbsp;list&nbsp;-&gt;&nbsp;string&nbsp;*&nbsp;'a&nbsp;option&nbsp;-&gt;&nbsp;instruction&nbsp;list</CODE></P>
+      <P>The following operator is used to raise an exception when two values 
+      are expected to be equal but are found to differ:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(=?)&nbsp;a&nbsp;b&nbsp;=&nbsp;if&nbsp;a&nbsp;&lt;&gt;&nbsp;b&nbsp;then&nbsp;failwith&nbsp;(sprintf&nbsp;"Expected&nbsp;%A&nbsp;but&nbsp;found&nbsp;%A"&nbsp;a&nbsp;b);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;=?&nbsp;)&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;unit&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The <CODE>interpretThen</CODE> function interprets the tests themselves 
+      and uses the <CODE>=?</CODE> operator to validate the expectations 
+      described in the test against the actual result that it observes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;interpretThen&nbsp;state&nbsp;results&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;ATM&nbsp;should&nbsp;dispense&nbsp;\\$([,0-9]+)"&nbsp;[Dollars&nbsp;dispensed],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dispensed&nbsp;=?&nbsp;Seq.sumBy&nbsp;(function&nbsp;Dispensed&nbsp;n&nbsp;-&gt;&nbsp;n&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;0M)&nbsp;results<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;ATM&nbsp;should&nbsp;not&nbsp;dispense&nbsp;any&nbsp;money"&nbsp;[],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0M&nbsp;=?&nbsp;Seq.sumBy&nbsp;(function&nbsp;Dispensed&nbsp;n&nbsp;-&gt;&nbsp;n&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;0M)&nbsp;results<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;ATM&nbsp;should&nbsp;retain&nbsp;the&nbsp;card"&nbsp;[],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;true&nbsp;=?&nbsp;Seq.exists&nbsp;((=)&nbsp;CardRetained)&nbsp;results<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;card&nbsp;should&nbsp;be&nbsp;returned"&nbsp;[],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;true&nbsp;=?&nbsp;Seq.exists&nbsp;((=)&nbsp;CardReturned)&nbsp;results<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Regex&nbsp;"the&nbsp;account&nbsp;balance&nbsp;should&nbsp;be&nbsp;\\$([,0-9]+)"&nbsp;[Dollars&nbsp;balance],&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%A"&nbsp;(balance,&nbsp;state.balance)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;balance&nbsp;=?&nbsp;state.balance<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;line&nbsp;-&gt;&nbsp;invalidArg&nbsp;(sprintf&nbsp;"Failed&nbsp;to&nbsp;interpret&nbsp;Then&nbsp;%A"&nbsp;line)&nbsp;"line";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;interpretThen&nbsp;:&nbsp;state&nbsp;-&gt;&nbsp;seq&lt;result&gt;&nbsp;-&gt;&nbsp;string&nbsp;*&nbsp;'a&nbsp;option&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Finally the following <CODE>execute</CODE> function begins with a sane 
+      default state and runs the interpreters over the sentences of the BDD 
+      test, using the <CODE>handleRequest</CODE> function from the application 
+      to execute the instructions from the test:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;execute&nbsp;(scenario:&nbsp;scenario)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;state&nbsp;=&nbsp;{&nbsp;balance&nbsp;=&nbsp;0M;&nbsp;cardState&nbsp;=&nbsp;Invalid;&nbsp;stock&nbsp;=&nbsp;0M;&nbsp;debit&nbsp;=&nbsp;0M&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;state&nbsp;=&nbsp;Seq.fold&nbsp;interpretGiven&nbsp;state&nbsp;scenario.givens<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;instructions&nbsp;=&nbsp;Seq.fold&nbsp;interpretWhen&nbsp;[]&nbsp;scenario.whens<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;state,&nbsp;results&nbsp;=&nbsp;Seq.fold&nbsp;Application.handleRequest&nbsp;(state,&nbsp;[])&nbsp;instructions<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;(interpretThen&nbsp;state&nbsp;results)&nbsp;scenario.thens;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;execute&nbsp;:&nbsp;scenario&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>This completes the test harness but we add a helper function 
+      <CODE>test</CODE> that loads a feature file from the source directory of 
+      the project in order to make it easier to run tests from F# 
+      interactive:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;test&nbsp;feature&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;scenarios&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.IO.File.ReadAllText(__SOURCE_DIRECTORY__&nbsp;+&nbsp;"\\"&nbsp;+&nbsp;feature&nbsp;+&nbsp;".feature")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;scenariosOfFeature<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Feature:&nbsp;%s"&nbsp;feature<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;scenario&nbsp;in&nbsp;scenarios&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Scenario:&nbsp;%s"&nbsp;scenario.scenarioName<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;execute&nbsp;scenario;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;test&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>This completes the generic test harness including the interpreter. 
+      Next, we focus on integration with specific tools: NUnit and F# 
+      interactive.</P>
+      <H2>Integration with NUnit</H2>
+      <P>NUnit is a common testing framework that makes it easy to write and run 
+      unit tests. Many tools have been built upon NUnit including the 
+      TestDriven.NET application that provides easy access to tests from within 
+      Visual Studio.</P>
+      <P>After referencing <CODE>NUnit.Framework.dll</CODE>, our tests may be 
+      integrated with NUnit as follows. We begin by opening the NUnit 
+      namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;NUnit.Framework;;</CODE></P>
+      <P>Assuming the feature files have been included in the project as 
+      embedded resources, we can obtain them via the assembly:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;assembly&nbsp;=&nbsp;System.Reflection.Assembly.GetExecutingAssembly();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;assembly&nbsp;:&nbsp;System.Reflection.Assembly</CODE></P>
+      <P>The following function extracts the resource embedded in the assembly 
+      as a string:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;load&nbsp;file&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;assembly&nbsp;=&nbsp;System.Reflection.Assembly.GetExecutingAssembly()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;s&nbsp;=&nbsp;assembly.GetManifestResourceStream(file)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;s&nbsp;=&nbsp;null&nbsp;then&nbsp;invalidArg&nbsp;(sprintf&nbsp;"Failed&nbsp;to&nbsp;get&nbsp;manifest&nbsp;resource&nbsp;stream&nbsp;'%s'"&nbsp;file)&nbsp;"file"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;reader&nbsp;=&nbsp;new&nbsp;System.IO.StreamReader(s)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reader.ReadToEnd();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;load&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;string</CODE></P>
+      <P>Finally, we create a class with the <CODE>TestFixture</CODE> attribute 
+      and two member functions that extract and execute the scenarios in a 
+      feature:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;TestFixture&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;FeatureFixture&nbsp;()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;Test&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;TestCaseSource("TestATM")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.ATM&nbsp;scenario&nbsp;=&nbsp;TestHarness.execute&nbsp;scenario<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.TestATM()&nbsp;=&nbsp;TestHarness.scenariosOfFeature(load&nbsp;"ATM.feature");;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;FeatureFixture&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;FeatureFixture<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;ATM&nbsp;:&nbsp;scenario:'a&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;TestATM&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;TestHarness.scenario&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>This approach ensures that NUnit displays different features separately 
+      and the tester can see immediately which feature failed.</P>
+      <H2>Testing directly from F# interactive</H2>
+      <P>F# facilitates a novel approach to testing: compiling and running 
+      within F# interactive. Whereas NUnit integration facilitates the use of 
+      many tools such as report generation during batch compilation that are 
+      already available from NUnit tests, executing tests interactively is 
+      faster and can provide more user-friendly feeback making it ideal for use 
+      during the development of tests.</P>
+      <P>The <CODE>test</CODE> function defined at the end of our test harness 
+      code was specifically designed to allow tests to be run as easily as 
+      possible from within F# interactive. With that function, a tester can 
+      compile the source code to the applications, the Gherkin parser and our 
+      test harness and use it to execute tests immediately as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;#load&nbsp;"Parse.fs"&nbsp;"Application.fs"&nbsp;"TestHarness.fs"<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;Acme.TestHarness<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;test&nbsp;"ATM"</CODE></P>
+      <P>This is much faster than invoking NUnit and running the tests from 
+      within the NUnit application.</P>
+      <H2>Summary</H2>
+      <P>This article has built upon the techniques described in several 
+      previous articles in order to build a test harness for a high-level domain 
+      specific language for testing. The result is a remarkably powerful 
+      approach to testing that allows succinct human readable tests to be 
+      executed by the machine. The tests can be made accessible to non-technical 
+      personnel. F# makes it easy for testers to work with. The functional style 
+      of threading the state through each part of the test makes it much easier 
+      to record a history of operations and internal states that culminated in 
+      erroneous behaviour and, therefore, to diagnose and fix bugs when they are 
+      found.</P>
+      <P>Moreover, the control this technique offers over the programmatic 
+      dissection of the tests opens up new avenues. For example, the high-level 
+      BDD tests can be used to derive low-level regression tests by recording 
+      the exact inputs and outputs to the system and generating code to verify 
+      low-level specifics during execution.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of 
+    testing.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20behaviour%20driven%20development_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

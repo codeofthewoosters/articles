@@ -1,0 +1,132 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0088)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/CancellableStreams.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20cancellable%20requests_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20cancellable%20requests_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20cancellable%20requests_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20cancellable%20requests_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20cancellable%20requests_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Cancellable requests</H1>
+      <P>Applications such as searching and visualization that request 
+      information from servers often have the potential to overload the server 
+      by sending too many requests before the handling of existing requests has 
+      been completed. A simple and effective solution to this problem is 
+      cancellation. This article examines a simple system of two communicating 
+      sequential processes that use cancellation to implement a server that 
+      accepts requests, returns responses and uses cancellation to tear down 
+      outstanding requests in order to avoid system overload.</P>
+      <H2>Introduction</H2>
+      <P>Many systems have the potential to overwhelm a server by sending too 
+      many requests, including some simple user interfaces such as searches and 
+      visualization. As in the previous article, the issue boils down to queuing 
+      because the client-side producer can overwhelm the server-side consumer 
+      when requests take a significant amount of time to handle.</P>
+      <P>In F#, asynchronous workflows provide a neat solution to this problem 
+      in the form of cancellation. When starting an asynchronous workflow, the 
+      <CODE>Async.Start</CODE> function can accept a 
+      <CODE>CancellationToken</CODE> that can be used to request that the 
+      workflow cooperatively cancel itself. Upon cancellation, the workflow 
+      invokes the current cleanup code rather than the next continuation.</P>
+      <P>Although it is possible (with enough effort) to wait for the workflow 
+      handling an outstanding request to cooperatively cancel itself, there is 
+      no assurance that this will happen quickly. To avoid unnecessary latency, 
+      we can choose to send a cancellation request and continue processing the 
+      next request immediately. However, this introduces a race condition where 
+      the handling of a new request may produce one response and then the 
+      handler of the previous request that has not yet cancelled itself might 
+      product another response. Thus, we must be careful to filter out responses 
+      associated with previous requests.</P>
+      <H2>Implementation</H2>
+      <P>We shall filter out responses to obsolete requests by associating an 
+      object of the following <CODE>JobID</CODE> class with each request and 
+      response:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;JobID&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;Id&nbsp;:&nbsp;int64<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new()&nbsp;=&nbsp;{&nbsp;Id&nbsp;=&nbsp;0L&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;private&nbsp;new(n)&nbsp;=&nbsp;{&nbsp;Id&nbsp;=&nbsp;n&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Next&nbsp;=&nbsp;JobID(this.Id&nbsp;+&nbsp;1L)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.IsYoungerThan(that:&nbsp;JobID)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Id&nbsp;&lt;&nbsp;that.Id;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;JobID&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;JobID<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;private&nbsp;new&nbsp;:&nbsp;n:int64&nbsp;-&gt;&nbsp;JobID<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;Id:&nbsp;int64<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;IsYoungerThan&nbsp;:&nbsp;that:JobID&nbsp;-&gt;&nbsp;bool<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Next&nbsp;:&nbsp;JobID<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>We shall use two classes that wrap asynchronous agents in this program, 
+      both of which follow the pattern of accumulating state as messages are 
+      received. This functionality could be factored out into an abstract base 
+      class with an internal agent, a <CODE>Post</CODE> method, and 
+      <CODE>IDisposable</CODE> interface implementation but F# would require 
+      derived classes to be upcast before the <CODE>Post</CODE> method could be 
+      invoked, or a replica of this method to be added to each derived class 
+      (defeating the advantage of reuse). So we choose to use a simple 
+      higher-order function instead:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;agent&nbsp;f&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;state&nbsp;=&nbsp;f&nbsp;msg&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;state&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;state);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;agent&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;Async&lt;'b&gt;)&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;MailboxProcessor&lt;'a&gt;</CODE></P>
+      <P>The first of our two communicating sequential processes is called the 
+      <CODE>Collator</CODE> and is responsible for dropping responses with job 
+      IDs that are younger than the last emitted job ID and forwarding all other 
+      responses. This can be implemented by passing a simple local 
+      <CODE>collate</CODE> function to our higher-order <CODE>agent</CODE> 
+      function and implementing a public <CODE>Post</CODE> member and 
+      <CODE>IDisposable</CODE> implementation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Collator&lt;'T&gt;(output)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;collate&nbsp;(id:&nbsp;JobID,&nbsp;msg:&nbsp;'T)&nbsp;lastId&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;return<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;id.IsYoungerThan&nbsp;lastId&nbsp;then&nbsp;lastId&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;id&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=&nbsp;agent&nbsp;collate&nbsp;(JobID())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Post&nbsp;msg&nbsp;=&nbsp;agent.Post&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Dispose()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;agent&nbsp;=&nbsp;agent<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Collator&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;output:('T&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;Collator&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Post&nbsp;:&nbsp;msg:(JobID&nbsp;*&nbsp;'T)&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>This <CODE>Collator</CODE> class can be tested by sending it a known 
+      sequence of messages with job IDs in different orders and observing which 
+      are filtered out:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;collator&nbsp;=&nbsp;new&nbsp;Collator&lt;_&gt;(printfn&nbsp;"%A")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;id0&nbsp;=&nbsp;JobID()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;id1&nbsp;=&nbsp;id0.Next<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;collator.Post&nbsp;[id0,&nbsp;0;&nbsp;id0,&nbsp;1;&nbsp;id1,&nbsp;2;&nbsp;id0,&nbsp;3;&nbsp;id1,&nbsp;4;&nbsp;id1,&nbsp;5];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;4<BR>&nbsp;&nbsp;&nbsp;&nbsp;5</CODE></P>
+      <P>In this case, only the message <CODE>3</CODE> was filtered out because 
+      it was the only message to have a job ID younger than its predecessor.</P>
+      <P>The other communicating sequential process is called 
+      <CODE>CancellableWorkers</CODE> and is responsible for receiving requests, 
+      cancelling any outstanding workflow when a new request is received, 
+      spawning a cancellable asynchronous workflow to handle the new request and 
+      sending responses through its own <CODE>Collator</CODE>. Again, this may 
+      be implemented as a local <CODE>execute</CODE> function passed to the 
+      <CODE>agent</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;CancellableWorkers&lt;'Input,&nbsp;'Output&gt;(work,&nbsp;output)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;collator&nbsp;=&nbsp;new&nbsp;Collator&lt;'Output&gt;(output)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cancel&nbsp;(src:&nbsp;System.Threading.CancellationTokenSource)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;src.Cancel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;src.Dispose()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;execute&nbsp;(request:&nbsp;'Input)&nbsp;(nextId:&nbsp;JobID,&nbsp;src)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;Option.iter&nbsp;cancel&nbsp;src<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;src&nbsp;=&nbsp;new&nbsp;System.Threading.CancellationTokenSource()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;post&nbsp;msg&nbsp;=&nbsp;collator.Post(nextId,&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async.Start(work&nbsp;post&nbsp;request,&nbsp;src.Token)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;nextId.Next,&nbsp;Some&nbsp;src&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=&nbsp;agent&nbsp;execute&nbsp;(JobID(),&nbsp;None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Request&nbsp;request&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.Post&nbsp;request<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Dispose()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;collator&nbsp;=&nbsp;collator<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;agent&nbsp;=&nbsp;agent<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;CancellableWorkers&lt;'Input,'Output&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;work:(('Output&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;'Input&nbsp;-&gt;&nbsp;Async&lt;unit&gt;)&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output:('Output&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;CancellableWorkers&lt;'Input,'Output&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Request&nbsp;:&nbsp;request:'Input&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The <CODE>CancellableWorkers</CODE> class can be tested by making 
+      requests that generate sequences of messages and sanity checking the 
+      emitted stream of messages. The following makes 5 such requests, each 
+      attempting to reply with 3 responses:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;5<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;generated&nbsp;=&nbsp;System.Collections.Concurrent.ConcurrentQueue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;emitted&nbsp;=&nbsp;System.Collections.Concurrent.ConcurrentQueue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;generate&nbsp;f&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;generated.Enqueue&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;f(x,&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;Async.Sleep&nbsp;10<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f(x,&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;Async.Sleep&nbsp;10<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f(x,&nbsp;2)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;emit&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;emitted.Enqueue&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;msg&nbsp;=&nbsp;(n,&nbsp;2)&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%s"&nbsp;(String.concat&nbsp;",&nbsp;"&nbsp;(Seq.map&nbsp;(sprintf&nbsp;"%A")&nbsp;generated))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%s"&nbsp;(String.concat&nbsp;",&nbsp;"&nbsp;(Seq.map&nbsp;(sprintf&nbsp;"%A")&nbsp;emitted))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;workers&nbsp;=&nbsp;new&nbsp;CancellableWorkers&lt;_,&nbsp;_&gt;(generate,&nbsp;emit)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;workers.Request&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Thread.Sleep&nbsp;5;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;(1,&nbsp;0),&nbsp;(2,&nbsp;0),&nbsp;(3,&nbsp;0),&nbsp;(4,&nbsp;0),&nbsp;(5,&nbsp;0),&nbsp;(4,&nbsp;1),&nbsp;(2,&nbsp;1),&nbsp;(5,&nbsp;1),&nbsp;(3,&nbsp;1),&nbsp;(5,&nbsp;2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;(1,&nbsp;0),&nbsp;(2,&nbsp;0),&nbsp;(3,&nbsp;0),&nbsp;(4,&nbsp;0),&nbsp;(5,&nbsp;0),&nbsp;(5,&nbsp;1),&nbsp;(5,&nbsp;2)</CODE></P>
+      <P>The generated messages shows that the workflows handling obsolete 
+      requests were cancelled quickly in most cases. For example, the message 
+      <CODE>(1,&nbsp;0)</CODE> appears but <CODE>(1,&nbsp;1)</CODE> does not so 
+      the workflow was successfully cancelled before generating this message. 
+      The message <CODE>(4,&nbsp;0)</CODE> appears followed soon after by 
+      <CODE>(4,&nbsp;1)</CODE> before that workflow was cancelled but note how 
+      the latter message was filtered out from messages emitted from the 
+      collator because it was preceded by the response <CODE>(5,&nbsp;0)</CODE> 
+      to the newer request that displaced the existing one.</P>
+      <H2>Summary</H2>
+      <P>This article has described a simple system that allows a client to fire 
+      a stream of requests at a server and receive a stream of responses in 
+      return such that the receipt of a new query causes any existing query to 
+      be silently cancelled.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of concurrent 
+      programming.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20cancellable%20requests_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

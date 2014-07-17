@@ -1,0 +1,344 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0074)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/vcgc.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20very%20concurrent%20garbage%20collector_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20very%20concurrent%20garbage%20collector_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20very%20concurrent%20garbage%20collector_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20very%20concurrent%20garbage%20collector_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20very%20concurrent%20garbage%20collector_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>The Very Concurrent Garbage Collector</H1>
+      <P>One of the most interesting research papers on garbage collection 
+      describes an unusual algorithm called the "Very Concurrent Garbage 
+      Collector" (VCGC) that manages to recycle unreachable heap blocks with 
+      only the occasional global synchronization with mutator threads in order 
+      to snapshot the global roots. This article walks through the design and 
+      implementation of VCGC in F#. Given that the subject of concurrent garbage 
+      collectors is notoriously difficult, this demonstrates how prototype 
+      solutions written in high-level languages like F# can help with 
+      correctness. Furthermore, the implementation adopts an allocationless 
+      programming style in order to leverage the benefits of this GC algorithm 
+      and we find that maximum pause times are over 100x shorter than with the 
+      default .NET 4 workstation GC and wall-clock performance is only slightly 
+      worse.</P>
+      <H2>Introduction</H2>
+      <P>VCGC is a beautiful concurrent algorithm based upon mark-sweep. The 
+      essence of this algorithm is that different threads may work concurrently 
+      on the same heap using the concept of epochs. An epoch is a time stamp 
+      that conveys the last time a heap block was updated relative to a global 
+      epoch counter. The marker and sweeper operate on heap blocks in different 
+      epochs and the global interpretation of epoch is updated at infrequent 
+      global synchronizations.</P>
+      <P>Heap blocks with an epoch equal to the global one are "young", those 
+      with an epoch one below are "old" and two below are "dead". The marker is 
+      responsible for youngifying reachable old heap blocks by traversing the 
+      heap starting from the global roots. The sweeper is responsible for 
+      recycling dead heap blocks by iterating over the set of all allocated heap 
+      blocks, i.e. those that have not been marked for two GC cycles. The 
+      mutator allocates new heap blocks from a local free list.</P>
+      <P>The marker and sweeper run concurrently with the mutator thread, 
+      exchanging information only at an infrequent and brief global 
+      synchronization when the mutator provides a new set of global roots.</P>
+      <P>Garbage collectors fall onto a sliding scale from on-the-fly collectors 
+      to snapshot collectors. On-the-fly collectors use a lot of fine-grained 
+      communication between the mutators and GC threads in order to keep the GC 
+      apprised of the constantly-changing heap topology. This allows on-the-fly 
+      collectors to collect garbage promptly but fine-grained communication is 
+      slow. In contrast, snapshot collectors take a snapshot of the global roots 
+      and heap at an infrequent synchronization and recycle heap blocks that 
+      were unreachable. This coarse-grained synchronization is more efficient 
+      but heap blocks are not collected so promptly and there is more "floating 
+      garbage" as a consequence.</P>
+      <P>VCGC is a simple snapshot algorithm. The mutator allocates off its own 
+      free list, recording allocations since the last GC cycle. The GC thread 
+      can run the marker and sweeper concurrently or in series. The marker 
+      traverses the set of heap blocks that were reachable at the last snapshot 
+      of the stack based upon the heap topology (which is immutable in our case) 
+      youngifying old heap blocks. The sweeper sweeps heap blocks in the dead 
+      epoch from a GC-local allocation list. Note that the marker operates on 
+      the subset of old heap blocks and the sweeper operates on the distinct set 
+      of dead heap blocks so there is no conflict between them and, 
+      consequently, no need for synchronization. Upon synchronization, the 
+      mutator sends the GC a copy of its stack and the set of values it has 
+      allocated since the last GC cycle and swaps free lists with the GC.</P>
+      <P>Our implementation uses two barriers to implement the global 
+      synchronization and the GC thread runs the marker and sweeper in series. 
+      Once both the mutator and GC threads have passed the first barrier they 
+      send data to each other and wait at the second barrier before receiving 
+      the sent data and continuing independently.</P>
+      <H2>Implementation</H2>
+      <P>The following <CODE>Coord</CODE> struct will be used to represent 
+      positions on the chess board:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Coord&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;x&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;y&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(x,&nbsp;y)&nbsp;=&nbsp;{x=x;&nbsp;y=y};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Coord&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;x:int&nbsp;*&nbsp;y:int&nbsp;-&gt;&nbsp;Coord<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;x:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;y:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>In order to eliminate the contribution of the .NET GC from any 
+      measurements we make on our VCGC implementation we must adopt an 
+      allocationless style. References will be represented by integers tagged 
+      with the following unit of measure:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Measure&gt;]&nbsp;type&nbsp;IsRefn;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;Measure&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;IsRefn</CODE></P>
+      <P>This makes the static type system distinguish our references from 
+      ordinary integers, preventing us from confusing them accidentally. We 
+      shall use the following alias:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Refn&nbsp;=&nbsp;int&lt;IsRefn&gt;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Refn&nbsp;=&nbsp;int&lt;IsRefn&gt;</CODE></P>
+      <P>The null reference can be represented by <CODE>-1</CODE> here because 
+      this will not be a valid index into the heap:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;Null&nbsp;=&nbsp;-1&lt;IsRefn&gt;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;Null&nbsp;:&nbsp;int&lt;IsRefn&gt;&nbsp;=&nbsp;-1</CODE></P>
+      <P>The following <CODE>isNull</CODE> function tests a reference to see if 
+      it is a null reference.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;isNull&nbsp;r&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;=&nbsp;-1&lt;IsRefn&gt;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;isNull&nbsp;:&nbsp;int&lt;IsRefn&gt;&nbsp;-&gt;&nbsp;bool</CODE></P>
+      <P>The following <CODE>derefn</CODE> function can be used to convert a 
+      <CODE>Refn</CODE> into an <CODE>int</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;derefn&nbsp;(n:&nbsp;Refn)&nbsp;=&nbsp;int&nbsp;n;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;derefn&nbsp;:&nbsp;Refn&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>And the following <CODE>refn</CODE> function does the opposite:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;refn&nbsp;(n:&nbsp;int)&nbsp;:&nbsp;Refn&nbsp;=&nbsp;1&lt;_&gt;&nbsp;*&nbsp;n;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;refn&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;Refn</CODE></P>
+      <P>A heap block is a cons cell containing a <CODE>Coord</CODE> and a 
+      reference to the tail list <CODE>xs</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;HeapBlock&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;x&nbsp;:&nbsp;Coord<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs&nbsp;:&nbsp;Refn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;(x,&nbsp;xs)&nbsp;=&nbsp;{x=x;&nbsp;xs=xs};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;HeapBlock&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;x:Coord&nbsp;*&nbsp;xs:refn&nbsp;-&gt;&nbsp;HeapBlock<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;x:&nbsp;Coord<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs:&nbsp;refn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The heap may then be represented as a <CODE>HeapBlock</CODE> array.</P>
+      <P>Various structures in VCGC require an extensible collection of 
+      references. We use the following <CODE>Refns</CODE> class to implement 
+      such a collection:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Refns()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;n&nbsp;=&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;xs&nbsp;:&nbsp;Refn&nbsp;[]&nbsp;=&nbsp;Array.zeroCreate&nbsp;1000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Item<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;get&nbsp;i&nbsp;=&nbsp;xs.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.CopyFrom&nbsp;(ys:&nbsp;Refn&nbsp;[])&nbsp;m&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n+m&nbsp;&lt;&nbsp;xs.Length&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[n+i]&nbsp;&lt;-&nbsp;ys.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;&lt;-&nbsp;n&nbsp;+&nbsp;m<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Push&nbsp;ys.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;private&nbsp;this.SetIndexAndCopyFrom&nbsp;(epoch:&nbsp;sbyte&lt;_&gt;&nbsp;[])&nbsp;age&nbsp;(ys:&nbsp;Refn&nbsp;[])&nbsp;m&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n+m&nbsp;&lt;&nbsp;xs.Length&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y&nbsp;=&nbsp;ys.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;epoch.[derefn&nbsp;y]&nbsp;&lt;-&nbsp;age<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[n+i]&nbsp;&lt;-&nbsp;y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;&lt;-&nbsp;n&nbsp;+&nbsp;m<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y&nbsp;=&nbsp;ys.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;epoch.[derefn&nbsp;y]&nbsp;&lt;-&nbsp;age<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Push&nbsp;y<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.SetIndexAndMoveTo&nbsp;epoch&nbsp;age&nbsp;(ys:&nbsp;Refns)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ys.SetIndexAndCopyFrom&nbsp;epoch&nbsp;age&nbsp;xs&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Count&nbsp;&lt;-&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;Range(i0,&nbsp;i1)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Refns()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=i0&nbsp;to&nbsp;i1-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.Push&nbsp;(refn&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Push&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n=xs.Length&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs&nbsp;&lt;-&nbsp;Array.append&nbsp;xs&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[n]&nbsp;&lt;-&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;&lt;-&nbsp;n&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Pop()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;=&nbsp;0&nbsp;then&nbsp;failwith&nbsp;"Attempt&nbsp;to&nbsp;pop&nbsp;from&nbsp;empty&nbsp;extensible&nbsp;array"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;&lt;-&nbsp;n&nbsp;-&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[n]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Count<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;get()&nbsp;=&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;set&nbsp;n'&nbsp;=&nbsp;n&nbsp;&lt;-&nbsp;n'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.SetIndex&nbsp;(ys:&nbsp;int&nbsp;[])&nbsp;y&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ys.[derefn&nbsp;xs.[i]]&nbsp;&lt;-&nbsp;y<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.FilterTo&nbsp;(epoch:&nbsp;sbyte&lt;_&gt;&nbsp;[])&nbsp;dead&nbsp;(freeList:&nbsp;Refns)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;src&nbsp;dst&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;src&nbsp;=&nbsp;n&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;&lt;-&nbsp;dst<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;xs.[src]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;epoch.[derefn&nbsp;x]&nbsp;=&nbsp;dead&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;freeList.Push&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(src+1)&nbsp;dst<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[dst]&nbsp;&lt;-&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(src+1)&nbsp;(dst+1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;0&nbsp;0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Refns&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Refns<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;CopyFrom&nbsp;:&nbsp;ys:Refn&nbsp;[]&nbsp;-&gt;&nbsp;m:int&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FilterTo&nbsp;:&nbsp;epoch:sbyte&lt;'u&gt;&nbsp;[]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dead:sbyte&lt;'u&gt;&nbsp;-&gt;&nbsp;freeList:Refns&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Pop&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Refn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Push&nbsp;:&nbsp;x:Refn&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;SetIndex&nbsp;:&nbsp;ys:int&nbsp;[]&nbsp;-&gt;&nbsp;y:int&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;private&nbsp;SetIndexAndCopyFrom&nbsp;:&nbsp;epoch:sbyte&lt;'w&gt;&nbsp;[]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;age:sbyte&lt;'w&gt;&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ys:Refn&nbsp;[]&nbsp;-&gt;&nbsp;m:int&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SetIndexAndMoveTo&nbsp;:&nbsp;epoch:sbyte&lt;'v&gt;&nbsp;[]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;age:sbyte&lt;'v&gt;&nbsp;-&gt;&nbsp;ys:Refns&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Count&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Item&nbsp;:&nbsp;i:int&nbsp;-&gt;&nbsp;Refn&nbsp;with&nbsp;get<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Count&nbsp;:&nbsp;int&nbsp;with&nbsp;set<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;Range&nbsp;:&nbsp;i0:int&nbsp;*&nbsp;i1:int&nbsp;-&gt;&nbsp;Refns<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The <CODE>CopyFrom</CODE> member copies elements into a 
+      <CODE>Refns</CODE> from the start of the given array. This will be used to 
+      copy a snapshot of the global roots from the stack used by the mutator 
+      into a <CODE>Refns</CODE> used by the GC thread.</P>
+      <P>The <CODE>FilterTo</CODE> member moves elements <CODE>x</CODE> for 
+      which <CODE>epoch.[x]=dead</CODE> to <CODE>freeList</CODE> and will be 
+      used for sweeping. Note that epochs are represented by values of the 
+      <CODE>sbyte</CODE> type. In fact, epochs can be represented using just 
+      three different values.</P>
+      <P>The <CODE>Push</CODE> member appends an element to the end of the 
+      extensible array and the <CODE>Pop</CODE> member removes one. The 
+      <CODE>Count</CODE> property gets and sets the number of elements in the 
+      extensible array.</P>
+      <P>The <CODE>SetIndexAndCopyFrom</CODE> member sets the corresponding 
+      element in an <CODE>epoch</CODE> array to <CODE>age</CODE> for each 
+      element in the given sub array before copying them into the current 
+      extensible array. The <CODE>SetIndexAndMoveTo</CODE> member sets the 
+      corresponding element in the <CODE>epoch</CODE> array from this extensible 
+      array and moves them to another extensible array.</P>
+      <P>The static <CODE>Range</CODE> member creates an extensible array 
+      containing a range of consecutive integers.</P>
+      <P>In the interests of clarity, we shall encapsulate the data going to and 
+      from the GC and mutator threads in a pair of structs. The 
+      <CODE>MutatorToGC</CODE> struct conveys the stack and collection of newly 
+      allocated heap blocks (since the last global synchronization):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MutatorToGC&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;stack&nbsp;:&nbsp;Refns<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;newlyAllocated&nbsp;:&nbsp;Refns<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(stack,&nbsp;newlyAllocated)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{stack=stack;&nbsp;newlyAllocated=newlyAllocated};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MutatorToGC&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;stack:Refns&nbsp;*&nbsp;newlyAllocated:Refns&nbsp;-&gt;&nbsp;MutatorToGC<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;stack:&nbsp;Refns<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;newlyAllocated:&nbsp;Refns<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The <CODE>GCToMutator</CODE> struct conveys the free list that the GC 
+      conveys back to the mutator after each GC cycle:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;GCToMutator&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;freeList&nbsp;:&nbsp;Refns<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(freeList)&nbsp;=&nbsp;{freeList=freeList};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;GCToMutator&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;freeList:Refns&nbsp;-&gt;&nbsp;GCToMutator<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;freeList:&nbsp;Refns<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>We shall also distinguish between ints and epochs using a unit of 
+      measure:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Measure&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Epoch;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;Measure&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Epoch</CODE></P>
+      <P>An age is then represented as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;age&nbsp;=&nbsp;sbyte&lt;Epoch&gt;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;age&nbsp;=&nbsp;sbyte&lt;Epoch&gt;</CODE></P>
+      <P>The garbage collected heap is encapsulated in the following 
+      <CODE>Heap</CODE> class:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Heap()&nbsp;=</CODE></P>
+      <P>The garbage collector itself is implemented as a series of nested 
+      functions and its iterface to the mutator is then exposed via methods.</P>
+      <P>The following <CODE>gcMarkAndYoungify</CODE> function traverses the 
+      heap starting from the global roots on the stack and updates the 
+      <CODE>epoch</CODE> of each reachable heap block from <CODE>old</CODE> to 
+      <CODE>young</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;gcMarkAndYoungify&nbsp;(heap:&nbsp;HeapBlock&nbsp;[])&nbsp;young&nbsp;(stack:&nbsp;Refns)&nbsp;(epoch:&nbsp;age&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;old&nbsp;=&nbsp;young&nbsp;-&nbsp;1y&lt;Epoch&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;mark&nbsp;(blk:&nbsp;Refn)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;epoch.[derefn&nbsp;blk]&nbsp;=&nbsp;old&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;epoch.[derefn&nbsp;blk]&nbsp;&lt;-&nbsp;young<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;blk&nbsp;=&nbsp;heap.[derefn&nbsp;blk].xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not(isNull&nbsp;blk)&nbsp;then&nbsp;mark&nbsp;blk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;stack.Count&nbsp;-&nbsp;1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;blk&nbsp;=&nbsp;stack.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not(isNull&nbsp;blk)&nbsp;then&nbsp;mark&nbsp;blk</CODE></P>
+      <P>The following <CODE>gcSweep</CODE> function enumerates all allocated 
+      heap blocks filtering out those in the dead epoch and returning them to 
+      the free list:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;gcSweep&nbsp;young&nbsp;(allocated:&nbsp;Refns)&nbsp;(gcFreeList:&nbsp;Refns)&nbsp;(epoch:&nbsp;age&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dead&nbsp;=&nbsp;young&nbsp;-&nbsp;2y&lt;Epoch&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allocated.FilterTo&nbsp;epoch&nbsp;dead&nbsp;gcFreeList</CODE></P>
+      <P>We shall use a heap containing the following number of heap blocks:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;heapSize&nbsp;=&nbsp;1000000</CODE></P>
+      <P>The mutable <CODE>mutatorToGC</CODE> contains the snapshot of the stack 
+      and the collection of newly allocated heap blocks:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;mutatorToGC&nbsp;=&nbsp;MutatorToGC(Refns(),&nbsp;Refns())</CODE></P>
+      <P>The system uses two separate free lists that start off with half of the 
+      references to free heap blocks each:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mkGCFreeList()&nbsp;=&nbsp;Refns.Range(heapSize/2,&nbsp;heapSize)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;mutatorFreeList&nbsp;=&nbsp;Refns.Range(0,&nbsp;heapSize/2)</CODE></P>
+      <P>The GC thread pushes newly freed heap blocks onto its free list while 
+      the mutator pops newly allocated heap blocks off its own free list. In a 
+      production-quality solution we would want to rebalance these free lists 
+      over time but, for the purposes of this demonstration, we do not bother. 
+      The simplest solution to balancing would be to give the mutator the 
+      largest free list.</P>
+      <P>The GC uses the following <CODE>gcSend</CODE> function to send its free 
+      list to the mutator by swapping the two free lists over:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;gcSend&nbsp;oldFreeList&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;newFreeList&nbsp;=&nbsp;mutatorFreeList<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorFreeList&nbsp;&lt;-&nbsp;oldFreeList<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;newFreeList</CODE></P>
+      <P>And the following <CODE>gcReceive</CODE> function to read the snapshot 
+      of the stack and newly allocated heap blocks from the mutator:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;gcReceive&nbsp;young&nbsp;(allocated:&nbsp;Refns)&nbsp;(epoch:&nbsp;age&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;old&nbsp;=&nbsp;young&nbsp;-&nbsp;1y&lt;Epoch&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorToGC.newlyAllocated.SetIndexAndMoveTo&nbsp;epoch&nbsp;old&nbsp;allocated<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorToGC.stack</CODE></P>
+      <P>Note that this function moves the newly allocated heap blocks onto the 
+      <CODE>allocated</CODE> collection (the set of all currently-allocated heap 
+      blocks) as well as setting the epoch for the newly allocated heap blocks 
+      to old ready for the mark phase to youngify them.</P>
+      <P>The GC uses two global barriers for synchronization with the mutator 
+      thread:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;startBarrier&nbsp;=&nbsp;new&nbsp;System.Threading.Barrier(2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;finishBarrier&nbsp;=&nbsp;new&nbsp;System.Threading.Barrier(2)</CODE></P>
+      <P>The <CODE>startBarrier</CODE> is signalled when both threads are to 
+      begin a GC cycle. Once both threads have reached this barrier they move on 
+      to sending data (snapshot stack, newly allocated and free lists) before 
+      signaling the <CODE>finishBarrier</CODE>, reading the data that was sent 
+      to them and continuing with the majority of their work independently.</P>
+      <P>The heap is a preallocated array of heap blocks:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;heap&nbsp;=&nbsp;Array.create&nbsp;heapSize&nbsp;Unchecked.defaultof&lt;HeapBlock&gt;</CODE></P>
+      <P>The following <CODE>gcLoop</CODE> function implements the main loop of 
+      the garbage collector:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;gcLoop&nbsp;young&nbsp;(allocated:&nbsp;Refns)&nbsp;(freeList:&nbsp;Refns)&nbsp;(epoch:&nbsp;sbyte&lt;_&gt;&nbsp;[])&nbsp;()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;startBarrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;freeList&nbsp;=&nbsp;gcSend&nbsp;freeList<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;young&nbsp;=&nbsp;young&nbsp;+&nbsp;1y&lt;Epoch&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finishBarrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stack&nbsp;=&nbsp;gcReceive&nbsp;young&nbsp;allocated&nbsp;epoch<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gcMarkAndYoungify&nbsp;heap&nbsp;young&nbsp;stack&nbsp;epoch<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gcSweep&nbsp;young&nbsp;allocated&nbsp;freeList&nbsp;epoch<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gcLoop&nbsp;young&nbsp;allocated&nbsp;freeList&nbsp;epoch&nbsp;()</CODE></P>
+      <P>Note how the body of this function signals the start barrier, swaps 
+      free lists, ages the heap, signals the finish barrier, reads the snapshot 
+      stack and newly allocated collection, marks and sweeps the heap before 
+      recursing.</P>
+      <P>The thread that will run the GC is defined as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;gcThread&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;allocated&nbsp;=&nbsp;Refns()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;epoch&nbsp;=&nbsp;Array.create&nbsp;heap.Length&nbsp;0y&lt;Epoch&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Thread(gcLoop&nbsp;2y&lt;Epoch&gt;&nbsp;allocated&nbsp;(mkGCFreeList())&nbsp;epoch)</CODE></P>
+      <P>Note how the data structures used by the GC are passed from function to 
+      function as a way of restricting their scope and, therefore, avoiding 
+      confusion with the data structures visible to the mutator code.</P>
+      <P>The GC thread is started as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gcThread.IsBackground&nbsp;&lt;-&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gcThread.Start()</CODE></P>
+      <P>The following function will be used by the mutator to send data to the 
+      GC:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutatorSend&nbsp;(stack:&nbsp;Refn&nbsp;[])&nbsp;sp&nbsp;(newlyAllocated:&nbsp;Refns)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorToGC.stack.Count&nbsp;&lt;-&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorToGC.stack.CopyFrom&nbsp;stack&nbsp;sp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;msg&nbsp;=&nbsp;MutatorToGC(mutatorToGC.stack,&nbsp;newlyAllocated)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;newlyAllocated&nbsp;=&nbsp;mutatorToGC.newlyAllocated<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorToGC&nbsp;&lt;-&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;newlyAllocated</CODE></P>
+      <P>The collection of newly allocated heap blocks that is filled by the 
+      mutator before being passed to the GC is defined as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;mutatorNewlyAllocated&nbsp;=&nbsp;Refns()</CODE></P>
+      <P>The following <CODE>Item</CODE> property allows the mutator to 
+      dereference heap blocks easily using the <CODE>xs.[i]</CODE> syntax:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Item<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;get&nbsp;i&nbsp;=&nbsp;heap.[derefn&nbsp;i]</CODE></P>
+      <P>The <CODE>Alloc</CODE> member pops a free heap block off the mutator's 
+      free list and initializes it:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Alloc(h,&nbsp;t)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;blk&nbsp;=&nbsp;mutatorFreeList.Pop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap.[derefn&nbsp;blk]&nbsp;&lt;-&nbsp;HeapBlock(h,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorNewlyAllocated.Push&nbsp;blk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blk</CODE></P>
+      <P>The <CODE>GCReady</CODE> property assesses whether or not the mutator 
+      should initiate a GC cycle:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.GCReady&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorNewlyAllocated.Count&nbsp;&gt;&nbsp;4000</CODE></P>
+      <P>Finally, the <CODE>GC</CODE> member performs a GC cycle by 
+      synchronizing with the GC thread and sending a snapshot of the current 
+      stack (the global roots) and the set of heap blocks that the mutator has 
+      allocated since the last GC cycle:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.GC&nbsp;(stack:&nbsp;Refn&nbsp;[])&nbsp;(sp:&nbsp;int)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;startBarrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutatorNewlyAllocated&nbsp;&lt;-&nbsp;mutatorSend&nbsp;stack&nbsp;sp&nbsp;mutatorNewlyAllocated<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finishBarrier.SignalAndWait();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Heap&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Heap<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Alloc&nbsp;:&nbsp;h:Coord&nbsp;*&nbsp;t:Refn&nbsp;-&gt;&nbsp;Refn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;GC&nbsp;:&nbsp;stack:Refn&nbsp;[]&nbsp;-&gt;&nbsp;sp:int&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;GCReady&nbsp;:&nbsp;bool<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Item&nbsp;:&nbsp;i:int&nbsp;-&gt;&nbsp;HeapBlock&nbsp;with&nbsp;get<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The simplest approach to sending the newly allocated heap blocks from 
+      the mutator to the GC thread is to copy them and wipe the mutator's 
+      collection clean. However, this incurs a considerable stall because it is 
+      likely that many heap blocks have been allocated so we adopted the 
+      approach of exchanging newly freed collection instead.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;heap&nbsp;=&nbsp;Heap();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;heap&nbsp;:&nbsp;Heap</CODE></P>
+      <P>The mutator uses an ordinary array as its stack, in the interests of 
+      performance:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;stack&nbsp;=&nbsp;Array.create&nbsp;1000&nbsp;Null;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;stack&nbsp;:&nbsp;int&lt;IsRefn&gt;&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;-1;&nbsp;...|]</CODE></P>
+      <P>The stack pointer is stored in the <CODE>sp</CODE> variable:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mutable&nbsp;sp&nbsp;=&nbsp;0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;sp&nbsp;:&nbsp;int&nbsp;=&nbsp;0</CODE></P>
+      <P>The following <CODE>List</CODE> module provides some definitions for 
+      manipulating our lists:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;List&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;empty&nbsp;=&nbsp;Null<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cons&nbsp;x&nbsp;xs&nbsp;:&nbsp;Refn&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap.Alloc(x,&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;isEmpty&nbsp;xs&nbsp;=&nbsp;xs=empty;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;List&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;empty&nbsp;:&nbsp;int&lt;IsRefn&gt;&nbsp;=&nbsp;-1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;cons&nbsp;:&nbsp;Coord&nbsp;-&gt;&nbsp;Refn&nbsp;-&gt;&nbsp;Refn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;isEmpty&nbsp;:&nbsp;int&lt;IsRefn&gt;&nbsp;-&gt;&nbsp;bool<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following <CODE>safe</CODE> function is from our n-queens solver 
+      and is used to determine if a queen at one position is safe from a queen 
+      at another:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;safe&nbsp;(q0:&nbsp;Coord)&nbsp;(q1:&nbsp;Coord)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;q0.x&lt;&gt;q1.x&nbsp;&amp;&amp;&nbsp;q0.y&lt;&gt;q1.y&nbsp;&amp;&amp;&nbsp;q0.x-q0.y&lt;&gt;q1.x-q1.y&nbsp;&amp;&amp;&nbsp;q0.x+q0.y&lt;&gt;q1.x+q1.y;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;safe&nbsp;:&nbsp;Coord&nbsp;-&gt;&nbsp;Coord&nbsp;-&gt;&nbsp;bool</CODE></P>
+      <P>A faithful translation of our usual n-queens solver would allow the 
+      closure representing the predicate passed to the <CODE>List.filter</CODE> 
+      function to be heap allocated as well but we shall skip this complexity 
+      and use a <CODE>filter</CODE> function specialized for our 
+      <CODE>safe</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;filter&nbsp;q&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;List.isEmpty&nbsp;xs&nbsp;then&nbsp;List.empty&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;blk&nbsp;=&nbsp;heap.[derefn&nbsp;xs]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;safe&nbsp;q&nbsp;blk.x&nbsp;then&nbsp;List.cons&nbsp;blk.x&nbsp;(filter&nbsp;q&nbsp;blk.xs)&nbsp;else&nbsp;filter&nbsp;q&nbsp;blk.xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;filter&nbsp;:&nbsp;Coord&nbsp;-&gt;&nbsp;int&lt;IsRefn&gt;&nbsp;-&gt;&nbsp;int&lt;IsRefn&gt;</CODE></P>
+      <P>Note that we also do not bother tracking stack allocations or 
+      performing garbage collections in the <CODE>filter</CODE> function, 
+      deferring these necessary mutator operations to the <CODE>search</CODE> 
+      function below.</P>
+      <P>The following <CODE>search</CODE> function recursively traverses the 
+      search space of the n-queens problem accumulating the number of solutions 
+      found so far:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;search&nbsp;n&nbsp;nqs&nbsp;qs&nbsp;ps&nbsp;a&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;List.isEmpty&nbsp;ps&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;nqs=n&nbsp;then&nbsp;a+1&nbsp;else&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;osp&nbsp;=&nbsp;sp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stack.[sp]&nbsp;&lt;-&nbsp;qs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stack.[sp+1]&nbsp;&lt;-&nbsp;ps<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sp&nbsp;&lt;-&nbsp;sp&nbsp;+&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;heap.GCReady&nbsp;then&nbsp;heap.GC&nbsp;stack&nbsp;sp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;blk&nbsp;=&nbsp;heap.[derefn&nbsp;ps]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;q,&nbsp;ps&nbsp;=&nbsp;blk.x,&nbsp;blk.xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;qs'&nbsp;=&nbsp;List.cons&nbsp;q&nbsp;qs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ps'&nbsp;=&nbsp;filter&nbsp;q&nbsp;ps<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;a&nbsp;=&nbsp;search&nbsp;n&nbsp;(nqs+1)&nbsp;qs'&nbsp;ps'&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sp&nbsp;&lt;-&nbsp;osp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;search&nbsp;n&nbsp;nqs&nbsp;qs&nbsp;ps&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;search&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int&lt;IsRefn&gt;&nbsp;-&gt;&nbsp;int&lt;IsRefn&gt;&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>If the list <CODE>ps</CODE> is empty then the function is a leaf and 
+      returns with either <CODE>a+1</CODE> or <CODE>a</CODE> so we avoid 
+      GC-related operations. Otherwise the stack pointer is recorded, 
+      <CODE>qs</CODE> and <CODE>ps</CODE> are pushed onto the stack, GC 
+      readiness is checked and a GC cycle invoked if the conditions require it. 
+      The stack pointer <CODE>sp</CODE> is restored to its former value 
+      <CODE>osp</CODE> when this stack frame is exited. The first recursive call 
+      to <CODE>search</CODE> is not a tail call so the lists <CODE>qs</CODE> and 
+      <CODE>ps</CODE> must be pushed onto the stack to preserve them for the 
+      final recursive call to <CODE>search</CODE>. Note that the temporary lists 
+      <CODE>qs'</CODE> and <CODE>ps'</CODE> will be pushed by the callee so 
+      there is no need to push them here. Finally, the result of a tail call to 
+      <CODE>search</CODE> is returned. Tail call elimination allows us to 
+      restore the stack before this call so the tail callee's stack frame 
+      overwrites ours.</P>
+      <P>The following <CODE>ps</CODE> function constructs a list containing 
+      every position on a board of size <CODE>n</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ps&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;list&nbsp;=&nbsp;List.empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list&nbsp;&lt;-&nbsp;List.cons&nbsp;(Coord(i,&nbsp;j))&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ps&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The <CODE>solve</CODE> function computes the number of solutions to the 
+      n-queens problem:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;solve&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sols&nbsp;=&nbsp;search&nbsp;n&nbsp;0&nbsp;List.empty&nbsp;(ps&nbsp;n)&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap.GC&nbsp;[||]&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;heap.GC&nbsp;[||]&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sols;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;solve&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>This concludes our implementation of the Very Concurrent Garbage 
+      Collector.</P>
+      <H2>Results</H2>
+      <P>Instrumenting the above program such that it records the time as the 
+      mutator and GC threads enter their various phases of operation gives the 
+      following results when the mutator triggers a GC after at least 4,096 
+      allocations:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20very%20concurrent%20garbage%20collector_files/VCGC.png"></P>
+      <P>The top half of the image shows the mutator progressing on its work 
+      almost the entire time. In fact, the mutator spends only a few percent of 
+      its time synchronizing with the GC thread and exchanging data. This is 
+      theoretically ideal because the mutator can get on and solve the user's 
+      problem using almost all of the core's power. However, other interactions 
+      such as the effect of locality on cache efficiency can also affect mutator 
+      performance significantly. Consequently, garbage collectors should be 
+      careful to preserve locality for the mutator when possible. In this case, 
+      the primary locality-aware optimization that we made was to sweep the 
+      allocated collection using sliding compaction. In previous GC 
+      implementations we removed unreachable elements from the allocated 
+      collection by overwriting them with the one at the end but this 
+      effectively randomized the order of the allocated collection and, 
+      consequently, destroyed the locality of the mutator's allocations.</P>
+      <P>The bottom half of the image shows the GC thread synchronizing with the 
+      mutator and then preparing (copying references to newly allocated heap 
+      blocks), marking and sweeping before waiting for the mutator to 
+      synchronize again. Despite the very high allocation rate of our mutator, 
+      the GC thread has no problem keeping up and, consequently, the mutator is 
+      never left waiting for the GC thread. This results in very small 
+      submillisecond pause times compared to the 200ms pauses seen with the .NET 
+      4 GC.</P>
+      <H2>Summary</H2>
+      <P>This article has described how a complete concurrent garbage can be 
+      implemented in F# and used from F# in preference to the built-in .NET 
+      garbage collector. The results show much shorter maximum pause times 
+      compared to the .NET 4 GC and comparable throughput.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of garbage 
+      collection and allocationless programming.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2011</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20very%20concurrent%20garbage%20collector_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

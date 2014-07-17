@@ -1,0 +1,349 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0089)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/regular_expressions.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Working with Regular Expressions</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Working with Regular Expressions</TITLE>     
+<LINK href="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Working with Regular Expressions</H1>
+      <P>Regular expressions are a domain-specific language for pattern matching 
+      over sequences of characters. This functionality provides a concise and 
+      efficient way to dissect strings and, consequently, is used in many forms 
+      of string processing including the definition of lexers. This article 
+      describes how .NET's support for regular expressions can be used to 
+      manpulate strings easily and efficiently from the F# programming 
+      language.</P>
+      <H2>Introduction</H2>
+      <P>The .NET framework provides an excellent high-performance regular 
+      expression library that is easy to use from F#. The library generates 
+      interpreted code by default but can also be used to generate 
+      high-performance optimized native code for the best possible speed when 
+      the same regular expression will be used many times either on many strings 
+      or on very large strings.</P>
+      <P>We begin by opening this namespace:</P>
+<PRE>&gt; open System.Text.RegularExpressions;;</PRE>
+      <H3>Creating a regular expression</H3>
+      <P>The name "regular expression" is often abbreviated to regexp or regex. 
+      The .NET framework uses the class              <CODE>Regex</CODE> to 
+      represent regular expressions. For example, the following regular 
+      expression matches the four character sequence              <I>this</I> 
+      verbatim:           </P>
+<PRE>&gt; let re = Regex "test";;
+val re : Regex</PRE>
+      <H3>Searching for a match</H3>
+      <P>A given string may be matched against the regular expression            
+        <CODE>re</CODE>           </P>
+<PRE>&gt; re.IsMatch "This is a testament to their work";;
+val it : bool = true
+&gt; re.IsMatch "Tested my patience";;
+val it : bool = false</PRE>
+      <P>Note that the second string does not match even though it contains the 
+      word "Tested" because the case of the first letter is different from that 
+      required by the regular expression, which is case sensitive by 
+default.</P>
+      <H3>Regex options</H3>
+      <P>Regular expressions may have some options such as case insensitivity 
+      defined when they are created by passing an additional              
+      <CODE>RegexOptions</CODE> to the              <CODE>Regex</CODE> 
+      constructor:           </P>
+<PRE>&gt; Regex("test", RegexOptions.IgnoreCase).IsMatch "Tested my patience";;
+val it : bool = true</PRE>
+      <P>The following options may be used:</P>
+      <P>
+      <TABLE style="width: 80%;">
+        <TBODY>
+        <TR>
+          <TD style="width: 25%;"><CODE>None</CODE>                 </TD>
+          <TD style="width: 75%;">Specifies that no options are set. </TD></TR>
+        <TR>
+          <TD><CODE>IgnoreCase</CODE>                 </TD>
+          <TD>Specifies case-insensitive matching. </TD></TR>
+        <TR>
+          <TD><CODE>Multiline</CODE>                 </TD>
+          <TD>Multiline mode. Changes the meaning of ^ and $ so they match at 
+            the beginning and end, respectively, of any line, and not just the 
+            beginning and end of the entire string. </TD></TR>
+        <TR>
+          <TD><CODE>ExplicitCapture</CODE>                 </TD>
+          <TD>Specifies that the only valid captures are explicitly named or 
+            numbered groups of the form (?&lt;name&gt;...). This allows unnamed 
+            parentheses to act as noncapturing groups without the syntactic 
+            clumsiness of the expression (?:...). </TD></TR>
+        <TR>
+          <TD><CODE>Compiled</CODE>                 </TD>
+          <TD>Specifies that the regular expression is compiled to an 
+            assembly. This yields faster execution but increases startup 
+        time.</TD></TR>
+        <TR>
+          <TD><CODE>Singleline</CODE>                 </TD>
+          <TD>Changes the meaning of                    <CODE>.</CODE>  so it 
+            matches every character (instead of every character except \n).      
+                        </TD></TR>
+        <TR>
+          <TD><CODE>IgnorePatternWhitespace</CODE>                 </TD>
+          <TD>Eliminates unescaped white space from the pattern and enables 
+            comments marked with a hash. However, this option does not affect or 
+            eliminate white space in character classes.</TD></TR>
+        <TR>
+          <TD><CODE>RightToLeft</CODE>                 </TD>
+          <TD>Specifies that the search will be from right to left instead of 
+            from left to right. </TD></TR>
+        <TR>
+          <TD><CODE>ECMAScript</CODE>                 </TD>
+          <TD>Enables ECMAScript-compliant behavior for the expression. </TD></TR>
+        <TR>
+          <TD><CODE>CultureInvariant</CODE>                 </TD>
+          <TD>Specifies that cultural differences in language is 
+        ignored.</TD></TR></TBODY></TABLE>
+      <P></P>
+      <P>Note that case insensitivity can also be specified for part of a 
+      regular expression by preceding it with              <CODE>(?i)</CODE> as 
+      follows:           </P>
+<PRE>&gt; Regex("(?i)test").IsMatch "Tested my patience";;
+val it : bool = true</PRE>
+      <H3>Matching characters</H3>
+      <P>Case insensitivity is useful but the ability to arbitrarily specify 
+      which characters you wish to match is more powerful. To do this, we begin 
+      to build our string patterns using the domain specific language of regular 
+      expressions.</P>
+      <P>The dot symbol              <CODE>.</CODE> in a regular expression 
+      matches any character except newline:           </P>
+<PRE>&gt; let re = Regex ".";;
+val re : Regex
+&gt; re.Replace("Gary Foolow was\nin the foo", "X");;
+val it : string = "XXXXXXXXXXXXXXX\nXXXXXXXXXX"</PRE>
+      <P>Currying can be used to factor out the commonality between the string 
+      replacements we keep making:</P>
+<PRE>&gt; let replace re (sub: string) input =
+    (Regex re).Replace(input, sub);;
+val replace : string -&gt; string -&gt; string -&gt; string</PRE>
+      <P>Note that a type annotation on the              <CODE>sub</CODE> 
+      parameter to the              <CODE>replace</CODE> function is required 
+      because the              <CODE>Replace</CODE> member of the              
+      <CODE>Regex</CODE> class is overloaded.           </P>
+      <P>We can now partially apply our new              <CODE>replace</CODE> 
+      function to a regular expression and substitution and then, for example, 
+      map the resulting closure over a sequence of strings to perform 
+      replacements on all of them. However, this implementation of the           
+         <CODE>replace</CODE> function will construct many identical objects of 
+      the              <CODE>Regex</CODE> class. Hoisting the construction 
+      allows us to write the              <CODE>replace</CODE> function much 
+      more efficiently when its partial application is repeatedly applied:       
+          </P>
+<PRE>&gt; let replace re =
+    let re = Regex re
+    fun (sub: string) input -&gt;
+      re.Replace(input, sub);;
+val replace : string -&gt; (string -&gt; string -&gt; string)</PRE>
+      <P>Note that the type attributed to this function is slightly different, 
+      using superfluous parentheses to highlight the fact that intermediate 
+      computation requires the generation of a closure (required to capture the  
+                  <I>free variable</I>             <CODE>re</CODE> from its 
+      environment).           </P>
+      <P>The implementation of regular expressions in the .NET framework 
+      provides many different shortcuts for common sets of characters. The 
+      documentation contains a full list and we shall only mention one other:    
+                <CODE>\s</CODE> is used to match any whitespace character:       
+          </P>
+<PRE>&gt; replace "\s" "#" "One two\tthree\nfour";;
+val it : string = "One#two#three#four"</PRE>
+      <P>Note that this handles tabs and newlines as whitespace.</P>
+      <P>The construct              <CODE>[...]</CODE> matches any of a set of 
+      characters. In particular, ranges of characters may be specified by the 
+      form              <CODE>[a-z]</CODE> . For example, individual digits may 
+      be matched as follows:           </P>
+<PRE>&gt; replace "[0-9]" "X" "1 + 2 * 3 = 7";;
+val it : string = "X + X * X = X"</PRE>
+      <P>Note that this is slightly different to              <CODE>fslex</CODE>
+       , where the regular expression used to match a digit is written in the 
+      form              <CODE>['0'-'9']</CODE> .           </P>
+      <P>Similarly, the construct              <CODE>[^...]</CODE> matches any 
+      character not in the given set. For example, replacing the non-digit 
+      non-whitespace characters instead:           </P>
+<PRE>&gt; replace "[^0-9\\s]" "X" "1 + 2 * 3 = 7";;
+val it : string = "1 X 2 X 3 X 7"</PRE>
+      <P>The symbol              <CODE>^</CODE> matches the beginning of the 
+      input and the symbol              <CODE>$</CODE> matches the end of the 
+      input:           </P>
+<PRE>&gt; replace "^" "X" "A\nquick\ntest";;
+val it : string = "XA\nquick\ntest"
+&gt; replace "$" "X" "A\nquick\ntest";;
+val it : string = "A\nquick\ntestX"</PRE>
+      <P>The infix operator              <CODE>|</CODE> matches either of the 
+      regular expressions that it lies between. For example, the following 
+      regular expression matches the digits 1, 2 and 7 (but not 3):           
+      </P>
+<PRE>&gt; replace "1|2|7" "X" "1 + 2 * 3 = 7";;
+val it : string = "X + X * 3 = X"</PRE>
+      <P>Finally, the special characters              <CODE>. $ ^ { [ ( | ) * + 
+      ? \</CODE> are matched by escaping them with a preceding              
+      <CODE>\</CODE> . For example, the following regular expression matches the 
+                   <CODE>+</CODE> and              <CODE>*</CODE> characters:    
+             </P>
+<PRE>&gt; replace "\\+|\\*" "X" "1 + 2 * 3 = 7";;
+val it : string = "1 X 2 X 3 = 7"</PRE>
+      <P>Note that the              <CODE>\</CODE> character in the string 
+      literal in the F# code must be escaped itself using another              
+      <CODE>\</CODE> character. So the string              <CODE>\+|\*</CODE> is 
+      being written as the string literal              <CODE>"\\+|\\*"</CODE> .  
+               </P>
+      <H3>Matching sequences</H3>
+      <P>The atomic regular expressions described in the previous section may be 
+      generalized to sequences using the postfix              <CODE>*</CODE> and 
+                   <CODE>+</CODE> operators where the former matches zero or 
+      more repeats and the latter matches one or more repeats. This concept 
+      should be familiar from our previous more general but much less efficient 
+      formulation in terms of parser combinators.           </P>
+      <P>For example, the following extends our previous matching of single 
+      digits with a regular expression that matches integers (sequences of one 
+      or more digits):</P>
+<PRE>&gt; replace "[0-9]+" "X" "12 + 23 * 34 = 794";;
+val it : string = "X + X * X = X"</PRE>
+      <P>Note how the entire integers were replaced by a single              
+      <CODE>'X'</CODE> .           </P>
+      <P>As we saw with lexers, this allows us to match some simple tokens such 
+      as an identifier that consists of a letter followed by a sequence of zero 
+      or more alphanumeric characters:</P>
+<PRE>&gt; replace "[a-zA-Z][a-zA-Z0-9]*" "&lt;ident&gt;"
+    "let rec f1 = function 0 -&gt; 1 | n -&gt; n * f1(n - 1)";;
+val it : string
+= "&lt;ident&gt; &lt;ident&gt; &lt;ident&gt; = &lt;ident&gt; 0 -&gt; 1 | &lt;ident&gt; -&gt; &lt;ident&gt; * &lt;ident&gt;(&lt;ident&gt; - 1)"</PRE>
+      <P>Note that the identifier              <CODE>f1</CODE> is matched.       
+          </P>
+      <H3>Groups</H3>
+      <P>Finding matches and replacing them is one application of regular 
+      expressions but it is often desirable to extract parts of the matched 
+      string according to the regular expression that was used. This is achieved 
+      using a concept known as              <I>groups</I> .           </P>
+      <P>A group is defined using the syntax              <CODE>(...)</CODE> in 
+      the regular expression. The              <CODE>Groups</CODE> property of a 
+      resulting              <CODE>Match</CODE> can then be used to extract the 
+      string that was found to match a given group.           </P>
+      <P>For example, the following matches the first identifier              
+      <CODE>a1</CODE> and its groups match the              <CODE>a</CODE> and 
+      the              <CODE>1</CODE> :           </P>
+<PRE>&gt; let m = (Regex "([A-Za-z]+)([0-9]+)").Match "a1 + b2 = c3";;
+val m : Match
+&gt; m.Groups;;
+val it : GroupCollection
+= seq [a1 {Captures = seq [...];
+           Groups = ...;
+           Index = 0;
+           Length = 2;
+           Success = true;
+           Value = "a1";}; a {Captures = seq [...];
+                              Index = 0;
+                              Length = 1;
+                              Success = true;
+                              Value = "a";}; 1 {Captures = seq [...];
+                                                Index = 1;
+                                                Length = 1;
+                                                Success = true;
+                                                Value = "1";}]</PRE>
+      <H3>MatchEvaluator</H3>
+      <P>The following defines a              <CODE>subst</CODE> function that 
+      returns the first two groups separated by an underscore:           </P>
+<PRE>&gt; let subst (m: Match) =
+    sprintf "%s_%s" m.Groups.[1].Value m.Groups.[2].Value;;
+val subst : Match -&gt; string</PRE>
+      <P>This may be used to construct a              
+      <CODE>MatchEvaluator</CODE> that can be used to perform more intelligent 
+      replacements, in this case replacing letters followed by digits with 
+      letters followed by an underscore and then the digits:           </P>
+<PRE>&gt; (Regex "([A-Za-z]+)([0-9]+)").Replace("a1 + b2 = c3", MatchEvaluator subst);;
+val it : string = "a_1 + b_2 = c_3"</PRE>
+      <P>Groups may also be referred to by number within the regular expression 
+      itself as              <CODE>\1</CODE> and so forth. This allows us to 
+      represent the same sequence of characters matching in more than one place. 
+      For example, this replaces              <CODE>x*x</CODE> with              
+      <CODE>x^2</CODE> for any              <CODE>x</CODE> :           </P>
+<PRE>&gt; let subst (m: Match) =
+    sprintf "%s^2" m.Groups.[1].Value;;
+&gt; (Regex "(.+)\\*\\1").Replace("a*x*x+b*x+c", MatchEvaluator subst);;
+val it : string = "a*x^2+b*x+c"</PRE>
+      <P>Note that              <CODE>*</CODE> is a special character in a 
+      regular expression and must be escaped using a preceding              
+      <CODE>\</CODE> that is itself escaped in the string literal.           
+</P>
+      <H3>Searching</H3>
+      <P>The              <CODE>Matches</CODE> member of the              
+      <CODE>Regex</CODE> class can be used to find all substrings in the input 
+      matching a regular expression:           </P>
+<PRE>&gt; let ms = (Regex "([A-Za-z]+)([0-9]+)").Matches "a1 + b2 = c3";;
+val ms : MatchCollection</PRE>
+      <P>The resulting              <CODE>MatchCollection</CODE> does not 
+      implement the              <CODE>IEnumerable</CODE> interface so we cannot 
+      use F#'s              <CODE>Seq</CODE> module on it directly. However, we 
+      can use a sequence expression to create an ordinary sequence from a        
+            <CODE>MatchCollection</CODE> as follows:           </P>
+<PRE>&gt; seq { for i in 0 .. ms.Count-1 do
+          yield ms.[i] }
+  |&gt; Seq.map (fun m -&gt; m.Value);;
+val it : seq&lt;string&gt; = seq ["a1"; "b2"; "c3"]</PRE>
+      <P>The result shows that the regular expression found the three 
+      identifiers in the equation.</P>
+      <H3>Splitting</H3>
+      <P>One of the main applications of regular expressions in F# programs is 
+      splitting strings into substrings according to simple regular 
+      expressions.</P>
+      <P>The              <CODE>Split</CODE> member function of the              
+      <CODE>Regex</CODE> class returns an array containing all of the substrings 
+      that were separated by matches of the regular expression. For example, the 
+      following divides sentences into words by splitting at whitespace and 
+      punctuation:           </P>
+<PRE>&gt; let bible =
+    "Wherefore, holy brethren, partakers of the heavenly calling,\n
+     consider the Apostle and High Priest of our profession, Christ\n
+     Jesus;";;
+&gt; (Regex "[\s\\.,;:!\\?]+").Split bible;;
+val it : string array
+= [|"Wherefore"; "holy"; "brethren"; "partakers"; "of"; "the"; "heavenly";
+    "calling"; "consider"; "the"; "Apostle"; "and"; "High"; "Priest"; "of";
+    "our"; "profession"; "Christ"; "Jesus"; ""|]</PRE>
+      <H2>Summary</H2>
+      <P>This article has described how the .NET regular expression 
+      implementation can be used from F# programs. This library is simple and 
+      sufficiently efficient for most purposes, providing string search, split 
+      and replace functionality.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Working%20with%20Regular%20Expressions_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

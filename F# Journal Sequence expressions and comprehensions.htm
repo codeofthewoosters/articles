@@ -1,0 +1,376 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0090)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/sequence_expressions.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Sequence expressions and comprehensions</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Sequence expressions and comprehensions</TITLE>  
+   <LINK href="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Sequence expressions and comprehensions</H1>
+      <P>The .NET framework provides a powerful generic interface called         
+           <CODE>IEnumerable</CODE> that allows containers to be treated as 
+      arbitrary sequences. The approach is now widely used in C# but F# takes    
+                <CODE>IEnumerable</CODE> to a new level with its              
+      <CODE>Seq</CODE> data structure. This article describes abstract sequences 
+      in F#, the comprehension syntaxes provided by F# to make their 
+      construction simpler and clearer and practical applications of sequences 
+      with several examples.           </P>
+      <H2>Introduction</H2>
+      <P>The F# programming language provides a supertype called              
+      <CODE>Seq</CODE> for sequential containers. All of the built-in sequential 
+      containers (lists, arrays, sets, maps etc.) are subtypes of the            
+        <CODE>Seq</CODE> type.           </P>
+      <P>This allows sequential containers to be treated as sequences 
+      transparently. A simple example of this is the built-in              
+      <CODE>matrix</CODE> function that constructs a matrix from a sequence of 
+      sequences of floats:           </P>
+<PRE>&gt; matrix;;
+val it : (#seq&lt;'b&gt; -&gt; matrix) when 'b :&gt; seq&lt;float&gt; = &lt;fun:clo@0&gt;</PRE>
+      <P>The type of the              <CODE>matrix</CODE> function is simpler 
+      than it seems. The type of the argument to the              
+      <CODE>matrix</CODE> function is              <CODE>#seq&lt;'b&gt;</CODE> 
+      with the constraint              <CODE>'b :&gt; seq&lt;float&gt;</CODE> . 
+      The type              <CODE>#seq&lt;'b&gt;</CODE> denotes any subtype of   
+                 <CODE>seq</CODE> with elements of the type              
+      <CODE>'b</CODE> . The constraint              <CODE>'b :&gt; 
+      seq&lt;float&gt;</CODE> means that the type              <CODE>'b</CODE> 
+      must be a subtype of              <CODE>seq</CODE> with elements of the 
+      type              <CODE>float</CODE> . Note that sequences in F# use the 
+      C# notation for generics:              <CODE>seq&lt;float&gt;</CODE> 
+      rather than              <CODE>float seq</CODE> by default although the 
+      latter also works.           </P>
+      <P>Consequently, the              <CODE>matrix</CODE> function accepts not 
+      only sequences but any kinds of sequences. For example, a matrix can be 
+      constructed from a list of lists of floats:           </P>
+<PRE>&gt; matrix [[1.; 2.; 3.]; [2.; 4.; 6.]; [3.; 6.; 9.]];;
+val it : Math.matrix = matrix [[1.0; 2.0; 3.0];
+                               [2.0; 4.0; 6.0];
+                               [3.0; 6.0; 9.0];]</PRE>
+      <P>or from an array of arrays of floats:</P>
+<PRE>&gt; matrix [|[|1.; 2.; 3.|]; [|2.; 4.; 6.|]; [|3.; 6.; 9.|]|];;
+val it : Math.matrix = matrix [[1.0; 2.0; 3.0];
+                               [2.0; 4.0; 6.0];
+                               [3.0; 6.0; 9.0];]</PRE>
+      <P>This subtyping is very useful because it provides an common 
+      intermediary between many different kinds of data structure.</P>
+      <H2>Range Comprehensions</H2>
+      <P>Range comprehensions are an easy portal into the world of sequence 
+      expressions. The following syntax is used to construct a sequence of 
+      consecutive integers:</P>
+<PRE>&gt; seq {1 .. 5};;
+val it : seq&lt;int&gt; = seq [1; 2; 3; 4; ...]</PRE>
+      <P>As you can imagine, this simple functionality has many uses. 
+      Non-consecutive ranges can be constructed by specifying a step size as 
+      well:</P>
+<PRE>&gt; seq {0 .. 2 .. 10};;
+val it : seq&lt;int&gt; = seq [0; 2; 4; 6; ...]</PRE>
+      <H2>Constructing lists and arrays</H2>
+      <P>Sequence comprehensions can be used to build lists and arrays by simply 
+      placing them inside square brackets. For example, the two following 
+      expressions construct a list and an array containing the numbers one to 
+      five, respectively:</P>
+<PRE>&gt; [1 .. 5];;
+val it : int list = [1; 2; 3; 4; 5]
+&gt; [|1 .. 5|];;
+val it : int array = [|1; 2; 3; 4; 5|]</PRE>
+      <P>Note that this results in an explicit data structure being 
+      generated.</P>
+      <H2>Iterating over data structures</H2>
+      <P>Sequence expressions lead to a direct F# equivalent of              
+      <CODE>foreach</CODE> in C#, that iterates over the elements of any 
+      sequence container:           </P>
+<PRE>&gt; for i in 1 .. 5 do
+    printf "%d\n" i;;
+1
+2
+3
+4
+5
+val it : unit = ()</PRE>
+      <P>Note that the              <CODE>seq {...}</CODE> notation is not 
+      required when specifying a sequence expression in this              
+      <CODE>for</CODE> construct.           </P>
+      <P>In F#, this functionality is augmented with a rich variety of 
+      constructs better suited to functional programming.</P>
+      <H2>Mapping over data structures</H2>
+      <P>The higher-order              <CODE>map</CODE> function available for 
+      many data structures has a direct equivalent in sequence expressions. For 
+      example, the following generates the sequence of squares of the numbers 
+      one to five:           </P>
+<PRE>&gt; seq
+    { for i in 1 .. 5 -&gt;
+        i*i };;
+val it : seq&lt;int&gt; = seq [1; 4; 9; 16; ...]</PRE>
+      <P>These sequence expressions can also be placed inside square brackets to 
+      construct lists or arrays directly. For example, the following generates a 
+      list result:</P>
+<PRE>&gt; [ for i in 1 .. 5 -&gt;
+      i*i ];;
+val it : int list = [1; 4; 9; 16; 25]</PRE>
+      <H2>Filtering data structures</H2>
+      <P>Filter operations can also be performed in sequence expressions by 
+      augmenting the              <CODE>for</CODE> construct with a pattern 
+      guard. For example, the following filters out only numbers less than or 
+      equal to three:           </P>
+<PRE>&gt; seq
+    { for i in 1 .. 5 when i &lt;= 3 -&gt;
+        i };;
+val it : seq&lt;int&gt; = seq [1; 2; 3]</PRE>
+      <H2>Flattening</H2>
+      <P>Finally, sequence expressions can be nested before a final              
+      <CODE>-&gt;</CODE> to produce a flat data structure rather than nested 
+      sequences. For example, the following expression builds a list of the 
+      positions on a 3×3 board such as a tic-tac-toe board:           </P>
+<PRE>&gt; [ for x in 1 .. 3
+      for y in 1 .. 3 -&gt;
+        x, y ];;
+val it : (int * int) list
+  = [(1, 1); (1, 2); (1, 3); (2, 1); (2, 2); (2, 3); (3, 1); (3, 2); (3, 3)]</PRE>
+      <H2>Folding</H2>
+      <P>The              <CODE>Seq</CODE> module provides a variety of useful 
+      functions for acting on sequences. In particular, thanks to subtyping 
+      these functions can be applied to any kind of sequential container that 
+      implements the              <CODE>IEnumerable</CODE> interface. For 
+      example, the factorial              <I>n!</I> can be computed by folding 
+      the multiplication operator of a range of integers from one to             
+       <I>n</I> , such as              <I>5!</I> :           </P>
+<PRE>&gt; Seq.fold ( * ) 1 (seq {1 .. 5});;
+val it : int = 120</PRE>
+      <H2>Imperative yield</H2>
+      <P>Sequence expressions can even include              <CODE>let</CODE> 
+      bindings that are bound when the sequence is enumerated over and an        
+            <CODE>yield</CODE> construct can be used to generate sequences from 
+      imperative code. For example, the following imperative sequence expression 
+      uses a mutable reference to an integer to generate the sequence one to 
+      five:           </P>
+<PRE>&gt; seq
+    {
+      let n = ref 0
+      while !n &lt; 5 do
+        do incr n
+        yield !n
+    };;
+val it : seq&lt;int&gt; = seq [1; 2; 3; 4; ...]</PRE>
+      <P>This example is a long-winded way of writing              <CODE>{1 .. 
+      5}</CODE> but it illustrates several important aspects of imperative 
+      sequence expressions. These kinds of sequence expressions are particularly 
+      important in the context of IO, including reading from files and accessing 
+      databases and web services.           </P>
+      <P>The local              <CODE>let</CODE> binding creates a variable      
+              <CODE>n</CODE> that is available for the rest of the sequence 
+      expression. The              <CODE>do</CODE> construct is required to 
+      execute an imperative statement inside a sequence expression, in this case 
+      to increment              <CODE>n</CODE> .           </P>
+      <H2>Reading a file</H2>
+      <P>The following function uses the constructs described in the previous 
+      example to create a sequence of the lines in a file:</P>
+<PRE>&gt; let lines_of_file filename =
+    seq
+      {
+        use stream = new System.IO.FileStream(filename, System.IO.FileMode.Open)
+        use stream = new System.IO.StreamReader(stream)
+        while not stream.EndOfStream do
+          yield stream.ReadLine()
+      };;
+val lines_of_file : string -&gt; seq&lt;string&gt;</PRE>
+      <P>The              <CODE>use</CODE> bindings are analogous to the         
+           <CODE>let</CODE> bindings from the previous example except that they 
+      also dispose of the created objects when enumeration over the sequence is 
+      complete. The function then loops until the end of the file, yielding each 
+      line of the file in turn.           </P>
+      <P>The .NET platform actually provides similar functions for reading whole 
+      files but this sequence expression has an important advantage: the file is 
+      only read as the sequence is enumerated over. This is a form of lazy 
+      evaluation and is one of the most important aspects of sequences in F#. 
+      For example, this              <CODE>lines_of_file</CODE> function can be 
+      used to read only the first three lines of a file without having to read 
+      the entire file first. This functionality is of particular importance when 
+      handling large amount of data, such as many database applications.         
+        </P>
+      <H2>Simple word count</H2>
+      <P>The              <CODE>lines_of_file</CODE> function can be used to 
+      count the number of space-separated words in a file as follows:           
+      </P>
+<PRE>&gt; lines_of_file @"C:\bible13.txt"
+  |&gt; Seq.map (String.split [' '] &gt;&gt; List.length)
+  |&gt; Seq.fold ( + ) 0;;
+val it : int = 823647</PRE>
+      <P>An important characteristic of this word counter is that it handles a 
+      single line at a time and, consequently, has very low memory requirements 
+      compared to more obvious solutions that read whole files. This kind of 
+      programming makes F# interactive sessions a very powerful tool for data 
+      dissection and manipulation.</P>
+      <H2>Use sequence-specific operations</H2>
+      <P>The built-in              <CODE>Seq</CODE> module also provides some 
+      useful functions not found elsewhere. The              
+      <CODE>countBy</CODE> function is one example. This function uses a given 
+      function to extract the "key" of each element and counts how often each 
+      key occurs. For example, the following discovers four occurences of A, 
+      three occurrences of B and two occurences of C:           </P>
+<PRE>&gt; Seq.countBy (fun x -&gt; x) ["A"; "A"; "A"; "A"; "B"; "B"; "B"; "C"; "C"];;
+val it : seq&lt;int * int&gt; = seq [("A", 4); ("B", 3); ("C", 2)]</PRE>
+      <H2>Use sequence expressions to simplify functions</H2>
+      <P>Many functions can be written more elegantly using sequence expressions 
+      rather than ordinary functional composition, even if the function acts 
+      upon specific types like lists rather than generic sequences.</P>
+      <P>The following function uses nested sequence expressions to build the 
+      power set of the given set:</P>
+<PRE>&gt; let rec powerset = function
+    | [] -&gt; [[]]
+    | h::t -&gt;
+        [ for t in powerset t
+            for t in [t; h::t] -&gt;
+              t ];;
+val powerset : 'a list -&gt; 'a list list</PRE>
+      <P>For example, the power set of the set {1, 2, 3} is the set of sets:</P>
+<PRE>&gt; powerset [1; 2; 3];;
+val it : int list list
+  = [[]; [1]; [2]; [1; 2]; [3]; [1; 3]; [2; 3]; [1; 2; 3]]</PRE>
+      <H2>Write functions that are generic over different data structures</H2>
+      <P>User-defined functions can benefit from handling arbitrary sequences 
+      just like the built-in              <CODE>matrix</CODE> function discussed 
+      previously. The following function computes a generic outer product:       
+          </P>
+<PRE>&gt; let outer f a b =
+    seq
+      { for a in a -&gt;
+        seq
+          { for b in b -&gt;
+              f a b } };;
+val outer : ('a -&gt; 'b -&gt; 'c) -&gt; #seq&lt;'a&gt; -&gt; #seq&lt;'b&gt; -&gt; seq&lt;seq&lt;'c&gt;&gt;</PRE>
+      <P>This can be used to compute many kinds of outer product including the 
+      matrix outer product of two vectors:</P>
+<PRE>&gt; outer ( * ) [1.; 2.; 3.] [2.; 3.; 4.] |&gt; matrix;;
+val it : seq&lt;seq&lt;int&gt;&gt; = seq [seq [2; 3; 4]; seq [4; 6; 8]; seq [6; 9; 12]]</PRE>
+      <H2>Sequences can be unnecessarily inefficient</H2>
+      <P>Although sequence expressions are often easier to use than solutions 
+      that are specific to a data structure, some operations are made 
+      unnecessarily inefficient through the use of sequences. The two most 
+      important kinds of operation that can be slowed down by the use of 
+      sequences are related to random access containers.</P>
+      <P>The              <CODE>Seq.length</CODE> function determines the length 
+      of a sequence by enumerating over it:           </P>
+<PRE>&gt; Seq.length [|1; 2; 3|];;
+val it : int = 3</PRE>
+      <P>Many data structures such as arrays provide fast O(1)              
+      <CODE>length</CODE> functions and this generic O(n) length function will 
+      be unnecessary slow in such cases.           </P>
+      <P>The              <CODE>Seq.nth</CODE> function, like the              
+      <CODE>List.nth</CODE> function, extracts the element at the given index by 
+      enumerating the sequence up to that point:           </P>
+<PRE>&gt; Seq.nth 2 [|1; 2; 3|];;
+val it : int = 3</PRE>
+      <P>Like              <CODE>Seq.length</CODE> , this also requires an 
+      arbitrary number of elements to be traversed before the result is obtained 
+      so direct functions such as              <CODE>Array.get</CODE> should be 
+      preferred.           </P>
+      <H2>Implement the IEnumerable interface in your own data structures</H2>
+      <P>You can even create new kinds of sequence by implementing the           
+         <CODE>IEnumerable</CODE> and              <CODE>IEnumerator</CODE> 
+      interfaces in your own data structures.           </P>
+      <P>An              <CODE>IEnumerator</CODE> is a low level mutable 
+      iterator used to enumerate over a sequence. This requires a              
+      <CODE>get_Current</CODE> function to obtain the current element and a      
+              <CODE>MoveNext</CODE> function to move the iterator to the next 
+      element. A              <CODE>Reset</CODE> function to place the iterator 
+      back at the first element and a dynamically-typed              
+      <CODE>get_Current</CODE> function can also be supplied but these are not 
+      ordinarily used in F#.           </P>
+      <P>The              <CODE>IEnumerable</CODE> interface simply requires a   
+                 <CODE>GetEnumerator</CODE> function to obtain an enumerator 
+      initialized to point at the first element of the sequence.           </P>
+      <P>The following definition uses an F# object expression to construct an 
+      object implementing the generic              <CODE>IEnumerable</CODE> 
+      interface that returns a generic              <CODE>IEnumerator</CODE> 
+      that is also described verbatim as an object expression:           </P>
+<PRE>&gt; let fibonacci_numbers =
+    { new System.Collections.Generic.IEnumerable&lt;_&gt; with
+        GetEnumerator() =
+          let n = ref (0, 1)
+          { new System.Collections.Generic.IEnumerator&lt;_&gt;
+              with get_Current() = snd !n
+            interface System.Collections.IEnumerator
+              with Reset() = failwith "Not implemented"
+              and MoveNext() =
+                let a, b = !n
+                n := b, a + b
+                true
+              and get_Current() = failwith "Not implemented"
+            interface System.IDisposable
+              with Dispose() = () }
+      interface System.Collections.IEnumerable with
+        GetEnumerator() = failwith "Not implemented" };;
+val fibonacci_numbers : System.Collections.Generic.IEnumerable&lt;int&gt;</PRE>
+      <P>The              <CODE>IEnumerator</CODE> uses a mutable reference to a 
+      current state              <CODE>n</CODE> quantified by previous and 
+      current Fibonacci numbers. The              <CODE>get_Current</CODE> 
+      member simply extracts the current number. The              
+      <CODE>MoveNext</CODE> member creates a new state with a new number given 
+      by the sum of the previous numbers and always returns              
+      <CODE>true</CODE> because this is an infinite sequence.           </P>
+      <P>Note that the              <CODE>MoveNext</CODE> function must be 
+      called before              <CODE>get_Current</CODE> when enumerating over 
+      a sequence in order to handle empty sequences.           </P>
+      <P>The              <CODE>Seq.take</CODE> function can be used to obtain 
+      the first few elements of this sequence:           </P>
+<PRE>&gt; Seq.take 10 fibonacci_numbers;;
+val it : int list = [1; 2; 3; 5; 8; 13; 21; 34; 55; 89]</PRE>
+      <P>In this case, the functionality could have been described more simply 
+      using the              <CODE>Seq.unfold</CODE> function provided by F#:    
+             </P>
+<PRE>&gt; Seq.unfold (fun (i, j) -&gt; Some(j, (j, i + j))) (1, 1)
+  |&gt; Seq.take 10;;
+val it : int list = [1; 2; 3; 5; 8; 13; 21; 34; 55; 89]</PRE>
+      <P>Compatibility with the existing generic sequence type via 
+      implementation of the              <CODE>IEnumerable</CODE> interface can 
+      be used to make many new data structures more accessible.           </P>
+      <H2>Summary</H2>
+      <P>As we have seen, the              <CODE>Seq</CODE> data structure in F# 
+      provides a powerful abstraction over sequence containers and even allows 
+      implicit containers to be created and manpulated without incurring 
+      explicit allocation of all elements. This is a powerful technique that can 
+      be used to good effect in many forms of F# programming. Sequences are of 
+      particular importance in concurrent and parallel programming and will be 
+      revisited in future F#.NET Journal articles on those topics.           
+    </P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Sequence%20expressions%20and%20comprehensions_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

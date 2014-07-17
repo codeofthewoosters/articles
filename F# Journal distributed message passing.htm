@@ -1,0 +1,198 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0095)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/distributedmessagepassing.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20distributed%20message%20passing_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20distributed%20message%20passing_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20distributed%20message%20passing_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20distributed%20message%20passing_files/title.gif"> 
+</TD>
+    <TD><IMG 
+      src="F%23%20Journal%20distributed%20message%20passing_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Distributed message passing</H1>
+      <P>The F# programming language makes message passing easy thanks to union 
+      types and pattern matching. Asynchronous workflows leverage this to 
+      provide Erlang-style agent-based programming. However, Erlang programs can 
+      be distributed across multiple machines transparently but asynchronous 
+      workflows work only in-process. This article examines the use of TCP 
+      sockets and serialization to communicate values between machines in order 
+      to use distributed message passing. This capability has many important 
+      practical applications including fault tolerance.</P>
+      <H2>Messages over TCP</H2>
+      <P>The Transmission Control Protocol (TCP) is a high-level protocol for 
+      sending messages over networks that preserves the order of the messages 
+      and communicates reliably by resending when network packets are dropped. 
+      Consequently, this is an excellent protocol for reliable message passing. 
+      Definitions related to TCP are provided by .NET in the 
+      <CODE>System.Net.Sockets</CODE> namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Net;;</CODE></P>
+      <P>The .NET platform also provides the ability to serialize any object of 
+      any class to a binary stream and deserialize it back again. This is ideal 
+      for our needs and, therefore, we shall also open the appropriate namespace 
+      for binary serializers:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Runtime.Serialization.Formatters.Binary;;</CODE></P>
+      <P>Creating, starting, connecting and using clients and servers is a very 
+      error-prone process and each step can result in a number of different 
+      exceptions being raised. As a first step towards fault tolerance, we shall 
+      wrap every function that we provide in order to catch any exceptions that 
+      are raised, returning a value of the following union type instead in order 
+      to convey success or failure of the requested operation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;result&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success&nbsp;of&nbsp;'a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;result&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success&nbsp;of&nbsp;'a</CODE></P>
+      <P>Both clients and servers listen to a bidirectional stream for traffic. 
+      This functionality is neatly encapsulated by the following 
+      <CODE>streamConnection</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;streamConnection&nbsp;(stream:&nbsp;System.IO.Stream)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;received&nbsp;=&nbsp;Event&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fmt&nbsp;=&nbsp;BinaryFormatter()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fmt.Deserialize&nbsp;stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;unbox<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;received.Trigger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;|&gt;&nbsp;Async.Start<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;send&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fmt&nbsp;=&nbsp;BinaryFormatter()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fmt.Serialize(stream,&nbsp;box&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Success()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Failure<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send,&nbsp;received.Publish;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;streamConnection&nbsp;:&nbsp;System.IO.Stream&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;result&lt;unit&gt;)&nbsp;*&nbsp;IEvent&lt;'b&gt;</CODE></P>
+      <P>Given a stream, this function returns a <CODE>send</CODE> function that 
+      attempts to serialize a message and send it down the stream, and a 
+      <CODE>received</CODE> event that is triggered whenever a message is 
+      successfully deserialized from the stream.</P>
+      <P>The F# standard library bundles several extensions that provide 
+      asynchronous implementations of core operations such as reading and 
+      writing byte arrays. However, sending and receiving messages are not among 
+      those asynchronous operations and, in fact, it does not seem possible to 
+      provide a drop-in replacement that can perform these operations 
+      asynchronously because the act of deserializing an object from a stream 
+      requires an unknown amount of data. This issue will be addressed in a 
+      future F#.NET Journal article, suffice to say that the implementation 
+      given here blocks a thread in the thread pool for each connected client 
+      and that will not be suitable for servers with a great many clients.</P>
+      <P>If the workflow waiting for incoming messages suffers an exception then 
+      it will die silently. If the sending of a message by the <CODE>send</CODE> 
+      function fails then it will return <CODE>Failure</CODE>. Returning an 
+      error code instead of using an exceptional route helps to ensure that 
+      errors are handled correctly by the caller.</P>
+      <P>The type variables <CODE>'a</CODE> and <CODE>'b</CODE> in the inferred 
+      type represent the types of outgoing and incoming messages, 
+      respectively.</P>
+      <P>The following <CODE>clientConnection</CODE> function attempts to create 
+      a TCP client and connect it to an existing TCP server in order to pass 
+      messages back and forth:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;clientConnection&nbsp;(ipAddress:&nbsp;IPAddress,&nbsp;port)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;client&nbsp;=&nbsp;new&nbsp;Sockets.TcpClient(NoDelay=true)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;client.Connect(ipAddress,&nbsp;port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stream&nbsp;=&nbsp;client.GetStream()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Success(streamConnection&nbsp;stream)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;Failure;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;clientConnection&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IPAddress&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;result&lt;('a&nbsp;-&gt;&nbsp;result&lt;unit&gt;)&nbsp;*&nbsp;IEvent&lt;'b&gt;&gt;</CODE></P>
+      <P>Again, an error return code is used to ensure that the caller handles 
+      any error by deconstructing the returned value rather than relying on the 
+      caller to remember to use an exception handler. Moreover, the 
+      <CODE>Success</CODE> branch of the return value is used to convey the 
+      <CODE>send</CODE> function used to send a message to the server and the 
+      <CODE>received</CODE> event that is triggered whenever the server sends a 
+      message back to the client.</P>
+      <P>The following <CODE>serverConnection</CODE> function creates a server 
+      that allows clients to connect, receives messages from them and allows 
+      messages to be relayed back to all currently-connected clients:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;serverConnection&nbsp;port&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;server&nbsp;=&nbsp;Sockets.TcpListener(IPAddress.Any,&nbsp;port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;relay&nbsp;=&nbsp;Event&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;received&nbsp;=&nbsp;Event&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;client&nbsp;=&nbsp;server.AcceptTcpClient()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stream&nbsp;=&nbsp;client.GetStream()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sendToClient,&nbsp;receivedFromClient&nbsp;=&nbsp;streamConnection&nbsp;stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;receivedFromClient.Add&nbsp;received.Trigger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;handler&nbsp;=&nbsp;Handler&lt;_&gt;(fun&nbsp;_&nbsp;msg&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;sendToClient&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success()&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;-&gt;&nbsp;relay.Publish.RemoveHandler&nbsp;handler)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;relay.Publish.AddHandler&nbsp;handler<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;|&gt;&nbsp;Async.Start<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Success(relay.Trigger,&nbsp;received.Publish)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;Failure;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;serverConnection&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;result&lt;('a&nbsp;-&gt;&nbsp;unit)&nbsp;*&nbsp;IEvent&lt;'b&gt;&gt;</CODE></P>
+      <P>When invoked, this function creates and starts a TCP server before 
+      starting an asynchronous workflow in the thread pool that listens for TCP 
+      connections from clients. When a connection is initiated, the 
+      <CODE>streamConnection</CODE> function is used to create a 
+      <CODE>sendToClient</CODE> function to send messages and a 
+      <CODE>receivedFromClient</CODE> event that is triggered whenever a message 
+      is received from the client. These two are hooked up to the 
+      <CODE>relay</CODE> and <CODE>received</CODE> events of the server. 
+      Firstly, the trigger of the server's <CODE>received</CODE> event is added 
+      as a callback to the <CODE>receivedFromClient</CODE> event so that any 
+      message received from any client is handled by the server. Secondly, a 
+      handler is added to the <CODE>relay</CODE> event so that all relayed 
+      messages are sent to this client and failure to send a message results in 
+      the handler being removed from the server's <CODE>relay</CODE> event.</P>
+      <H2>Use</H2>
+      <P>Now we give an example use of this functionality, starting with a 
+      definition of the types of messages supported:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;'a&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Hello&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;World&nbsp;of&nbsp;'a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'a&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Hello&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;World&nbsp;of&nbsp;'a</CODE></P>
+      <P>The following <CODE>print</CODE> function outputs a string to the .NET 
+      debug output:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;print&nbsp;s&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Diagnostics.Debug.WriteLine(s());;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;print&nbsp;:&nbsp;(unit&nbsp;-&gt;&nbsp;string)&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The IP address and a suitable port for this machine are:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ipAddress,&nbsp;port&nbsp;=&nbsp;IPAddress.Parse&nbsp;"192.168.1.70",&nbsp;8001;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;port&nbsp;:&nbsp;int&nbsp;=&nbsp;8001<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ipAddress&nbsp;:&nbsp;IPAddress&nbsp;=&nbsp;192.168.1.70</CODE></P>
+      <P>Finally, we can create a server, connect a client to it and send a 
+      message from the client to the server that will return a derived message 
+      back to the client as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;serverConnection&nbsp;port&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;-&gt;&nbsp;failwith&nbsp;"Failed&nbsp;to&nbsp;start&nbsp;server"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success(relayToAllClients,&nbsp;receivedFromClient)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;serverHandler&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(fun&nbsp;()&nbsp;-&gt;&nbsp;sprintf&nbsp;"Server&nbsp;received:&nbsp;%A"&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Hello&nbsp;n&nbsp;-&gt;&nbsp;relayToAllClients&nbsp;(World&nbsp;(n+1))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;World&nbsp;_&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;receivedFromClient.Add&nbsp;serverHandler<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;clientConnection&nbsp;(ipAddress,&nbsp;port)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;-&gt;&nbsp;failwith&nbsp;"Client&nbsp;failed&nbsp;to&nbsp;connect&nbsp;to&nbsp;server"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success(sendToServer,&nbsp;receivedFromServer)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;clientHandler&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(fun&nbsp;()&nbsp;-&gt;&nbsp;sprintf&nbsp;"Client&nbsp;received:&nbsp;%A"&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;receivedFromServer.Add&nbsp;clientHandler<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;sendToServer&nbsp;(Hello&nbsp;3)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;-&gt;&nbsp;failwith&nbsp;"Client&nbsp;failed&nbsp;to&nbsp;send&nbsp;message&nbsp;to&nbsp;server"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success()&nbsp;-&gt;&nbsp;()</CODE></P>
+      <P>This program works as expected, giving the output:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20distributed%20message%20passing_files/Working.png"></P>
+      <P>However, the program is very fragile because the boundary with the TCP 
+      layer is dynamically typed due to the use of serialization and 
+      deserialization and, consequently, it is easy to make mistakes that result 
+      in run-time type errors.</P>
+      <P>For example, changing the message passed from <CODE>Hello&nbsp;3</CODE> 
+      to <CODE>Hello</CODE> results in the following run-time type error:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20distributed%20message%20passing_files/RunTimeTypeError.png"></P>
+      <P>Note that the error message is obfuscated (the relevance of the type 
+      <CODE>clo@90</CODE> is not clear) and the debugger fails to the point to 
+      the actual location of the mistake in the source code. Moreover, the stack 
+      contains no useful information because the point at which the error was 
+      found is the deserialization loop that is running in the thread pool.</P>
+      <P>A major advantage of the F# programming language over alternatives like 
+      Erlang and Clojure is the ability to have the compiler check type 
+      information at compile time: static typing.</P>
+      <H2>Statically typing boundaries</H2>
+      <P>Naturally, we want to make sure that the type of message the client 
+      sends and the server receives are the same and the type of message the 
+      server sends and the client receives are the same. Note that the types of 
+      messages travelling in the two different directions may be different 
+      though.</P>
+      <P>In F#, perhaps the most natural solution to this problem is to create a 
+      dummy class type that is parameterized over the types of message 
+      travelling in each of the two directions. Such a solution may be written 
+      as follows, reusing the above code:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;MessagePassing&lt;'a,&nbsp;'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;Client(ipAddress:&nbsp;IPAddress,&nbsp;port)&nbsp;:&nbsp;result&lt;('a&nbsp;-&gt;&nbsp;result&lt;unit&gt;)&nbsp;*&nbsp;IEvent&lt;'b&gt;&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;client&nbsp;=&nbsp;new&nbsp;Sockets.TcpClient(NoDelay=true)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;client.Connect(ipAddress,&nbsp;port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stream&nbsp;=&nbsp;client.GetStream()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;send,&nbsp;receive&nbsp;=&nbsp;streamConnection&nbsp;stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Success(send,&nbsp;receive)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;Failure<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;Server&nbsp;port&nbsp;:&nbsp;result&lt;('b&nbsp;-&gt;&nbsp;unit)&nbsp;*&nbsp;IEvent&lt;'a&gt;&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;server&nbsp;=&nbsp;Sockets.TcpListener(IPAddress.Any,&nbsp;port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;relay&nbsp;=&nbsp;Event&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;received&nbsp;=&nbsp;Event&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;client&nbsp;=&nbsp;server.AcceptTcpClient()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stream&nbsp;=&nbsp;client.GetStream()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sendToClient,&nbsp;receivedFromClient&nbsp;=&nbsp;streamConnection&nbsp;stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;receivedFromClient.Add&nbsp;received.Trigger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;handler&nbsp;=&nbsp;Handler&lt;_&gt;(fun&nbsp;_&nbsp;msg&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;sendToClient&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success()&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;-&gt;&nbsp;relay.Publish.RemoveHandler&nbsp;handler)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;relay.Publish.AddHandler&nbsp;handler<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;|&gt;&nbsp;Async.Start<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Success(relay.Trigger,&nbsp;received.Publish)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;Failure;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MessagePassing&lt;'a,'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Client&nbsp;:&nbsp;ipAddress:IPAddress&nbsp;*&nbsp;port:int&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result&lt;('a&nbsp;-&gt;&nbsp;result&lt;unit&gt;)&nbsp;*&nbsp;IEvent&lt;'b&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;Server&nbsp;:&nbsp;port:int&nbsp;-&gt;&nbsp;result&lt;('b&nbsp;-&gt;&nbsp;unit)&nbsp;*&nbsp;IEvent&lt;'a&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The two type parameters of the <CODE>MessagePassing</CODE> class, 
+      <CODE>'a</CODE> and <CODE>'b</CODE>, are the generic types of messages 
+      travelling in different directions. These are enforced by using these two 
+      type variable names in the type annotations placed on the static 
+      <CODE>Client</CODE> and <CODE>Server</CODE> members of the class.</P>
+      <P>In order to use this class, we first refine the abstract 
+      <CODE>MessagePassing&lt;'a,'b&gt;</CODE> class type by specifying types 
+      for the type arguments <CODE>'a</CODE> and <CODE>'b</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;'a&nbsp;imsg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Hello&nbsp;of&nbsp;'a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'a&nbsp;imsg&nbsp;=&nbsp;|&nbsp;Hello&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;'a&nbsp;omsg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;World&nbsp;of&nbsp;'a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'a&nbsp;omsg&nbsp;=&nbsp;|&nbsp;World&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;ExampleMessagePassing&nbsp;=&nbsp;MessagePassing&lt;int&nbsp;imsg,&nbsp;int&nbsp;omsg&gt;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ExampleMessagePassing&nbsp;=&nbsp;MessagePassing&lt;int&nbsp;imsg,int&nbsp;omsg&gt;</CODE></P>
+      <P>Now we write our example in terms of the concrete 
+      <CODE>ExampleMessagePassing</CODE> class type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ExampleMessagePassing.Server&nbsp;port&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;-&gt;&nbsp;failwith&nbsp;"Failed&nbsp;to&nbsp;start&nbsp;server"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success(relayToAllClients,&nbsp;receivedFromClient)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;serverHandler&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(fun&nbsp;()&nbsp;-&gt;&nbsp;sprintf&nbsp;"Server&nbsp;received:&nbsp;%A"&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Hello&nbsp;n&nbsp;-&gt;&nbsp;relayToAllClients&nbsp;(World&nbsp;(n+1))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;receivedFromClient.Add&nbsp;serverHandler<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ExampleMessagePassing.Client&nbsp;(ipAddress,&nbsp;port)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;-&gt;&nbsp;failwith&nbsp;"Client&nbsp;failed&nbsp;to&nbsp;connect&nbsp;to&nbsp;server"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success(sendToServer,&nbsp;receivedFromServer)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;clientHandler&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print(fun&nbsp;()&nbsp;-&gt;&nbsp;sprintf&nbsp;"Client&nbsp;received:&nbsp;%A"&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;receivedFromServer.Add&nbsp;clientHandler<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;sendToServer&nbsp;(Hello&nbsp;3)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;-&gt;&nbsp;failwith&nbsp;"Client&nbsp;failed&nbsp;to&nbsp;send&nbsp;message&nbsp;to&nbsp;server"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success()&nbsp;-&gt;&nbsp;()</CODE></P>
+      <P>This ensures that the types at the boundaries are checked at compile 
+      time. For example, the previous example type error is now caught at 
+      compile time as follows:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20distributed%20message%20passing_files/StaticTypeError.png"></P>
+      <H2>Summary</H2>
+      <P>This article has described a TCP layer for transparent message passing 
+      that makes errors explicit using error return codes to replace exceptions 
+      and allows boundaries to be statically type checked.</P>
+      <P>Future F#.NET Journal articles will take these ideas further by 
+      inventing asynchronous techniques for achieving the same effect, allowing 
+      servers to handle many more simultaneous connections from clients, and 
+      examining related topics such as fault tolerance.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20distributed%20message%20passing_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

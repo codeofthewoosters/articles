@@ -1,0 +1,635 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0089)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/mathematica_interop.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Mathematica interoperability</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Mathematica%20interoperability_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Mathematica%20interoperability_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Mathematica%20interoperability_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Mathematica interoperability</TITLE>     <LINK 
+href="F%23%20Journal%20Mathematica%20interoperability_files/style.css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20Mathematica%20interoperability_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Mathematica%20interoperability_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Mathematica%20interoperability_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Mathematica%20interoperability_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Mathematica interoperability</H1>
+      <P>The Mathematica integrated technical computing environment from Wolfram 
+      Research is an incredibly powerful cross platform development environment, 
+      language and enormous standard library specifically designed for technical 
+      computing. Mathematica's .NET-Link technology is designed to allow 
+      Mathematica programs to interoperate with .NET languages such as C#. This 
+      article examines the hugely productive marriage of the F# programming 
+      language with Mathematica and demonstrates how Mathematica can be 
+      controlled entirely from F# programs, allowing Mathematica's awesome 
+      functionality to be tapped from a much higher performance and scalable 
+      language.</P>
+      <H2>Introduction</H2>
+      <P><A 
+      href="http://wolfram.com/products/mathematica/index.html">Mathematica</A> 
+      is designed to be an easy-to-use tool for technical users such as 
+      scientists and engineers. Consequently,              <A href="http://wolfram.com/">Wolfram 
+      Research</A> (the creators of Mathematica) have put a great deal of effort 
+      into creating a simple and powerful interface that makes Mathematica's 
+      extensive capabilities as accessible as possible, even for 
+      non-programmers.           </P>
+      <P>In particular, Mathematica has a hugely productive integrated 
+      development environment that allows programs to be defined hierarchically 
+      (without the need for compilation units) and decorated with comments, 
+      typeset mathematics and even interactive 2D and 3D visualizations:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Mathematica%20interoperability_files/mma2.gif"> 
+                  </P>
+      <P></P>
+      <P>This simple example elucidates several features of the Mathematica 
+      environment:</P>
+      <P>
+      <OL>
+        <LI>Implicit code folding dictated by the hierarchical use of headings 
+        and depicted graphically using thin cell handles on the right hand side 
+        of the GUI.</LI>
+        <LI>Use of typeset mathematics, both in comments describing the code and 
+        in the code itself.</LI>
+        <LI>Uniformity and brevity resulting from treating everything as an 
+        expression, e.g. no need to wrap the subexpression                  
+        <CODE>Sqrt[Tan[x]]</CODE> in an anonymous function with explicit free 
+        variables before passing it to the                  
+        <CODE>Integrate</CODE> function.               </LI>
+        <LI>Evaluating a definition causes its result to be injected into the 
+        notebook interface directly after the code segment.</LI>
+        <LI>Symbolic results are automatically typeset and 3D graphical results 
+        can be manipulated interactively with the mouse.</LI></OL>
+      <P></P>
+      <P>Although the F# programming language and IDE support have related 
+      design goals, the F# language is designed to be used by programmers 
+      primarily for the creation of applications. Consequently, F# has very 
+      different characteristics to Mathematica and is much closer to 
+      conventional .NET languages like C#. Hence the marriage of Mathematica 
+      with F# greatly increases the utility of both languages.</P>
+      <P>This articles examines the fundamental design and implementation of 
+      Mathematica in order to provide the most natural and efficient 
+      interoperability with F#. As we shall see, F# can be significantly more 
+      efficient than Mathematica even when dealing with symbolic expressions but 
+      Mathematica still provides an enormous breadth of functionality that 
+      remains otherwise unavailable from F# and .NET.</P>
+      <H2>Symbolic expressions in Mathematica</H2>
+      <P>Previous F#.NET Journal articles have reviewed some of the 
+      representations of symbolic expressions. Mathematica uses the following 
+      slightly unconventional representation:</P>
+      <P>
+      <TABLE class="centered" style="border: 1px solid rgb(153, 153, 153); width: 600px;">
+        <TBODY>
+        <TR>
+          <TD><B>Expression</B>                 </TD>
+          <TD><B>Meaning</B>                 </TD></TR>
+        <TR>
+          <TD>Integer</TD>
+          <TD>An integer</TD></TR>
+        <TR>
+          <TD>String</TD>
+          <TD>A string</TD></TR>
+        <TR>
+          <TD>Real</TD>
+          <TD>A double-precision floating point number</TD></TR>
+        <TR>
+          <TD>Symbol</TD>
+          <TD>The string name of a variable</TD></TR>
+        <TR>
+          <TD>Boolean</TD>
+          <TD>Either                    <CODE>True</CODE> or                   
+             <CODE>False</CODE>                 </TD></TR>
+        <TR>
+          <TD>Complex</TD>
+          <TD>A complex number</TD></TR>
+        <TR>
+          <TD>Function</TD>
+          <TD>A string function name and an array of expression 
+        arguments</TD></TR></TBODY></TABLE>
+      <P></P>
+      <P>Mathematica has the elegant design characteristic that everything is a 
+      symbolic expression. So, in theory, we only need an F# representation of 
+      such symbolic expressions in order to communicate between the two 
+      languages.</P>
+      <H2>Communicating symbolic expressions</H2>
+      <P>As always, the F# programming language makes it easy to define a data 
+      type representing the above definition of an expression:</P>
+<PRE>&gt; #light;;
+&gt; type expr =
+    | Integer of int
+    | String of string
+    | Real of float
+    | Symbol of string
+    | Boolean of bool
+    | Complex of complex
+    | Function of string * expr array;;</PRE>
+      <P>Compared to the previous definitions of symbolic expressions and 
+      abstract syntax trees, this              <CODE>expr</CODE> type has an 
+      obvious flaw: it cannot represent currying. This is usually represented as 
+      the application of a functional value to an argument and then the 
+      application of the functional result to another argument. However, the 
+      Mathematica representation of a symbolic expression only allows the 
+      function in an application to be specified as a string and not as an 
+      arbitrary expression. Despite the emphasis upon functional techniques in 
+      the literature about Mathematica, this is actually quite a serious and 
+      fundamental design flaw.           </P>
+      <P>Fortunately, the Mathematica Kernel can handle currying:</P>
+      <P>
+      <P style="margin-left: 50px;"><IMG src="F%23%20Journal%20Mathematica%20interoperability_files/currying.gif"> 
+                  </P>
+      <P></P>
+      <P>but, as we shall see, curried definitions cannot be communicated to and 
+      from Mathematica.</P>
+      <P>The following              <CODE>read</CODE> function reads a symbolic 
+      expression from the given Kernel link, returning the F# representation of 
+      a Mathematica expression as a value of the              <CODE>expr</CODE> 
+      type:           </P>
+<PRE>&gt; let rec read (ml : IKernelLink) =
+    match ml.GetExpressionType() with
+    | ExpressionType.Integer -&gt; Integer(ml.GetInteger())
+    | ExpressionType.String -&gt; String(ml.GetString())
+    | ExpressionType.Real -&gt; Real(ml.GetDouble())
+    | ExpressionType.Symbol -&gt; Symbol(ml.GetSymbol())
+    | ExpressionType.Boolean -&gt; Boolean(ml.GetBoolean())
+    | ExpressionType.Function -&gt;
+        let args = ref 0
+        let f = ml.GetFunction(args)
+        Function(f, [|for i in 1 .. !args -&gt; read ml|])
+    | _ -&gt; invalid_arg "Unsupported expression";;
+val read : IKernelLink -&gt; expr</PRE>
+      <P>Note how the              <CODE>GetFunction</CODE> member of the        
+            <CODE>ml</CODE> object returns the functional value being applied as 
+      a string rather than an expression.           </P>
+      <P>Although .NET-Link provides a              <CODE>GetExpr</CODE> member 
+      that can be used to fetch an entire expression it is not clear how this 
+      expression might be deconstructed for manipulation from F# code. Indeed, 
+      .NET-Link appears to be designed to bring the power of the .NET platform 
+      to Mathematica but not the converse. Thus we have written our own 
+      equivalent that builds a native F# data structure that is easily 
+      manipulated from F#.           </P>
+      <P>The following              <CODE>mma</CODE> function take a string 
+      representation of a Mathematica expression, creates a new link to the 
+      Mathematica Kernel, evaluates the expression in the kernel, reads and 
+      returns the result as a value of the              <CODE>expr</CODE> type:  
+               </P>
+<PRE>&gt; let mma (expr : string) =
+    let ml = MathLinkFactory.CreateKernelLink()
+    try
+      ml.WaitAndDiscardAnswer()
+      ml.Evaluate(expr)
+      ml.GetFunction(ref 0) |&gt; ignore
+      read ml
+    finally
+      ml.Close();;
+val mma : string -&gt; expr</PRE>
+      <P>Note the use of the              <CODE>try..finally..</CODE> construct 
+      to ensure that the kernel link is correctly closed upon completion. 
+      Mathematica is effectively an unmanaged application because it is not 
+      accurately garbage collected (like .NET). So it is always important to 
+      remember to call such functions because they will manually deallocate 
+      resources.           </P>
+      <P>This functionality may be tested by evaluating various example 
+      expressions that reduce to the basic kinds of expression handled by our 
+      interface.</P>
+      <P>The addition of two integers yields an integer as expected:</P>
+<PRE>&gt; mma "1+2";;
+val it : expr = Integer 3</PRE>
+      <P>The concatenation of two strings yields a string as expected:</P>
+<PRE>&gt; mma "\"foo\" &lt;&gt; \"bar\"";;
+val it : expr = String "foo"</PRE>
+      <P>The exponent of two numbers yields a floating point number as 
+      expected:</P>
+<PRE>&gt; mma "1.23 ^ 2.34";;
+val it : expr = Real 1.623222152</PRE>
+      <P>The symbolic representation of a quadratic uses the              
+      <CODE>Symbol</CODE> type constructor as expected:           </P>
+<PRE>&gt; mma "a x^2 + b x + c";;
+val it : expr
+= Function
+   ("Plus",
+    [|Symbol "c"; Function ("Times",[|Symbol "b"; Symbol "x"|]);
+      Function
+       ("Times",[|Symbol "a"; Function ("Power",[|Symbol "x"; Integer 2|])|])|])</PRE>
+      <P>A symbol representing one of the two boolean values evaluates to a      
+              <CODE>Boolean</CODE> as expected:           </P>
+<PRE>&gt; mma "True";;
+val it : expr = Boolean true</PRE>
+      <P>The application of a function              <CODE>f</CODE> to three 
+      arguments yields the              <CODE>Function</CODE> type constructor 
+      as expected:           </P>
+<PRE>&gt; mma "f[1, 2.3, c]";;
+val it : expr = Function ("f",[|Integer 1; Real 2.3; Symbol "c"|])</PRE>
+      <H2>Limitations</H2>
+      <P>The .NET-Link technology has several important shortcomings.</P>
+      <P>.NET-Link only provides a              <CODE>GetInteger</CODE> member 
+      that handles ordinary integers rather than arbitrary-precision integers:   
+              </P>
+<PRE>&gt; mma "100!";;
+Wolfram.NETLink.MathLinkException: Error code: 7. MathLink machine number overflow
+   at Wolfram.NETLink.Internal.NativeLink.GetInteger()
+   at Wolfram.NETLink.WrappedKernelLink.GetInteger()
+   at FSI_0034.read(IKernelLink ml)
+   at FSI_0035.mma(String expr)
+   at &lt;StartupCode$FSI_0038&gt;.$FSI_0038._main()
+stopped due to error</PRE>
+      <P>Mathematica's difficulty with currying is another source of problems 
+      with .NET-Link:</P>
+<PRE>&gt; mma "f[1][2]";;
+Wolfram.NETLink.MathLinkException: Error code: 3. MLGet out of sequence.
+   at Wolfram.NETLink.Internal.NativeLink.GetSymbol()
+   at Wolfram.NETLink.Internal.NativeLink.GetFunction(Int32&amp; argCount)
+   at Wolfram.NETLink.Internal.NativeLink.GetExpressionType()
+   at Wolfram.NETLink.WrappedKernelLink.GetExpressionType()
+   at FSI_0034.read(IKernelLink ml)
+   at FSI_0035.mma(String expr)
+   at &lt;StartupCode$FSI_0036&gt;.$FSI_0036._main()
+stopped due to error</PRE>
+      <P>In both cases there is the question of whether or not our code was at 
+      fault rather than Mathematica's. We can test this by using Wolfram 
+      Research's own code rather than our own. The following              
+      <CODE>mma'</CODE> function uses the Mathematica's own              
+      <CODE>GetExpr</CODE> member to read the incoming expression in 
+      Mathematica's own              <CODE>Expr</CODE> type:           </P>
+<PRE>&gt; let mma' (expr : string) =
+    let ml = MathLinkFactory.CreateKernelLink()
+    try
+      ml.WaitAndDiscardAnswer()
+      ml.Evaluate(expr)
+      ml.GetExpr()
+    finally
+      ml.Close();;
+val mma' : string -&gt; Expr</PRE>
+      <P>For example, the addition of two integers yields an integer result as 
+      expected:</P>
+<PRE>&gt; mma' "1+2";;
+val it : Expr = ReturnPacket[3] {Args = [|3|];
+                                 Dimensions = [|1|];
+                                 Head = ReturnPacket;
+                                 Item = ?;
+                                 Length = 1;}\text</PRE>
+      <P>However, even Wolfram Research's own              <CODE>GetExpr</CODE> 
+      member fails on a variety of valid expressions.           </P>
+      <P>Arbitrary-precision integers yield              <CODE>null</CODE> 
+      instead of an              <CODE>Expr</CODE> value, which subsequently 
+      breaks the              <CODE>ToString</CODE> method:           </P>
+<PRE>&gt; let bigint = mma' "100!";;
+val bigint : Expr
+&gt; bigint;;
+FS0193: System.NullReferenceException: Object reference not set to an instance of an object.
+   at Wolfram.NETLink.Expr.ToString()
+   at Microsoft.FSharp.Text.StructuredFormat.Display.fit$detupled@107@107(FastFunc`2 leafFormatter@107..
+   at Microsoft.FSharp.Text.StructuredFormat.Display.fit$cont@156@156(FastFunc`2 leafFormatter@156, In..
+   at Microsoft.FSharp.Text.StructuredFormat.Display.fit$detupled@107@107(FastFunc`2 leafFormatter@107..
+   at Microsoft.FSharp.Text.StructuredFormat.Display.fit$cont@143@143(FastFunc`2 leafFormatter@143, In..
+   at Microsoft.FSharp.Text.StructuredFormat.Display.fit$detupled@107@107(FastFunc`2 leafFormatter@107..
+   at Microsoft.FSharp.Text.StructuredFormat.Display.fit$cont@156@156(FastFunc`2 leafFormatter@156, In..
+   at Microsoft.FSharp.Text.StructuredFormat.Display.fit$detupled@107@107(FastFunc`2 leafFormatter@107..
+   at Microsoft.FSharp.Text.StructuredFormat.Display.squashTo(Int32 maxWidth, FastFunc`2 leafFormatter..
+   at Microsoft.FSharp.Text.StructuredFormat.Display.output_layout[T](FormatOptions opts, T oc, Layout..
+   at Microsoft.FSharp.Compiler.Interactive.Shell.invokePrinter(FastFunc`2 printer, displayEnv denv,  ..
+   at Microsoft.FSharp.Compiler.Interactive.Shell.evalExpr(InteractionState istate, synexpr expr)
+   at Microsoft.FSharp.Compiler.Interactive.Shell.mainThreadProcessParsedInteraction(Boolean exitViaKi..</PRE>
+      <P>Expressions containing applications where the head is not a symbol, 
+      such as curried expressions, also return              <CODE>null</CODE> :  
+               </P>
+<PRE>&gt; let curry = mma' "f[1][2]";;
+val curry : Expr
+&gt; curry;;
+FS0193: System.NullReferenceException: Object reference not set to an instance of an object.
+   at Wolfram.NETLink.Expr.ToString()
+...</PRE>
+      <P>Despite these shortcomings, .NET-Link can be used to productively 
+      interface F# and Mathematica in the most common cases.</P>
+      <H2>A symbolic integral</H2>
+      <P>The following snippet gets Mathematica to take an indefinite integral 
+      symbolically:</P>
+<PRE>&gt; let expr = mma "Integrate[Sqrt[Tan[x]], x]";;
+val expr : expr</PRE>
+      <P>This can only be done within F# by reimplementing the sophisticated 
+      term-based symbolic manipulations found in Mathematica, which is a 
+      considerable undertaking. Thus, the ability to call out to Mathematica in 
+      order to take this integral is very useful. However, Mathematica is 
+      typically much slower than languages that are ultimately compiled to 
+      native code, like F#, so there is merit in transferring the resulting 
+      symbolic expression over to F# for numerically-intensive computations.</P>
+      <P>In this case, the resulting symbolic expression is non-trivial:</P>
+<PRE>&gt; expr;;
+val it : expr
+= Function
+   ("Times",
+    [|Function ("Rational",[|Integer 1; Integer 2|]);
+      Function
+       ("Power",[|Integer 2; Function ("Rational",[|Integer -1; Integer 2|])|]);
+      Function
+       ("Plus",
+        [|Function
+           ("Times",
+            [|Integer -2;
+              Function
+               ("ArcTan",
+                [|Function
+                   ("Plus",
+                    [|Integer 1;
+                      Function
+                       ("Times",
+                        [|Integer -1;
+                          Function
+                           ("Power",
+                            [|Integer 2;
+                              Function ("Rational",[|Integer 1; Integer 2|])|]);
+                          Function
+                           ("Power",
+                            [|Function ("Tan",[|Symbol "x"|]);
+                              Function ("Rational",[|Integer 1; Integer 2|])|])|])|])|])|]);
+          Function
+           ("Times",
+            [|Integer 2;
+              Function
+               ("ArcTan",
+                [|Function
+                   ("Plus",
+                    [|Integer 1;
+                      Function
+                       ("Times",
+                        [|Function
+                           ("Power",
+                            [|Integer 2;
+                              Function ("Rational",[|Integer 1; Integer 2|])|]);
+                          Function
+                           ("Power",
+                            [|Function ("Tan",[|Symbol "x"|]);
+                              Function ("Rational",[|Integer 1; Integer 2|])|])|])|])|])|]);
+          Function
+           ("Log",
+            [|Function
+               ("Plus",
+                [|Integer -1;
+                  Function
+                   ("Times",
+                    [|Function
+                       ("Power",
+                        [|Integer 2;
+                          Function ("Rational",[|Integer 1; Integer 2|])|]);
+                      Function
+                       ("Power",
+                        [|Function ("Tan",[|Symbol "x"|]);
+                          Function ("Rational",[|Integer 1; Integer 2|])|])|]);
+                  Function
+                   ("Times",[|Integer -1; Function ("Tan",[|Symbol "x"|])|])|])|]);
+          Function
+           ("Times",
+            [|Integer -1;
+              Function
+               ("Log",
+                [|Function
+                   ("Plus",
+                    [|Integer 1;
+                      Function
+                       ("Times",
+                        [|Function
+                           ("Power",
+                            [|Integer 2;
+                              Function ("Rational",[|Integer 1; Integer 2|])|]);
+                          Function
+                           ("Power",
+                            [|Function ("Tan",[|Symbol "x"|]);
+                              Function ("Rational",[|Integer 1; Integer 2|])|])|]);
+                      Function ("Tan",[|Symbol "x"|])|])|])|])|])|])</PRE>
+      <H3>Interpreting expressions</H3>
+      <P>The simplest way to evaluate a symbolic expression is to write a simple 
+      interpreter. In this case, we shall assume that all expressions will be 
+      evaluated to complex numbers and we shall require the following complex    
+                <CODE>arctan</CODE> implementation:           </P>
+<PRE>&gt; type Complex with
+    static member Atan z =
+      -Complex.OneI * log((Complex.One + Complex.OneI * z)/sqrt(Complex.One + z * z));;</PRE>
+      <P>The following              <CODE>eval</CODE> function evaluates a value 
+      of the type              <CODE>expr</CODE> into a              
+      <CODE>complex</CODE> value in the context of an association list           
+         <CODE>subst</CODE> that maps symbol names onto their complex values:    
+             </P>
+<PRE>&gt; let rec eval subst f =
+    match f with
+    | Integer n -&gt; complex (float n) 0.
+    | Symbol s -&gt; List.assoc s subst
+    | Function("ArcTan", [|f|]) -&gt; Complex.Atan(eval subst f)
+    | Function("Log", [|f|]) -&gt; log(eval subst f)
+    | Function("Plus", fs) -&gt; Array.fold_left (fun z f -&gt; z + eval subst f) Complex.Zero fs
+    | Function("Power", fs) -&gt; Array.fold_right (fun f z -&gt; exp(log(eval subst f) * z)) fs Complex.One
+    | Function("Times", fs) -&gt; Array.fold_left (fun z f -&gt; z * eval subst f) Complex.One fs
+    | Function("Rational", [|p; q|]) -&gt; eval subst p / eval subst q
+    | Function("Tan", [|f|]) -&gt; tan(eval subst f)
+    | _ -&gt; invalid_arg "eval";;
+val eval : (string * complex) list -&gt; expr -&gt; complex</PRE>
+      <P>This function may be used to evaluate our large symbolic expression in 
+      the context of a given value of              <CODE>x</CODE> as follows:    
+             </P>
+<PRE>&gt; eval ["x", complex 0.1 0.3] expr;;
+val it : complex
+= -0.0356175387815692r+1.22309152988562i
+    {Conjugate = -0.0356175387815692r-1.22309152988562i;
+     ImaginaryPart = 1.22309153;
+     Magnitude = 1.223610028;
+     Phase = 1.59990901;
+     RealPart = -0.03561753878;
+     i = 1.22309153;
+     r = -0.03561753878;}</PRE>
+      <P>The result              
+      <CODE>-0.0356175387815692r+1.22309152988562i</CODE> is the same as that 
+      given by Mathematica:           </P>
+      <P>
+      <P style="margin-left: 50px;"><IMG src="F%23%20Journal%20Mathematica%20interoperability_files/complex_result.gif"> 
+                  </P>
+      <P></P>
+      <P>However, even this simple interpreter written in F# is substantially 
+      faster than Mathematica when the expression must be evaluated many times, 
+      e.g. tabulated:</P>
+<PRE>&gt; let time f x =
+    let t = new System.Diagnostics.Stopwatch()
+    t.Start()
+    try f x finally
+    printf "Took %dms\n" t.ElapsedMilliseconds;;
+val time : ('a -&gt; 'b) -&gt; 'a -&gt; 'b
+&gt; let table =
+    let n = 600
+    time (Array2.init n n) (fun i j -&gt;
+      let aux i = -3. + 6. * float i / float n
+      eval ["x", complex (aux i) (aux j)] expr);;
+val table : complex [,]
+Took 10315ms</PRE>
+      <P>Mathematica takes over 25s to compute the same tabulation but this 
+      simple F# program takes only 10s.</P>
+      <H2>Generating F# code</H2>
+      <P>The easiest way to compile this expression in order to accelerate its 
+      evaluation is to write a pretty printer for the expression type that 
+      prints F# code. The following              <CODE>print_fs</CODE> function 
+      does exactly this:           </P>
+<PRE>&gt; let rec print_fs ff = function
+    | Integer n -&gt; fprintf ff "(complex %d. 0.)" n
+    | Symbol v -&gt; fprintf ff "%s" v
+    | Function("Rational", [|Integer p; Integer q|]) -&gt; fprintf ff "(complex %g 0.)" (float p / float q)
+    | Function("Power", [|f; Function("Rational", [|Integer 1; Integer 2|])|]) -&gt; fprintf ff "(sqrt %a)" print_fs f
+    | Function("Times", [|Integer (-1); f|]) -&gt; fprintf ff "(-%a)" print_fs f
+    | Function("ArcTan", [|f|]) -&gt; fprintf ff "(Complex.Atan %a)" print_fs f
+    | Function("Log", [|f|]) -&gt; fprintf ff "(log %a)" print_fs f
+    | Function("Plus", fs) -&gt; prints_fs " + " ff (List.of_array fs)
+    | Function("Power", [|f; g|]) -&gt; fprintf ff "(%a ** %a)" print_fs f print_fs g
+    | Function("Rational", [|f; g|]) -&gt; fprintf ff "(%a / %a)" print_fs f print_fs g
+    | Function("Tan", [|f|]) -&gt; fprintf ff "(tan %a)" print_fs f
+    | Function("Times", fs) -&gt; prints_fs " * " ff (List.of_array fs)
+    | f -&gt; invalid_arg(sprintf "print_fs %A" f)
+  and prints_fs sep ff = function
+    | [f] -&gt; print_fs ff f
+    | f::fs -&gt; fprintf ff "(%a%s%a)" print_fs f sep (prints_fs sep) fs
+    | fs -&gt; invalid_arg(sprintf "prints_fs %A" fs);;
+val print_fs : System.IO.TextWriter -&gt; expr -&gt; unit
+val prints_fs : string -&gt; System.IO.TextWriter -&gt; expr list -&gt; unit</PRE>
+      <P>The auxiliary              <CODE>prints_fs</CODE> function is 
+      responsible for printing sequences of expressions with the given 
+      separator.           </P>
+      <P>This function may be used to print an F# implementation of any 
+      expression:</P>
+<PRE>&gt; print_fs stdout expr;;
+((complex 0.5 0.) * (((complex 2. 0.) ** (complex -0.5 0.)) * (((complex -2. 0.) *
+(Complex.Atan ((complex 1. 0.) + ((complex -1. 0.) * ((sqrt (complex 2. 0.)) * (sqrt
+(tan x))))))) + (((complex 2. 0.) * (Complex.Atan ((complex 1. 0.) + ((sqrt (complex
+2. 0.)) * (sqrt (tan x)))))) + ((log ((complex -1. 0.) + (((sqrt (complex 2. 0.)) *
+(sqrt (tan x))) + (-(tan x))))) + (-(log ((complex 1. 0.) + (((sqrt (complex 2. 0.))
+* (sqrt (tan x))) + (tan x))))))))))</PRE>
+      <P>We can immediately cut and paste this code into F# to obtain a 
+      specialized function that evaluates this expression even more 
+      efficiently:</P>
+<PRE>&gt; let eval_expr x =
+    let inline ( ** ) z1 z2 : complex = exp(log z1 * z2)
+    ((complex 0.5 0.) * (((complex 2. 0.) ** (complex -0.5 0.)) *
+                         (((complex -2. 0.) *
+                           (Complex.Atan ((complex 1. 0.) +
+                                          ((complex -1. 0.) * ((sqrt (complex 2. 0.)) * (sqrt (tan x))))))) +
+                          (((complex 2. 0.) *
+                            (Complex.Atan ((complex 1. 0.) + ((sqrt (complex 2. 0.)) * (sqrt (tan x)))))) +
+                           ((log ((complex -1. 0.) + (((sqrt (complex 2. 0.)) * (sqrt (tan x))) +
+                                                      ((complex -1. 0.) * (tan x))))) +
+                            ((complex -1. 0.) *
+                             (log ((complex 1. 0.) +
+                                   (((sqrt (complex 2. 0.)) * (sqrt (tan x))) + (tan x))))))))));;
+val eval_expr : Complex -&gt; Complex</PRE>
+      <P>Mathematica took 25s for our example tabulation and this approach 
+      computes the same result in just under 3s:</P>
+<PRE>&gt; let table2 =
+    let n = 600
+    time (Array2.init n n) (fun i j -&gt;
+      let aux i = -3. + 6. * float i / float n
+      eval_expr (complex (aux i) (aux j)));;
+val table2 : Complex[,]
+Took 2907ms</PRE>
+      <P>The F# is already almost 9× faster than the original Mathematica but 
+      several productive optimizations remain to be done. Firstly, common 
+      subexpressions can be factored out to avoid recomputing expressions such 
+      as              <CODE>tan x</CODE> . Secondly, F# currently does little to 
+      optimize complex arithmetic so the arithmetic operations can be replaced 
+      with the explicit calculations of real and imaginary parts to improve 
+      performance even further.           </P>
+      <H2>Aside: Visualizing symbolic expressions with F# for Visualization</H2>
+      <P>Our F# for Visualization library provides mathematical typesetting and 
+      can be used to illustrate the suitability of the F# language for this kind 
+      of application.</P>
+      <P>The library may be referenced with:</P>
+<PRE>&gt; #I @"C:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0";;
+&gt; #r "C:\Program Files\FlyingFrog\FlyingFrog.Graphics.dll";;</PRE>
+      <P>The following modules contain definitions related to 2D graphics and 
+      typeset mathematics, respectively:</P>
+<PRE>&gt; open FlyingFrog.Graphics;;
+&gt; open FlyingFrog.Graphics.Typeset;;</PRE>
+      <P>The following function places stretchy parentheses around the given 
+      expression:</P>
+<PRE>&gt; let bracket math =
+    Bracket(Bracket.Paren Bracket.Open, math, Bracket.Paren Bracket.Close);;
+val bracket : math -&gt; math</PRE>
+      <P>The following function converts a Mathematica expression into a 
+      typesetting representation:</P>
+<PRE>&gt; let rec typeset = function
+    | Integer n when n&lt;0 -&gt; math_of_float(float n) |&gt; bracket
+    | Integer n -&gt; math_of_float(float n)
+    | Symbol s -&gt; Text s
+    | Function("Power", [|f; Function("Rational", [|Integer 1; Integer 2|])|]) -&gt; Sqrt(typeset f)
+    | Function("ArcTan", [|f|]) -&gt; Row[Super(Text "tan", Text "-1"); typeset f] |&gt; bracket
+    | Function("Log", [|f|]) -&gt; Row[Text "log"; typeset f] |&gt; bracket
+    | Function("Plus", [|f|]) -&gt; typeset f
+    | Function("Plus", fs) -&gt;
+        let t = typeset(Function("Plus", Array.sub fs 1 (fs.Length - 1)))
+        Row[typeset fs.[0]; Char '+'; t] |&gt; bracket
+    | Function("Power", [|f; g|]) -&gt; Super(typeset f, typeset g) |&gt; bracket
+    | Function("Times", fs) -&gt; Row(Seq.map typeset fs |&gt; List.of_seq) |&gt; bracket
+    | Function("Rational", [|p; q|]) -&gt; Fraction(typeset p, typeset q)
+    | Function("Tan", [|f|]) -&gt; Row[Text "tan"; bracket(typeset f)] |&gt; bracket
+    | _ -&gt; invalid_arg "typesets"</PRE>
+      <P>The following function uses the              <CODE>graph_of_math</CODE> 
+      function from the F# for Visualization library to perform the actual 
+      typesetting, laying the elements of the expression out on a 2D vector 
+      graphics canvas, and then uses the              <CODE>View</CODE> class to 
+      spawn an interactive visualization of the result:           </P>
+<PRE>&gt; let view math =
+    let _, _, graph = graph_of_math [Fill.black] (0., 0.) math
+    View graph;;
+val view : math -&gt; View</PRE>
+      <P>This may be used to visualize our example expression:</P>
+<PRE>&gt; view(typeset expr);;
+val it : View = ...</PRE>
+      <P>This produces the following output:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Mathematica%20interoperability_files/fsviz.gif"> 
+                  </P>
+      <P></P>
+      <P>Two obvious ways to improve this implementation are to avoid 
+      superfluous parentheses (when conventional associativity and precedence 
+      dictate that they can be removed without altering the meaning of the 
+      expression) and wrapping of long expressions like this across multiple 
+      lines. These techniques will be described in future F#.NET Journal 
+      articles, particularly the concept of              <I>functional 
+      unparsing</I> that uses similar techniques to parser combinators in order 
+      to pretty print grammars with precedence and associativity.           </P>
+      <H2>Summary</H2>
+      <P>This article has reviewed the basic concepts that underpin Mathematica 
+      and used this knowledge to create a simple bridge between F# and 
+      Mathematica. This bridge was used to demonstrate how Mathematica's 
+      functionality can be combined with the performance of F# to get 
+      complicated computational problems solved more quickly and easily than 
+      with either language alone.</P>
+      <P>Future F#.NET Journal articles will revisit several of the topics 
+      covered in this article, including the manipulation of symbolic 
+      expressions in F#, interoperability, visualization and even the creation 
+      of a simple notebook interface for a new language using Windows 
+      Presentation Foundation.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Mathematica%20interoperability_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

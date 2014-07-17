@@ -1,0 +1,135 @@
+body {
+	color: rgb(0, 0, 0); font-family: Tahoma, Verdana, Arial, Helvetica, sans-serif; font-size: 0.8em; background-color: rgb(255, 255, 255);
+}
+a:link {
+	color: rgb(0, 0, 0);
+}
+a:visited {
+	color: rgb(0, 0, 0);
+}
+a:active {
+	color: rgb(0, 0, 0);
+}
+a:hover {
+	color: rgb(0, 51, 119);
+}
+img {
+	border: 0px currentColor;
+}
+h1 {
+	text-align: center; color: rgb(0, 0, 0); font-family: Helvetica, sans-serif; font-size: 2em; font-weight: bold; margin-right: 5px; margin-left: 5px;
+}
+h2 {
+	color: rgb(119, 119, 255); font-family: Helvetica, sans-serif; font-size: 1.75em; font-weight: bold; margin-right: 15px; margin-left: 5px;
+}
+h3 {
+	color: rgb(102, 102, 255); font-family: Helvetica, sans-serif; font-size: 1.5em; font-weight: bold; margin-right: 15px; margin-left: 10px;
+}
+h4 {
+	color: rgb(85, 85, 255); font-family: Helvetica, sans-serif; font-size: 1.25em; font-weight: bold; margin-right: 15px; margin-left: 12px;
+}
+h5 {
+	color: rgb(51, 51, 255); font-family: Helvetica, sans-serif; font-size: 1.12em; font-weight: bold; margin-right: 15px; margin-left: 14px;
+}
+p {
+	margin-right: 15px; margin-left: 15px;
+}
+pre {
+	color: rgb(0, 51, 255); font-size: 1.1em; margin-right: 15px; margin-left: 15px;
+}
+ul {
+	margin-right: 30px; margin-left: 30px;
+}
+dl {
+	margin-right: 30px; margin-left: 30px;
+}
+ol {
+	margin-right: 30px; margin-left: 30px;
+}
+li {
+	margin-right: 30px; margin-left: 30px;
+}
+dt {
+	font-weight: bold; margin-right: 15px; margin-left: 15px;
+}
+dd {
+	margin-right: 15px; margin-left: 35px;
+}
+p.caption {
+	text-align: center; font-size: 75%; font-style: italic;
+}
+table {
+	width: 100%; margin-right: auto; margin-left: auto;
+}
+td {
+	vertical-align: middle;
+}
+code {
+	color: rgb(0, 51, 255); font-family: monospace; font-size: 1.1em;
+}
+p.price {
+	text-align: center; font-family: Tahoma, Verdana, Arial, Helvetica, sans-serif; font-size: 2em; font-style: italic;
+}
+table#logo {
+	border: 2px solid rgb(255, 187, 119); width: 960px; text-align: left; background-color: rgb(255, 247, 240);
+}
+table#menu {
+	width: 960px; background-color: rgb(255, 187, 119);
+}
+table#menu td {
+	width: 200px; text-align: center; font-family: Arial; font-size: 0.9em;
+}
+table#page {
+	border: 2px solid rgb(255, 187, 119); width: 960px; text-align: left; background-color: rgb(255, 247, 240); align: center;
+}
+table#page td {
+	border: 2px solid rgb(255, 187, 119); width: 300px; vertical-align: top;
+}
+table#items {
+	border: 0px solid rgb(0, 0, 0); width: 300px;
+}
+table#items td {
+	border: 0px solid rgb(0, 0, 0); vertical-align: middle;
+}
+.title {
+	height: 40px; text-align: center; font-weight: bold; vertical-align: top; background-color: rgb(255, 187, 119);
+}
+.overview {
+	background-color: rgb(255, 247, 240);
+}
+.details {
+	font-size: 0.8em;
+}
+table#item {
+	
+}
+table#item td {
+	width: 0px;
+}
+.view {
+	width: 128px;
+}
+p.more {
+	font-size: 0.9em;
+}
+table#footer {
+	width: 960px; text-align: right; font-size: 0.9em; background-color: rgb(255, 187, 119);
+}
+table#cards {
+	width: 900px;
+}
+table#cards td {
+	text-align: center;
+}
+table#advert {
+	width: 300px;
+}
+table#advert td.image {
+	width: 80px; text-align: center;
+}
+table#advert td.description {
+	text-align: center; font-size: 1.2em; vertical-align: middle;
+}
+.center {
+	margin-right: auto; margin-left: auto;
+}

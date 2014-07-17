@@ -1,0 +1,191 @@
+﻿<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0084)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/allocationless.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=utf-8" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20allocationless%20programming_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20allocationless%20programming_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20allocationless%20programming_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20allocationless%20programming_files/title.gif"> </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20allocationless%20programming_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Allocationless programming on .NET</H1>
+      <P>An extreme technique used in some latency-critical applications is to 
+      completely circumvent the garbage collector by replacing all heap 
+      allocations with the use of pre-allocated arrays of value types, 
+      effectively implementing manual memory management inside a managed 
+      programming language. This might be called Fortran-style programming on 
+      .NET but the advantage is that stalls due to garbage collection can be 
+      made less frequent or even eliminated entirely.</P>
+      <H2>Introduction</H2>
+      <P>The Common Language Runtime (CLR) upon which .NET is based offers an 
+      unusual feature called value types. These kinds of types are stored 
+      unboxed in their parent data structure in the heap or held in registers or 
+      as a stack-allocated struct locally. This, in turn, facilitates an unusual 
+      style of programming where references to heap allocated values can be 
+      replaced with a reference to and <CODE>int</CODE> index into a heap 
+      allocated "pool" of value types.</P>
+      <P>Perhaps the most famous application of this technique was in the design 
+      and implementation of the .NET <CODE>Dictionary</CODE> data structure. 
+      This collection uses the <CODE>KeyValuePair</CODE> value type to store 
+      keys and values unboxed in the spine of a hash table. When the key and 
+      value types are also value types (such as <CODE>int</CODE> or 
+      <CODE>float</CODE>) this results in the entire collection being stored in 
+      a single array. The performance advantages are substantial: filling a 
+      generic hash table with <CODE>float</CODE> keys mapped onto 
+      <CODE>float</CODE> values is 17× faster on .NET than the JVM.</P>
+      <P>This same technique is actually generally applicable. All references in 
+      a program may be replaced with indices into pre-allocated pools. This 
+      article describes how a simple purely-functional n-queens solver that 
+      makes heavy use of singly-linked lists can be transformed into this 
+      allocationless style.</P>
+      <H2>Allocating n-queens solver</H2>
+      <P>The program described in this section solves the n-queens problem, 
+      returning the number of solutions, by building and filtering immutable 
+      singly-linked lists.</P>
+      <P>We begin with a <CODE>safe</CODE> function that returns true when 
+      queens placed at the two given positions cannot attack each other:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;safe&nbsp;((x1,&nbsp;y1),&nbsp;(x2,&nbsp;y2))&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x1&nbsp;&lt;&gt;&nbsp;x2&nbsp;&amp;&amp;&nbsp;y1&nbsp;&lt;&gt;&nbsp;y2&nbsp;&amp;&amp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x2&nbsp;-&nbsp;x1&nbsp;&lt;&gt;&nbsp;y2&nbsp;-&nbsp;y1&nbsp;&amp;&amp;&nbsp;x1&nbsp;-&nbsp;y2&nbsp;&lt;&gt;&nbsp;x2&nbsp;-&nbsp;y1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;safe&nbsp;:&nbsp;(int&nbsp;*&nbsp;int)&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)&nbsp;-&gt;&nbsp;bool</CODE></P>
+      <P>The list <CODE>ps</CODE> enumerates every position on an n×n board:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ps&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;i&nbsp;in&nbsp;1&nbsp;..&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;1&nbsp;..&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;i,&nbsp;j&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ps&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;(int&nbsp;*&nbsp;int)&nbsp;list</CODE></P>
+      <P>The <CODE>filter</CODE> function is a replica of the built-in 
+      <CODE>List.filter</CODE> function that we describe explicitly in 
+      preparation for developing an allocationless variant:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;filter(q,&nbsp;ps)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ps&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;p::ps&nbsp;-&gt;&nbsp;if&nbsp;safe(q,&nbsp;p)&nbsp;then&nbsp;p::filter(q,&nbsp;ps)&nbsp;else&nbsp;filter(q,&nbsp;ps);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;filter&nbsp;:&nbsp;(int&nbsp;*&nbsp;int)&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)&nbsp;list&nbsp;-&gt;&nbsp;(int&nbsp;*&nbsp;int)&nbsp;list</CODE></P>
+      <P>The <CODE>search</CODE> function is the core of the solver, searching 
+      for solutions by considering both placing and not placing a queen at each 
+      of the remaining safe positions on the board until <CODE>n</CODE> queens 
+      have been placed to form a solution:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;search(n,&nbsp;nqs,&nbsp;ps)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ps&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;if&nbsp;nqs&nbsp;=&nbsp;n&nbsp;then&nbsp;1&nbsp;else&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;q::ps&nbsp;-&gt;&nbsp;search(n,&nbsp;nqs,&nbsp;ps)&nbsp;+&nbsp;search(n,&nbsp;nqs+1,&nbsp;filter(q,&nbsp;ps));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;search&nbsp;:&nbsp;int&nbsp;*&nbsp;int&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)&nbsp;list&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The <CODE>solve</CODE> function is a simple wrapper that initializes 
+      the list of all board positions and searches for solutions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;solve&nbsp;n&nbsp;=&nbsp;search(n,&nbsp;0,&nbsp;ps&nbsp;n);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;solve&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>For example, <CODE>solve&nbsp;8</CODE> counts all 92 solutions to the 
+      8-queens problem:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;solve&nbsp;8;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;92</CODE></P>
+      <P>This program may be augmented with instrumentation that measures 
+      latency by filling an array <CODE>ts</CODE> of time stamps in the inner 
+      loop formed by the <CODE>search</CODE> function. We begin by defining a 
+      timer:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;timer&nbsp;:&nbsp;System.Diagnostics.Stopwatch</CODE></P>
+      <P>Then a global index into the array:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mutable&nbsp;i&nbsp;=&nbsp;0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;i&nbsp;:&nbsp;int&nbsp;=&nbsp;0</CODE></P>
+      <P>And the array itself:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ts&nbsp;=&nbsp;Array.create&nbsp;10000000&nbsp;0.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ts&nbsp;:&nbsp;float&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;&nbsp;0.0;</CODE></P>
+      <P>The <CODE>search</CODE> function may then be instrumented as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;search(n,&nbsp;nqs,&nbsp;ps)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&nbsp;&lt;&nbsp;ts.Length&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ts.[i]&nbsp;&lt;-&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;&lt;-&nbsp;i&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ps&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;if&nbsp;nqs&nbsp;=&nbsp;n&nbsp;then&nbsp;1&nbsp;else&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;q::ps&nbsp;-&gt;&nbsp;search(n,&nbsp;nqs,&nbsp;ps)&nbsp;+&nbsp;search(n,&nbsp;nqs+1,&nbsp;filter(q,&nbsp;ps));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;search&nbsp;:&nbsp;int&nbsp;*&nbsp;int&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)&nbsp;list&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The time stamps left in the <CODE>ts</CODE> array after a successful 
+      evaluation of <CODE>solve&nbsp;11</CODE> may be analyzed using the 
+      following code:</P>
+      <H2>Allocationless</H2>
+      <P>An allocationless variant of the above program may be written by 
+      representing the immutable singly-linked lists as a pool of pairs of list 
+      cells with the tail represented by an index referring to the entry in the 
+      pool containing the next list cell (or the special value <CODE>-1</CODE> 
+      to denote the empty list).</P>
+      <P>This requires a struct type to store the head and tail of each list 
+      cell:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;T2&lt;'a,'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;x&nbsp;:&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;y&nbsp;:&nbsp;'b<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(a,&nbsp;b)&nbsp;=&nbsp;{x=a;&nbsp;y=b};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;T2&lt;'a,'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;a:'a&nbsp;*&nbsp;b:'b&nbsp;-&gt;&nbsp;T2&lt;'a,'b&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;x:&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;y:&nbsp;'b<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The global mutable <CODE>idx</CODE> stores the index of the first 
+      unused cell in the pool:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mutable&nbsp;idx&nbsp;=&nbsp;0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;idx&nbsp;:&nbsp;int&nbsp;=&nbsp;0</CODE></P>
+      <P>The <CODE>pool</CODE> array acts as a heap of list cells:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;pool&nbsp;=&nbsp;Array.create&nbsp;4000&nbsp;(T2(T2(0,&nbsp;0),0));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;pool&nbsp;:&nbsp;T2&lt;T2&lt;int,int&gt;,int&gt;&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|FSI_0061+T2`2[FSI_0061+T2`2[System.Int32,System.Int32],System.Int32];&nbsp;...</CODE></P>
+      <P>The following <CODE>cons</CODE> function allocates a new list cell from 
+      <CODE>pool</CODE> and initializes it with the given head and tail, 
+      returning the index of the newly-allocated list cell:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;cons(h,&nbsp;t)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;idx&nbsp;=&nbsp;pool.Length&nbsp;then&nbsp;failwith&nbsp;"Out&nbsp;of&nbsp;pool"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;&lt;-&nbsp;idx&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pool.[idx&nbsp;-&nbsp;1]&nbsp;&lt;-&nbsp;T2(h,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;-&nbsp;1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;cons&nbsp;:&nbsp;T2&lt;int,int&gt;&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>If the <CODE>pool</CODE> fills up then we bail via an exception. An 
+      alternative would be to expand the pool but we are interested in measuring 
+      the latency of this program so we avoid this operation.</P>
+      <P>The empty list is the index <CODE>-1</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;empty&nbsp;=&nbsp;-1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;empty&nbsp;:&nbsp;int&nbsp;=&nbsp;-1</CODE></P>
+      <P>A function to test for the empty list simply checks for the index 
+      <CODE>-1</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;isEmpty&nbsp;p&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p&nbsp;=&nbsp;-1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;isEmpty&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;bool</CODE></P>
+      <P>The <CODE>safe</CODE> function must now deal with our new 
+      <CODE>T2</CODE> struct type by unpacking its fields before performing the 
+      same calculation as before:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;safe&nbsp;(xy1:&nbsp;T2&lt;_,_&gt;,&nbsp;xy2:&nbsp;T2&lt;_,_&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x1,&nbsp;y1,&nbsp;x2,&nbsp;y2&nbsp;=&nbsp;xy1.x,&nbsp;xy1.y,&nbsp;xy2.x,&nbsp;xy2.y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x1&nbsp;&lt;&gt;&nbsp;x2&nbsp;&amp;&amp;&nbsp;y1&nbsp;&lt;&gt;&nbsp;y2&nbsp;&amp;&amp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x2&nbsp;-&nbsp;x1&nbsp;&lt;&gt;&nbsp;y2&nbsp;-&nbsp;y1&nbsp;&amp;&amp;&nbsp;x1&nbsp;-&nbsp;y2&nbsp;&lt;&gt;&nbsp;x2&nbsp;-&nbsp;y1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;safe&nbsp;:&nbsp;T2&lt;int,int&gt;&nbsp;*&nbsp;T2&lt;int,int&gt;&nbsp;-&gt;&nbsp;bool</CODE></P>
+      <P>The <CODE>filter</CODE> function must be rewritten, replacing pattern 
+      matching over the built-in <CODE>list</CODE> data type with manual 
+      invocation of the <CODE>isEmpty</CODE> function and deconstruction by 
+      unpacking the fields of the <CODE>T2</CODE> struct:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;filter(f,&nbsp;xs)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isEmpty&nbsp;xs&nbsp;then&nbsp;xs&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;pool.[xs]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x,&nbsp;xs&nbsp;=&nbsp;c.x,&nbsp;c.y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;safe(f,&nbsp;x)&nbsp;then&nbsp;cons(x,&nbsp;filter(f,&nbsp;xs))&nbsp;else&nbsp;filter(f,&nbsp;xs);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;filter&nbsp;:&nbsp;T2&lt;int,int&gt;&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>Similarly, the <CODE>ps</CODE> function that creates the list 
+      containing every position on the board must be altered to use the 
+      <CODE>cons</CODE> function to build up a list instead of the built-in 
+      <CODE>::</CODE> constructor:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ps&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;ps&nbsp;=&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ps&nbsp;&lt;-&nbsp;cons(T2(i,&nbsp;j),&nbsp;ps)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ps;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ps&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The instrumented <CODE>search</CODE> function is rewritten in the same 
+      way:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;search(n,&nbsp;nqs,&nbsp;ps)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&nbsp;&lt;&nbsp;ts.Length&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ts.[i]&nbsp;&lt;-&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;&lt;-&nbsp;i&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isEmpty&nbsp;ps&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;nqs&nbsp;=&nbsp;n&nbsp;then&nbsp;1&nbsp;else&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;oldIdx&nbsp;=&nbsp;idx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;pool.[ps]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;q,&nbsp;ps&nbsp;=&nbsp;c.x,&nbsp;c.y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sols&nbsp;=&nbsp;search(n,&nbsp;nqs,&nbsp;ps)&nbsp;+&nbsp;search(n,&nbsp;nqs+1,&nbsp;filter(q,&nbsp;ps))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idx&nbsp;&lt;-&nbsp;oldIdx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sols;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;search&nbsp;:&nbsp;int&nbsp;*&nbsp;int&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>Perhaps the biggest problem with allocationless programming on .NET is 
+      the fact that circumventing the .NET garbage collector means we must now 
+      implement our own garbage collector. Solving this problem in the general 
+      case is beyond the scope of this article but we have added a tweak to the 
+      <CODE>search</CODE> function that allows unreachable list cells from the 
+      pool to be reused simply and efficiently. The trick is to notice that this 
+      program happens to always use list cells in FIFO order as a stack so any 
+      list cells allocated in the body of the search function (and its recursive 
+      calls) can be deallocated simply by resetting <CODE>idx</CODE> back to the 
+      value it had upon entry to the function. Without this trick to reuse list 
+      cells, the pool would quickly fill all available memory.</P>
+      <P>Finally, the <CODE>solve</CODE> function is the same as before:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;solve&nbsp;n&nbsp;=&nbsp;search(n,&nbsp;0,&nbsp;ps&nbsp;n);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;solve&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>This completes our allocationless implementation of this program. Note 
+      that the result is not substantially longer or more complicated than the 
+      original except for the introduction of a garbage collector (albeit a 
+      trivial one in this case).</P>
+      <H2>Results</H2>
+      <P>The following graph visualizes the change in the distribution of 
+      latencies from the allocating program to the allocationless program:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20allocationless%20programming_files/NQueensLatency.png"></P>
+      <P>Of the 10,000,000 latencies measured, the number over 10µs has 
+      decreased by a factor of 8 and the maximum latency has decreased from 
+      2,700µs to just 240µs.</P>
+      <H2>Summary</H2>
+      <P>We have described a technique that allows allocations to be removed 
+      from programs. This technique has applications in low-latency programming 
+      because it allows the stalls due to the garbage collector to be made less 
+      frequent or eliminated entirely. Our example program shows dramatic 
+      reductions in pause times.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of value types 
+      and garbage collection including the use of F# to prototype a new garbage 
+      collector.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20allocationless%20programming_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

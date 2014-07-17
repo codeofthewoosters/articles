@@ -1,0 +1,473 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0078)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/lex_yacc.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Parsing text with Lex and Yacc</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Parsing text with Lex and Yacc</TITLE>     <LINK 
+href="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Parsing text with Lex and Yacc</H1>
+      <P>The tool stack bundled with the F# distribution provides fslex and 
+      fsyacc tools that help in the construction of parsers. The ability to 
+      parse data in different formats is often very useful, particularly when 
+      translating between representations. This article introduces the concepts 
+      of lex and yacc-based parsing and describes how these tools may be used to 
+      construct robust and efficient parsers quickly and easily.</P>
+      <H2>Introduction</H2>
+      <P>The lex and yacc tools are used to implement two separate stages that 
+      have been used to provide a robust, efficient and flexible way to parse a 
+      wide variety of different formats since their inception in the mid 
+      1970s.</P>
+      <P>Lexing is the first stage and refers to the identification of regular 
+      expression patterns in a sequence and the corresponding reduction of each 
+      matched pattern to a tokenized form. In the context of parsing textual 
+      data such as source code, the sequence is a stream of bytes and the 
+      patterns handle tokens such as integers, identifiers, strings and so 
+      forth.</P>
+      <P>Parsing is the second stage and refers to the identification of 
+      grammatical patterns in a sequence of tokens. The recursively-defined 
+      rules of the grammar allow certain sequences of tokens and grammar rules 
+      to be converted into pieces of abstract syntax tree. In the context of 
+      parsing source code, a grammar rule might spot the sequence of one 
+      expression              <CODE>e1</CODE> following by an addition symbol 
+      followed by another expression              <CODE>e2</CODE> and reduce 
+      this grammatical construct into              <CODE>Add(e1, e2)</CODE> .    
+             </P>
+      <P>Ultimately, lexing and parsing are most commonly used to convert a 
+      character stream such as              <CODE>1 + 2 * 3</CODE> into an 
+      abstract syntax tree such as              <CODE>Add(Int 1, Mul(Int 2, Int 
+      3))</CODE> .           </P>
+      <P>The lex and yacc tools are known as compiler compilers because they 
+      take descriptions of lexers and parsers and generate source code 
+      implementing lexers and parsers according to the given descriptions. For 
+      this reason, parsers generated using fslex and fsyacc are typically much 
+      faster than hand-written parsers.</P>
+      <P>At the time of writing, the fslex and fsyacc tools are not integrated 
+      into the Visual Studio development environment and must be invoked by 
+      hand.</P>
+      <P>Before diving into the details of how lexers are defined for fslex, a 
+      brief introduction to regular expressions is required.</P>
+      <H2>Lexing</H2>
+      <H3>Regular Expressions</H3>
+      <P>A regular expression (             <I>regexp</I> ) is a string defining 
+      a pattern that matches a set of strings. The fslex tool handles a rich 
+      form of regular expressions written in an F# syntax rather than the more 
+      common Perl-compatible syntax.           </P>
+      <P>The following regular expression constructs are handled by fslex:</P>
+      <P>
+      <TABLE style="text-align: center;">
+        <TBODY>
+        <TR>
+          <TD><B>Syntax</B>                 </TD>
+          <TD><B>Example</B>                 </TD>
+          <TD><B>Description</B>                 </TD></TR>
+        <TR>
+          <TD>identifier</TD>
+          <TD><CODE>digit</CODE>                 </TD>
+          <TD>Refers to a previously defined regexp</TD></TR>
+        <TR>
+          <TD>string</TD>
+          <TD><CODE>"for"</CODE>                 </TD>
+          <TD>Matches only the given string constant</TD></TR>
+        <TR>
+          <TD>_</TD>
+          <TD><CODE>_</CODE>                 </TD>
+          <TD>Match any character</TD></TR>
+        <TR>
+          <TD>eof</TD>
+          <TD><CODE>eof</CODE>                 </TD>
+          <TD>Match the end of the input stream</TD></TR>
+        <TR>
+          <TD>char or escape sequence</TD>
+          <TD><CODE>'d'</CODE> or                    <CODE>'\n'</CODE>         
+                    </TD>
+          <TD>Match the given character</TD></TR>
+        <TR>
+          <TD>[character set]</TD>
+          <TD><CODE>['a'-'z' 'A'-'Z' '$']</CODE>                 </TD>
+          <TD>Match any character in the given set</TD></TR>
+        <TR>
+          <TD>[^ character set]</TD>
+          <TD><CODE>[^ ':']</CODE>                 </TD>
+          <TD>Match any character not in the given set</TD></TR>
+        <TR>
+          <TD>set1 # set2</TD>
+          <TD><CODE>['a'-'z'] # ['t']</CODE>                 </TD>
+          <TD>Match any character in the first set but not in the second 
+        set</TD></TR>
+        <TR>
+          <TD>regexp *</TD>
+          <TD><CODE>[' ' '\n']*</CODE>                 </TD>
+          <TD>Match zero or more repetitions</TD></TR>
+        <TR>
+          <TD>regexp +</TD>
+          <TD><CODE>['0'-'9']+</CODE>                 </TD>
+          <TD>Match one or more repetitions</TD></TR>
+        <TR>
+          <TD>regexp ?</TD>
+          <TD><CODE>'-' ?</CODE>                 </TD>
+          <TD>Match zero or one instances of</TD></TR>
+        <TR>
+          <TD>regexp1 | regexp2</TD>
+          <TD><CODE>'+' | '-'</CODE>                 </TD>
+          <TD>Match either regular expression</TD></TR>
+        <TR>
+          <TD>regexp1 regexp2</TD>
+          <TD><CODE>['0'-'9']+ '.' ['0'-'9']+</CODE>                 </TD>
+          <TD>Match each regular expression in turn</TD></TR></TBODY></TABLE>
+      <P></P>
+      <P>For example, the following regexp may be used to match string literals, 
+      defined as a sequence of characters or escape sequences enclosed in double 
+      quotes:</P>
+<PRE>'"' ([^ '"'] | '\\' _)* '"'</PRE>
+      <P>The first of the two alternate subexpressions              <CODE>[^ 
+      '"']</CODE> matches any character that is not a double quote. The second 
+      subexpression              <CODE>'\\' _</CODE> matches any escape 
+      sequence. The whole regexp matches a double quote following by a sequence 
+      of zero or more non-quote characters or escape sequences followed by a 
+      final double quote.           </P>
+      <H3>Defining a lexer</H3>
+      <P>The definition of a lexer for the fslex tool is given in a file with 
+      the suffix ".fsl". Lexer definitions may begin with a preamble of F# 
+      source code enclosed in              <CODE>{...}</CODE> . This preamble 
+      typically opens the namespace of the parser, where the variant type 
+      representing the tokens is defined:           </P>
+<PRE>{
+  open Parser
+}</PRE>
+      <P>Regexps may then be defined and bound to identifiers using the syntax 
+      of              <CODE>let</CODE> bindings. For example, we might define 
+      digits and a regexp to handle floating point literals:           </P>
+<PRE>let digit = ['0'-'9']
+let mantissa = digit+ '.' digit* | digit* '.' digit+
+let exponent = ['e' 'E'] ['+' '-']? digit+
+let floating = mantissa exponent?</PRE>
+      <P>The rules of the lexer are then defined with each regular expression 
+      followed by its action enclosed in              <CODE>{...}</CODE> . For 
+      example, the following rule is called              <CODE>token</CODE> (a 
+      conventional name for the default rule) and handles the functionality 
+      required for a simple calculator:           </P>
+<PRE>rule token = parse
+  | [' ' '\t']    { token lexbuf }
+  | digit+
+  | floating      { NUM(Lexing.lexeme lexbuf) }
+  | '('           { OPEN }
+  | ')'           { CLOSE }
+  | '!'           { FACTORIAL }
+  | '+'           { PLUS }
+  | '-'           { MINUS }
+  | '*'           { TIMES }
+  | '/'           { DIVIDE }
+  | '^'           { POWER }
+  | eof           { EOF }</PRE>
+      <P>The first clause matches spaces or tabs and calls the lexer recursively 
+      with              <CODE>token lexbuf</CODE> to lex the next token. This 
+      has the effect of skipping whitespace. The next two clauses match 
+      sequences of digits (integers) or floating point literals and generate a   
+                 <CODE>NUM</CODE> token. The expression              
+      <CODE>Lexing.lexeme lexbuf</CODE> obtains the matched string. The 
+      remaining clauses match character literals and convert them into tokens.   
+              </P>
+      <P>Any input that does not match any of the regular expressions causes the 
+                   <CODE>Failure("lexing: empty token")</CODE> exception to be 
+      raised.           </P>
+      <P>If the above code is stored in a lexer.fsl file then this file may be 
+      compiled into F# source code in lexer.ml implementing the defined lexer by 
+      running the fslex program on the lexer definition from the DOS prompt as 
+      follows:</P>
+<PRE>$ "C:\Program Files\FSharp-1.9.2.9\bin\fslex.exe" lexer.fsl
+compiling to dfas (can take a while...)
+159 NFA nodes
+23 states
+writing output</PRE>
+      <P>The printed output summarizes the complexity of this lexer.</P>
+      <H3>Caveat: Lexer table overflow</H3>
+      <P>The fslex program sometimes has trouble with lexer definitions that 
+      contain large numbers of constant regular expressions. This can happen if 
+      the lexer rule tries to match every keyword in the target language (such 
+      as              <CODE>public</CODE> ,              <CODE>static</CODE> or  
+                  <CODE>void</CODE> in Java), for example:           </P>
+<PRE>let digit = ['0'-'9']
+let alpha = ['a'-'z' 'A'-'Z']
+let ident = alpha (alpha | digit)*</PRE>
+<PRE>rule token = parse
+  ...
+  | "public"      { PUBLIC }
+  | "static"      { STATIC }
+  | "void"        { VOID }
+  ...
+  | ident         { keyword(Lexing.lexeme lexbuf) }</PRE>
+      <P>The solution is to match only a generic pattern in the lexer rule, such 
+      as a pattern for identifiers, and then use a separate F# function to 
+      determine if the matched string is a keyword (such as              
+      <CODE>public</CODE> in Java) or an identifier (such as a variable name):   
+              </P>
+<PRE>{
+  ...
+  let lex_keyword = function
+    | "public" -&gt; PUBLIC
+    | "static" -&gt; STATIC
+    | "void" -&gt; VOID
+    ...
+    | s -&gt; IDENT s
+}</PRE>
+<PRE>let digit = ['0'-'9']
+let alpha = ['a'-'z' 'A'-'Z']
+let ident = alpha+ (alpha | digit)*</PRE>
+<PRE>rule token = parse
+  ...
+  | ident         { lex_keyword(Lexing.lexeme lexbuf) }</PRE>
+      <P>Lexers will often look up the matched string in a hash table rather 
+      than using F#'s built-in pattern matching to identify keywords.</P>
+      <H2>Parsing</H2>
+      <P>The fsyacc tool converts a grammar definition in a file with the .fsy 
+      suffix into F# source code implementing a grammar for the given 
+      definition.</P>
+      <P>The tokens generated by the lexer are actually defined in the .fsy 
+      file. So although we are describing the files in their logical 
+      progression, the dependencies between the files is less obvious.</P>
+      <H2>Defining a grammar</H2>
+      <P>The basic format of a typical grammar definition is as follows:</P>
+<PRE>%{
+  F# header
+%}</PRE>
+<PRE>Token, entry, type and associativity/precedence declarations</PRE>
+<PRE>%%</PRE>
+<PRE>Grammar rules</PRE>
+      <H3>Header</H3>
+      <P>The header typically opens the namespace of a module that defines the 
+      type of the abstract syntax tree. In this case, the abstract syntax tree 
+      used to represent symbolic expressions will be defined in the expr.ml 
+      file, so we open that namespace:</P>
+<PRE>%{
+  open Expr
+%}</PRE>
+      <P>The subsequent declarations begin with the definition of the tokens 
+      generated by the lexer and handled by the parser.</P>
+      <H3>Token declarations</H3>
+      <P>Tokens that do not convey associated information are declared using the 
+      syntax:</P>
+<PRE>%token OPEN CLOSE COMMA</PRE>
+      <P>Tokens that do convey associated information are declared using a 
+      syntax that declares the type of value associated with each of the 
+      tokens:</P>
+<PRE>%token &lt;string&gt; INTEGER REAL IDENT</PRE>
+      <P>In this case, only the              <CODE>NUM</CODE> token carries data 
+      and its value is a of the type              <CODE>string</CODE> , the 
+      other tokens to do carry data:           </P>
+<PRE>%token &lt;string&gt; NUM
+%token OPEN CLOSE FACTORIAL PLUS MINUS TIMES DIVIDE POWER EOF</PRE>
+      <P>The entry points and the types of value they return are defined 
+      next.</P>
+      <H3>Entry points</H3>
+      <P>An entry point into the grammar is defined using the syntax:</P>
+<PRE>%start rule</PRE>
+      <P>where              <CODE>rule</CODE> is the name of the rule in the 
+      grammar.           </P>
+      <P>The return value of each entry point must also be specified using the 
+      syntax:</P>
+<PRE>%type &lt;type&gt; rule</PRE>
+      <P>In this case, we shall use a single entry point              
+      <CODE>expr</CODE> that handles a symbolic expression:           </P>
+<PRE>%start expr
+%type &lt;Expr.t&gt; expr</PRE>
+      <P>The              <CODE>Expr.t</CODE> type is defined in the expr.fs 
+      file and the              <CODE>expr</CODE> rule is defined lower down in 
+      the parser.           </P>
+      <H3>Associativities and precedences</H3>
+      <P>The declarations are completed by listing the tokens in increasing 
+      precedence and giving their associativies. This is not strictly necessary 
+      because grammars may always be written in a form where conflicts are 
+      resolved without need of precedences and associativities. However, 
+      specifying precedences and associativities can make grammars much 
+      simpler.</P>
+      <P>The associativies are specified using one of three kinds of 
+      declaration:</P>
+<PRE>%left TOKEN
+%nonassoc TOKEN
+%right TOKEN</PRE>
+      <P>Associativity determines whether a sequence is bracketed from the left 
+      or from the right. For example, subtraction may be considered a 
+      left-associative operator because 1-2-3 is understood to mean (1-2)-3 
+      whereas raise-to-the-power is right-associative because 2^3^4 means 
+      2^(3^4).</P>
+      <P>In this case, we have five levels of precedence that may be listed with 
+      their associativies as follows:</P>
+<PRE>%left PLUS MINUS
+%left TIMES DIVIDE
+%nonassoc prec_uminus
+%right POWER
+%nonassoc FACTORIAL</PRE>
+      <P>The definition              <CODE>%nonassoc prec_uminus</CODE> 
+      introduces a precedence for a new identifier that is not a token. This 
+      will be used to handle unary minus (e.g. -x) in the grammar with a higher 
+      precedence than that of ordinary binary infix minus (e.g. x-y).           
+      </P>
+      <H3>Grammar rules</H3>
+      <P>A grammar rule is a sequence of match cases, each of which is itself a 
+      sequence of rules or tokens.</P>
+      <P>For example, the following grammar rule              
+      <CODE>num_list</CODE> might be used to parse a list of comma-separated 
+      numbers:           </P>
+<PRE>num_list:            { [] }
+| NUM                { [$1] }
+| NUM COMMA num_list { $1 :: $3 }
+;</PRE>
+      <P>Note the use of              <CODE>$1</CODE> and              
+      <CODE>$3</CODE> to refer to the data conveyed by the first and third 
+      elements in the match case of the rule, respectively. These are used to 
+      compose results from the              <CODE>Num</CODE> token and the 
+      result of parsing the remainder of the list.           </P>
+      <P>The first match case handles the empty list. The second match case 
+      handles a singleton list. The third match case handles an arbitrary-length 
+      list by extracting the first element from the list and using the           
+         <CODE>num_list</CODE> rule recursively to prepend the head onto the 
+      result of parsing the tail.           </P>
+      <P>In this case, the core of the grammar is a rule called              
+      <CODE>expr</CODE> that parses an expression:           </P>
+<PRE>expr:
+| NUM                          { Num(float_of_string $1) }
+| MINUS expr %prec prec_uminus { Neg $2 }
+| expr FACTORIAL               { Factorial $1 }
+| expr PLUS expr               { Add($1, $3) }
+| expr MINUS expr              { Sub($1, $3) }
+| expr TIMES expr              { Mul($1, $3) }
+| expr DIVIDE expr             { Div($1, $3) }
+| expr POWER expr              { Pow($1, $3) }
+| OPEN expr CLOSE              { $2 }
+;</PRE>
+      <P>Unary minus is handled by the case              <CODE>MINUS expr</CODE> 
+      where the subsequent              <CODE>%prec prec_uminus</CODE> indicates 
+      that this case is to have a different precedence to that of              
+      <CODE>MINUS</CODE> .           </P>
+      <P>The complete grammar definition in the file parser.fsy may be compiled 
+      into F# source code in the files parser.mli and parser.ml using the fsyacc 
+      tool:</P>
+<PRE>$ "C:\Program Files\FSharp-1.9.2.9\bin\fsyacc.exe" parser.fsy
+building tables
+computing first function
+building kernels
+computing lookahead relations
+building lookahead table
+building action table
+building goto table
+19 states
+2 nonterminals
+14 terminals
+10 productions
+#rows in action table: 19
+#unique rows in action table: 12
+maximum #different actions per state: 8
+average #different actions per state: 3</PRE>
+      <P>The lexer.fsl, parser.mli and parser.ml files may now be used from 
+      hand-written F# code and compiled into F# programs. Moreover, a single 
+      program may use more than one parser by simply giving different names to 
+      the lexers and parsers.</P>
+      <H2>Complete example</H2>
+      <P>The example program built in this article is a calculator:              
+      <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/LexYacc.zip">download</A>
+       .           </P>
+      <P>The dependency diagram is illustrated below:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/calc_deps.gif"> 
+                  </P>
+      <P></P>
+      <P>The dependency of the lexer on the parser was discussed previously (the 
+      tokens are defined in the parser). The dependency of both the parser and 
+      the main interpreter (the              <CODE>Calc</CODE> and              
+      <CODE>Eval</CODE> modules here) upon a module containing the 
+      representation of the abtract syntax tree (             <CODE>Expr</CODE> 
+      here) is a common pattern seen in compilers and interpreters of all kinds. 
+                </P>
+      <P>At the time of writing, dependencies between F# compilation units are 
+      not handled automatically by Visual Studio. The order of compilation is 
+      simply determined by the order in which the compilation units are listed 
+      in the Solution Explorer window:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/vs_deps.gif"> 
+                  </P>
+      <P></P>
+      <P>The lexer.fsl and parser.fsy files are put into Solution Explorer so 
+      that they can be edited easily. These files are currently ignored by the 
+      Visual Studio build system.</P>
+      <P>The program can be run and symbolic expressions containing a variety of 
+      operators can be entered at the prompt for evaluation. For example:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/calc.gif"> 
+                  </P>
+      <P></P>
+      <P>The program can be exited with CTRL-C.</P>
+      <H2>Exercises</H2>
+      <P>Toying with a working parser is a great way to get a better 
+      understanding of the fslex and fsyacc tools. In this case, the example 
+      program was deliberately written in a slightly superfluous style in order 
+      to work in some of the features of fslex and fsyacc.</P>
+      <P>You might like to try to following exercises:</P>
+      <P>
+      <OL>
+        <LI>Try to remove the need for precedence declarations by splitting the 
+        grammar rule                  <CODE>expr</CODE> into many different 
+        rules, one for each precedence.               </LI>
+        <LI>Extend the lexer and parser to include new operators and even new 
+        types, e.g. strings and string concatenation.</LI>
+        <LI>Extend the evaluation function to handle looping constructs, i.e. 
+        write an interpreter for a programming language.</LI>
+        <LI>Replace evaluation with a back-end that outputs to a known 
+        programming language like Java, i.e. write a compiler.</LI>
+        <LI>Insert an extra stage between the reading of the input language and 
+        the writing of the output language that performs simplifying reductions 
+        on the abstract syntax tree, i.e. write an optimizing compiler.</LI></OL>
+      <P></P>
+      <P>Many of these tasks will be completed in future F#.NET Journal 
+      articles.</P>
+      <H2>Summary</H2>
+      <P>The fslex and fsyacc tools are a great way to implement robust and 
+      efficient lexers and parsers in F# programs. This makes it much easier to 
+      handle non-trivial input formats such as document formats and even 
+      programming languages themselves. Moreover, the lex and yacc tools have 
+      ossified themselves as the defacto standard for parsing textual input.</P>
+      <P>Future F#.NET Journal articles will contain significantly more 
+      sophisticated lexers and parsers as well as descriptions of different 
+      parsing techniques, such as the use of parser 
+  combinators.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Parsing%20text%20with%20Lex%20and%20Yacc_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

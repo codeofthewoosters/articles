@@ -1,0 +1,393 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0074)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/xna1.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Beginner's XNA tutorial</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Beginner's XNA tutorial</TITLE>     <LINK href="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/title.gif"> 
+              </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/left.gif">         
+    </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Beginner's XNA tutorial</H1>
+      <P>Microsoft's XNA framework is a .NET library intended primarily for 
+      games programming that superceded Managed Direct X (MDX). XNA provides a 
+      safer, higher-level design that still exposes low-level graphics 
+      capabilities in order to provide the best possible performance for 
+      graphics-intensive software from a managed language. This article 
+      describes everything required to get rendering using the XNA framework 
+      with F#, from the most primitive built in effects to custom shader 
+      programs.</P>
+      <H2>Introduction</H2>
+      <P>Microsoft's              <A href="http://www.microsoft.com/downloads/details.aspx?FamilyId=7D70D6ED-1EDD-4852-9883-9A33C0AD8FEE&amp;displaylang=en">XNA 
+      Game Studio</A> is described as "a toolset that makes creating great video 
+      games for Windows-based PCs, the Zune digital media player, and the Xbox 
+      360 console (with an active premium XNA Creators Club subscription) easier 
+      than ever". Installing this development environment installs the managed 
+      DLLs required to use XNA from F#.           </P>
+      <P>The              <CODE>Microsoft.Xna.Framework</CODE> and              
+      <CODE>Microsoft.Xna.Framework.Game</CODE> DLLs are located in the          
+          <CODE>C:\Program Files\Microsoft XNA\XNA Game 
+      Studio\v3.0\References\Windows\x86</CODE> directory by default and must be 
+      added as references to an F# project using XNA:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/references.gif"> 
+                  </P>
+      <P></P>
+      <P>Standalone XNA-based executables may now be built using F#. This 
+      article describes how the XNA framework may be used to build Windows 
+      applications entirely from within F#.</P>
+      <H2>Minimal 2D example</H2>
+      <P>We begin by creating the simplest possible XNA program that displays 
+      graphics.</P>
+      <P>XNA-related definitions come from the following namespace:</P>
+<PRE>open Microsoft.Xna.Framework</PRE>
+      <P>The              <CODE>Graphics</CODE> namespace therein is also 
+      heavily used and may also be opened in a real project but we shall name 
+      its members explicitly in this program to aid clarity.           </P>
+      <P>The XNA framework provides a single core class type called              
+      <CODE>Game</CODE> that encapsulates the entire application. Compared to 
+      rich user interface libraries like Windows Presentation Foundation, the    
+                <CODE>Game</CODE> class is remarkably simple.           </P>
+      <P>We use the classic object oriented approach of creating our own         
+           <CODE>XnaTest</CODE> class that is derived from the              
+      <CODE>Game</CODE> class and overrides some members in order to achieve the 
+      desired functionality:           </P>
+<PRE>type XnaTest() as this =
+  inherit Game()</PRE>
+      <P>The definition of our class begins with some              
+      <CODE>let</CODE> bindings to define private data.           </P>
+      <P>The              <CODE>GraphicsDeviceManager</CODE> class encapsulates 
+      both a Direct X device and much of the code required to maintain its state 
+      after device resets and losses:           </P>
+<PRE>  let mutable graphics : GraphicsDeviceManager = null</PRE>
+      <P>The              <CODE>Effect</CODE> base class encapsulates the 
+      techniques that may be used to interpret vertex data when rendering:       
+          </P>
+<PRE>  let mutable effect : Graphics.Effect = null</PRE>
+      <P>The              <CODE>VertexDeclaration</CODE> property of the 
+      graphics device must be set in order to describe the contents of the 
+      vertex type:           </P>
+<PRE>  let mutable vertexDeclaration : Graphics.VertexDeclaration = null</PRE>
+      <P>In this example, we shall draw a set of white points at random 
+      locations:</P>
+<PRE>  let rand = System.Random()
+  let n_verts = 100000
+  let random_vert _ =
+    Graphics.VertexPositionColor(Vector3(0.f, 0.f, 0.f), Graphics.Color.White)
+  let vertex = Array.init n_verts random_vert</PRE>
+      <P>Although we are using a vertex type              
+      <CODE>VertexPositionColor</CODE> that includes per-vertex colors and we 
+      have set them all to white, this information is actually ignored by the 
+      basic effect provided by XNA that we shall use. Drawing colored points 
+      requires the use of (simple) custom shaders to create a suitable technique 
+      in the effect.           </P>
+      <P>The implicit constructor for our class simply creates a              
+      <CODE>GraphicsDeviceManager</CODE> :           </P>
+<PRE>  do
+    graphics &lt;- new GraphicsDeviceManager(this)</PRE>
+      <P>Our              <CODE>graphics</CODE> variable could have been set 
+      when it was defined but its creation requires a reference to              
+      <CODE>this</CODE> and, consequently, requires run-time checks for 
+      consistency. The F# compiler requests that all such actions are placed in 
+      a single              <CODE>do</CODE> block as we have done here.          
+       </P>
+      <P>We override the              <CODE>Initialize</CODE> method from the    
+                <CODE>Game</CODE> to set the variables to their initial values:  
+               </P>
+<PRE>  override this.Initialize() =
+    base.Initialize()
+    this.IsMouseVisible &lt;- true
+    let gd = graphics.GraphicsDevice
+    effect &lt;- new Graphics.BasicEffect(gd, null)
+    let elts = Graphics.VertexPositionColor.VertexElements
+    vertexDeclaration &lt;- new Graphics.VertexDeclaration(gd, elts)</PRE>
+      <P>Note that we use the built-in              <CODE>BasicEffect</CODE> 
+      class for our              <CODE>effect</CODE> variable. This is the 
+      easiest way to get started with XNA but the real power lies in custom 
+      shaders, as we shall see in the next section.           </P>
+      <P>We override the              <CODE>Draw</CODE> method from the          
+          <CODE>Game</CODE> in order to draw the required graphical elements:    
+             </P>
+<PRE>  override this.Draw gameTime =
+    let gd = graphics.GraphicsDevice
+    gd.VertexDeclaration &lt;- vertexDeclaration
+    gd.Clear Graphics.Color.Black
+    for i=0 to n_verts - 1 do
+      let x() = 2. * rand.NextDouble() - 1. |&gt; float32
+      vertex.[i].Position &lt;- Vector3(x(), x(), x())
+    effect.Begin()
+    for pass in effect.CurrentTechnique.Passes do
+      pass.Begin()
+      let prim = PrimitiveType.PointList
+      gd.DrawUserPrimitives(prim, vertex, 0, n_verts)
+      pass.End()
+    effect.End()</PRE>
+      <P>In this case, we simply clear the device to black, randomize the 
+      coordinates of the vertices and draw the vertices as points using the 
+      default effect. Note how we loop over the effect's passes. In this case, 
+      there is a single pass but more sophisticated forms of rendering can use 
+      multiple passes to add special effects such as blurs around light 
+      sources.</P>
+      <P>Finally, the main part of the program constructs an object of our       
+             <CODE>XnaTest</CODE> class and calls its              
+      <CODE>Run</CODE> method to run the "game".           </P>
+<PRE>do
+  use game = new XnaTest()
+  game.Run()</PRE>
+      <P>The whole program is well under 50 lines of code and produces the 
+      following result using hardware acceleration where possible:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/test.gif"> 
+                  </P>
+      <P></P>
+      <P>A Visual Studio 2008 project containing the full source code is 
+      available for download              <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/40/XNATest.zip">here</A>
+       .           </P>
+      <H2>3D graphics with custom shaders</H2>
+      <P>The minimal example presented in the last section used the              
+      <CODE>BasicEffect</CODE> class built into XNA. This provides only the most 
+      rudimentary vertex and pixel shaders. These shaders will run on almost all 
+      graphics hardware and, consequently, are the default for ubiquitous 
+      graphics like Windows Presentation Foundation.           </P>
+      <P>However, the XNA framework allows us to write our own shaders in the 
+      High-Level Shader Language (HLSL). This empowers us with the ability to 
+      control exactly how the graphics hardware interprets and handles vertex 
+      data both per-vertex and even per-pixel. The              <I>programmable 
+      graphics pipeline</I> is the most revolutionary innovation that consumer 
+      graphics has seen in decades and there is no excuse for missing out on 
+      these awesome capabilities!           </P>
+      <P>In this example we shall open both namespaces:</P>
+<PRE>open Microsoft.Xna.Framework
+open Microsoft.Xna.Framework.Graphics</PRE>
+      <P>The following              <CODE>Icosahedron</CODE> module creates 
+      vertex and index arrays for an approximation to the icosahedron:           
+      </P>
+<PRE>module Icosahedron =
+  let vertex =
+    let vec3 x y z = x, y, z
+    let r = sin(System.Math.PI / 3.)
+    let s = 1. / sqrt 5.
+    let f g x = r * g(float x * System.Math.PI / 5.)
+    let aux n y i = vec3 (f sin (2 * i + n)) y (f cos (2 * i + n))
+    [|yield vec3 0. 1. 0.
+      for i in 0 .. 4 do yield aux 0 s i
+      for i in 0 .. 4 do yield aux 1 (-s) i
+      yield vec3 0. -1. 0.|]</PRE>
+<PRE>  let index =
+    let r1 i = 1 + (1 + i) % 5
+    let r2 i = 6 + (1 + i) % 5
+    [|for i in 0 .. 4 do yield 0, r1 i, r1(i + 1)
+      for i in 0 .. 4 do yield r1(i + 1), r1 i, r2 i
+      for i in 0 .. 4 do yield r1(i + 1), r2 i, r2(i + 1)
+      for i in 0 .. 4 do yield r2(i+1), r2 i, 11|]</PRE>
+      <P>This is derived from the code in our book              <A href="http://www.ffconsultancy.com/products/fsharp_for_scientists/">F# 
+      for Scientists</A> but updated for the September 2008 F# CTP using the new 
+                   <CODE>yield</CODE> notation for sequence expressions.         
+        </P>
+      <P>As a demonstration of XNA's capabilities we shall define and use our 
+      own custom              <CODE>vertex</CODE> struct type           </P>
+<PRE>type Vertex = struct
+  val Position : Vector3
+  val Normal : Vector3
+  val Color : Color
+  new(p, n, c) = { Position = p; Normal = n; Color = c }
+  
+  static member VertexElements =
+    let ve3 = VertexElementFormat.Vector3
+    let vec = VertexElementFormat.Color
+    let m = VertexElementMethod.Default
+    let o n = sizeof&lt;float32&gt; * n |&gt; int16
+    [|
+      VertexElement(0s, o 0, ve3, m, VertexElementUsage.Position, 0uy);
+      VertexElement(0s, o 3, ve3, m, VertexElementUsage.Normal, 0uy);
+      VertexElement(0s, o 6, vec, m, VertexElementUsage.Color, 0uy);
+    |]
+end</PRE>
+      <P>The              <CODE>VertexElements</CODE> property is an array that 
+      declares the internal representation of a vertex. In particular, the 
+      nested              <CODE>o</CODE> function is used to compute the offset 
+      in bytes of each field from the start of the struct.           </P>
+      <P>The following              <CODE>subdivide</CODE> function refines a 
+      triangular mesh approximating a sphere but subdividing each triangle into 
+      four smaller triangles:           </P>
+<PRE>let subdivide (ps: seq&lt;Vector3 * Vector3 * Vector3&gt;) =
+  [|for p1, p2, p3 in ps do
+      let f p1 p2 = Vector3.Normalize(p1 + p2)
+      let p12, p23, p31 = f p1 p2, f p2 p3, f p3 p1
+      for t in [p1, p12, p31; p12, p2, p23; p23, p3, p31; p31, p12, p23] do
+        yield t|]</PRE>
+      <P>We derive a class from the              <CODE>Game</CODE> class as 
+      before:           </P>
+<PRE>type IcosahedronGame() as this =
+  inherit Game()</PRE>
+      <P>The following private variables are used:</P>
+<PRE>  let mutable graphics : GraphicsDeviceManager = null
+  let mutable effect : Effect = null
+  let mutable vertexDeclaration : VertexDeclaration = null
+  let mutable projection : Matrix = Matrix.Identity
+  let mutable view : Matrix = Matrix.Identity
+  let mutable world : Matrix = Matrix.Identity
+  let positions =
+    [|for i, j, k in Icosahedron.index do
+        let f n =
+          let x, y, z = Icosahedron.vertex.[n]
+          Vector3(float32 x, float32 y, float32 z)
+        yield f i, f j, f k|]
+    |&gt; subdivide
+    |&gt; subdivide
+  let vertex =
+    [|for p1, p2, p3 in positions do
+        for p in [p1; p2; p3] do
+          yield Vertex(p, Vector3.Normalize p, Color.Red)|]
+  let time = System.Diagnostics.Stopwatch.StartNew()</PRE>
+      <P>The constructor builds a              
+      <CODE>GraphicsDeviceManager</CODE> as before but we also make the mouse 
+      pointer visible instead of the default behaviour of the pointer becoming 
+      invisible when it is over the XNA window (just for fun):           </P>
+<PRE>  do
+    graphics &lt;- new GraphicsDeviceManager(this)
+    this.IsMouseVisible &lt;- true</PRE>
+      <P>The              <CODE>Initialize</CODE> method is similar to before 
+      but now loads the HLSL shaders from a string given at the start of the F# 
+      program (we have omitted the string from our description but it is derived 
+      from the XNA Creators Club On-line article              <A href="http://creators.xna.com/en-GB/sample/shader_series3">Shader 
+      Series 3: Per-Pixel Lighting</A> and is included in Visual Studio project 
+      at the end of this article):           </P>
+<PRE>  override this.Initialize() =
+    base.Initialize()
+    let gd = graphics.GraphicsDevice
+    let opts = CompilerOptions.None
+    let compiled =
+      let platform = TargetPlatform.Windows
+      Effect.CompileEffectFromSource(hlsl, [||], null, opts, platform)
+    printf "%s\n" compiled.ErrorsAndWarnings
+    effect &lt;- new Effect(gd, compiled.GetEffectCode(), opts, null)
+    vertexDeclaration &lt;-
+      let elts = Vertex.VertexElements
+      new VertexDeclaration(gd, elts)</PRE>
+      <P>The              <CODE>Draw</CODE> function now handles the             
+       <CODE>world</CODE> ,              <CODE>view</CODE> and              
+      <CODE>projection</CODE> matrices required for rendering and sets several 
+      parameters in the effect that the shader code relies upon:           </P>
+<PRE>  override this.Draw gameTime =
+    let gd = graphics.GraphicsDevice
+    gd.Clear Color.Black</PRE>
+<PRE>    projection &lt;-
+      let fov = float32 System.Math.PI / 4.f
+      let aspect =
+        let bound = this.Window.ClientBounds
+        float32 bound.Width / float32 bound.Height
+      let near, far = 0.01f, 100.f
+      Matrix.CreatePerspectiveFieldOfView(fov, aspect, near, far)
+    
+    let cameraPosition =
+      let angle = float32 time.ElapsedMilliseconds / 1e3f
+      Vector3(3.f * sin angle, 3.f, 3.f * cos angle)
+    view &lt;-
+      let up = Vector3(0.f, 1.f, 0.f)
+      Matrix.CreateLookAt(cameraPosition, Vector3.Zero, up)
+    
+    let draw (technique: string) (world: Matrix) =
+      gd.VertexDeclaration &lt;- vertexDeclaration
+      gd.RenderState.CullMode &lt;- CullMode.None
+      effect.CurrentTechnique &lt;- effect.Techniques.[technique]
+      effect.Parameters.["world"].SetValue(world)
+      effect.Parameters.["view"].SetValue(view)
+      effect.Parameters.["projection"].SetValue(projection)
+      effect.Parameters.["lightPosition"].SetValue(Vector3(0.f, 2.f, 0.f))
+      effect.Parameters.["cameraPosition"].SetValue cameraPosition
+      effect.Begin()
+      for pass in effect.CurrentTechnique.Passes do
+        pass.Begin()
+        let prim = PrimitiveType.TriangleList
+        gd.DrawUserPrimitives(prim, vertex, 0, vertex.Length / 3)
+        pass.End()
+      effect.End()
+    
+    draw "Gouraud" (Matrix.CreateTranslation(-1.05f, 0.f, 0.f))
+    draw "Phong" (Matrix.CreateTranslation(1.05f, 0.f, 0.f))</PRE>
+      <P>The nested              <CODE>draw</CODE> function is used to render an 
+      approximate sphere at the given location.           </P>
+      <P>Finally, the game is invoked:</P>
+<PRE>do
+  use game = new IcosahedronGame()
+  game.Window.AllowUserResizing &lt;- true
+  game.Run()</PRE>
+      <P>We have also made the window stretchy in this case, demonstrating how 
+      XNA automates a lot of the tedious handling of Direct X devices.</P>
+      <P>This program produces the following output:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/gouraud_phong.gif"> 
+                  </P>
+      <P></P>
+      <P>A Visual Studio 2008 project containing the full source code is 
+      available for download              <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/40/Icosahedron.zip">here</A>
+       .           </P>
+      <P>This result illustrates two different lighting models that are both 
+      commonly seen in computer graphics. The sphere on the left was rendered 
+      using "Gouraud" shading, a technique where a color is determined for each 
+      vertex and the color across a triangle is a linear interpolation between 
+      the colors of its vertices. The sphere on the right uses "Phong" shading 
+      where surface normals are interpolated across each triangle and the same 
+      lighting expression is used to calculate the color of each pixel.</P>
+      <P>Although Phong shading produces substantially higher fidelity images, 
+      it is a lot more computationally expensive because it requires 
+      interpolated normals to be normalized to unit length and the lighting 
+      calculations to be performed for each of hundreds of thousands of  pixels 
+      rather than only a few dozen vertices. Consequently, Gouraud shading is 
+      the method of choice and is the only option available from many libraries 
+      such as Windows Presentation Foundation. However, modern graphics hardware 
+      is easily capable of this feat so Phong shading, also known as             
+       <I>per-pixel lighting</I> , is ubiquitous in today's computer games.      
+           </P>
+      <H2>Summary</H2>
+      <P>This article has described the basic design and use of XNA including 
+      the ability to specify custom vertex and pixel shader for the ultimate 
+      fine-grained control over the rendering pipeline.</P>
+      <P>The XNA framework is specifically designed for games programming and 
+      makes it relatively easy to produce stand-alone programs with advanced 
+      graphical capabilities that run on a wide variety of machines. However, 
+      many other applications can benefit from such advanced graphical 
+      capabilities so XNA should not be dismissed as a technology that is only 
+      of interest to games programmers.</P>
+      <P>XNA can also be used to target the XBox platform, which will be the 
+      subject of a future F#.NET Journal article.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Beginner's%20XNA%20tutorial_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

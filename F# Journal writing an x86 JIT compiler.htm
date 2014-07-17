@@ -1,0 +1,233 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0076)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/x86JIT.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20writing%20an%20x86%20JIT%20compiler_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20writing%20an%20x86%20JIT%20compiler_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20writing%20an%20x86%20JIT%20compiler_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20writing%20an%20x86%20JIT%20compiler_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20writing%20an%20x86%20JIT%20compiler_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Writing an x86 JIT compiler</H1>
+      <P>F# comes from the MetaLanguage or ML family of languages that were 
+      specifically designed for metaprogramming, a subject that includes writing 
+      interpreters, compilers and theorem provers as well as tools that 
+      manipulate programs such as refactoring plugins for Visual Studio. This 
+      article goes back to F#'s roots to create a tiny JIT compiler capable of 
+      transforming high-level expression-based functions down to raw x86 machine 
+      code for run-time execution. Remarkably, the resulting compiler is just 
+      170 lines of F# code!</P>
+      <P>Compilers come in many shapes and sizes. Modern virtual machines 
+      typically use JIT compilation because this allows programs to be 
+      distributed in a pre-compiled but platform and architecture agnostic 
+      format such as .NET assemblies. As we shall see, compilation is not the 
+      magical process envisaged by many programmers.</P>
+      <P>This article presents a JIT compiler that is capable of compiling data 
+      structures representing high-level code down to blocks of x86 assembler 
+      instructions and then assembling them into bytes of machine code stored in 
+      an executable array that can be called directly from F#. Amazingly, the 
+      entire compiler is under 170 lines of code! Finally, we demonstrate the 
+      compilation of several different computations including a factorial 
+      function and a Fibonacci function. With one simple optimization pass 
+      applied to the x86 assembler instruction blocks we are able to beat the 
+      performance of F# itself on the Fibonacci function!</P>
+      <H2>x86 code gen</H2>
+      <P>Our compiler is divided into four modules. Each module is a separate 
+      file in a Visual Studio project that starts with a line declaring the name 
+      of the module:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;X86CodeGen</CODE></P>
+      <P>We shall present the code inside each module as if it had been entered 
+      in to an F# interactive session, starting with the definition of a union 
+      type representing a single x86 instruction:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;instruction&lt;'location&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PushEbx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MovEax&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddEax&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddEsp&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddFromEspToEax<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MulFromEspToEax<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MovEbxEsp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;StoreEaxAtEbx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PushEax<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LoadEaxFromEbx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LoadEaxFromEspOffset&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CmpEax&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;JumpGE&nbsp;of&nbsp;'location<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PopEax<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PopEbx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Jump&nbsp;of&nbsp;'location<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Ret<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Call&nbsp;of&nbsp;'location<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Label&nbsp;of&nbsp;string;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;instruction&lt;'location&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PushEbx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MovEax&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddEax&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddEsp&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddFromEspToEax<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MulFromEspToEax<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MovEbxEsp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;StoreEaxAtEbx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PushEax<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LoadEaxFromEbx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LoadEaxFromEspOffset&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CmpEax&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;JumpGE&nbsp;of&nbsp;'location<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PopEax<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PopEbx<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Jump&nbsp;of&nbsp;'location<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Ret<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Call&nbsp;of&nbsp;'location<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Label&nbsp;of&nbsp;string</CODE></P>
+      <P>This small subset of the available instructions is enough to represent 
+      a wide variety of programs.</P>
+      <P>The following function gives the size of each instruction when it is 
+      assembled into a byte array:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;size&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PushEbx&nbsp;|&nbsp;PushEax&nbsp;|&nbsp;PopEax&nbsp;|&nbsp;PopEbx&nbsp;|&nbsp;Ret&nbsp;-&gt;&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MovEbxEsp&nbsp;|&nbsp;StoreEaxAtEbx&nbsp;|&nbsp;LoadEaxFromEbx&nbsp;|&nbsp;JumpGE&nbsp;_&nbsp;|&nbsp;Jump&nbsp;_&nbsp;-&gt;&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddEsp&nbsp;_&nbsp;|&nbsp;AddEax&nbsp;_&nbsp;|&nbsp;AddFromEspToEax&nbsp;|&nbsp;CmpEax&nbsp;_&nbsp;-&gt;&nbsp;3<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LoadEaxFromEspOffset&nbsp;_&nbsp;|&nbsp;MulFromEspToEax&nbsp;-&gt;&nbsp;4<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MovEax&nbsp;_&nbsp;|&nbsp;Call&nbsp;_&nbsp;-&gt;&nbsp;5<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Label&nbsp;_&nbsp;-&gt;&nbsp;0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;size&nbsp;:&nbsp;instruction&lt;'a&gt;&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>Next comes our assembler that converts x86 instructions into their 
+      machine code representation as bytes. Our code will refer to code at 
+      locations both before and after it so we implement a two-pass assembler 
+      that constructs a <CODE>Dictionary</CODE> mapping labels to their 
+      locations in the first pass and then uses these locations to produce the 
+      final machine code in the second pass.</P>
+      <P>So we begin by opening the namespace containing the 
+      <CODE>Dictionary</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Collections.Generic;;</CODE></P>
+      <P>The following <CODE>assemble</CODE> function takes a list of x86 
+      assembly instructions that use <CODE>string</CODE> labels and returns a 
+      byte array containing the equivalent machine code:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;assemble&nbsp;instrs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lbls&nbsp;=&nbsp;Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;program&nbsp;=&nbsp;ResizeArray()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;pass&nbsp;in&nbsp;1..2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pc&nbsp;=&nbsp;ref&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;instr&nbsp;in&nbsp;instrs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;find&nbsp;lbl&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pass=1&nbsp;then&nbsp;0&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lbls.[lbl]&nbsp;-&nbsp;(!pc&nbsp;+&nbsp;size&nbsp;instr)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;code&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;instr&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PushEbx&nbsp;-&gt;&nbsp;[0x53uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MovEax&nbsp;n&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;uint32&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;i&nbsp;=&nbsp;(n&nbsp;&gt;&gt;&gt;&nbsp;(8*i))&nbsp;|&gt;&nbsp;byte<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0xb8uy;&nbsp;f&nbsp;0;&nbsp;f&nbsp;1;&nbsp;f&nbsp;2;&nbsp;f&nbsp;3]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddEax&nbsp;n&nbsp;-&gt;&nbsp;[0x83uy;&nbsp;0xc0uy;&nbsp;byte&nbsp;n]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddEsp&nbsp;n&nbsp;-&gt;&nbsp;[0x83uy;&nbsp;0xc4uy;&nbsp;byte&nbsp;n]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;AddFromEspToEax&nbsp;-&gt;&nbsp;[0x03uy;&nbsp;0x04uy;&nbsp;0x24uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MulFromEspToEax&nbsp;-&gt;&nbsp;[0x0fuy;&nbsp;0xafuy;&nbsp;0x04uy;&nbsp;0x24uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MovEbxEsp&nbsp;-&gt;&nbsp;[0x89uy;&nbsp;0xe3uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;StoreEaxAtEbx&nbsp;-&gt;&nbsp;[0x89uy;&nbsp;0x03uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PushEax&nbsp;-&gt;&nbsp;[0x50uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LoadEaxFromEbx&nbsp;-&gt;&nbsp;[0x8buy;&nbsp;0x03uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LoadEaxFromEspOffset&nbsp;n&nbsp;-&gt;&nbsp;[0x8buy;&nbsp;0x44uy;&nbsp;0x24uy;&nbsp;byte&nbsp;n]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;CmpEax&nbsp;n&nbsp;-&gt;&nbsp;[0x83uy;&nbsp;0xf8uy;&nbsp;byte&nbsp;n]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;JumpGE&nbsp;lbl&nbsp;-&gt;&nbsp;[0x7duy;&nbsp;byte(find&nbsp;lbl)]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PopEax&nbsp;-&gt;&nbsp;[0x58uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PopEbx&nbsp;-&gt;&nbsp;[0x5buy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Jump&nbsp;lbl&nbsp;-&gt;&nbsp;[0xebuy;&nbsp;byte(find&nbsp;lbl)]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Ret&nbsp;-&gt;&nbsp;[0xc3uy]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Call&nbsp;lbl&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;find&nbsp;lbl<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;i&nbsp;=&nbsp;(n&nbsp;&gt;&gt;&gt;&nbsp;(8*i))&nbsp;|&gt;&nbsp;byte<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0xe8uy;&nbsp;f&nbsp;0;&nbsp;f&nbsp;1;&nbsp;f&nbsp;2;&nbsp;f&nbsp;3]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Label&nbsp;lbl&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lbls.[lbl]&nbsp;&lt;-&nbsp;!pc<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;pass=2&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;program.AddRange&nbsp;code<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pc&nbsp;:=&nbsp;!pc&nbsp;+&nbsp;size&nbsp;instr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;program.ToArray();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;assemble&nbsp;:&nbsp;seq&lt;instruction&lt;string&gt;&gt;&nbsp;-&gt;&nbsp;byte&nbsp;[]</CODE></P>
+      <P>The core of this function is a pattern match that converts x86 assembly 
+      language instructions into their machine code representation. The only 
+      non-trivial match cases are those that deal with parameterized 
+      instructions, such as loading off the stack at an arbitrary offset or 
+      jumping to an arbitrary location.</P>
+      <P>The most rudimentary form of compiler is a so-called "splat" compiler 
+      that replaces high-level constructs with templates of assembler 
+      instructions places one after the other. Thanks to the sophisticated 
+      out-of-order execution engines in modern x86 CPUs, splat compilers perform 
+      surprisingly well because the CPU contains hardware that optimizes the 
+      code before it is executed.</P>
+      <P>However, there is still a little scope for applying optimizations to 
+      the intermediate stream of assembler instrutions. In this case, our splat 
+      compiler will often generate sequences of assembler instructions that 
+      unnecessarily pop a value off the stack and then push it straight back on 
+      again without doing anything with it and immediately overwrites the 
+      register than contained the popped value.</P>
+      <P>The following <CODE>simplify</CODE> function implements a simple 
+      optimization pass that just spots this unnecessary sequence of assembler 
+      instructions and removes the pop and push:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;simplify&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PopEax::PushEax::(LoadEaxFromEbpOffset&nbsp;_::_&nbsp;as&nbsp;xs)&nbsp;-&gt;&nbsp;simplify&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::xs&nbsp;-&gt;&nbsp;x::simplify&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;[];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;simplify&nbsp;:&nbsp;instruction&lt;'a&gt;&nbsp;list&nbsp;-&gt;&nbsp;instruction&lt;'a&gt;&nbsp;list</CODE></P>
+      <P>This function is not tail recursive so it will stack overflow if it is 
+      applied to instruction blocks containing many tens of thousands of 
+      instructions but this is not a problem for our toy compiler.</P>
+      <P>The remainder of our compiler just generates sequences of assembler 
+      instructions and uses the functions provided here to optimize and assemble 
+      them into machine code.</P>
+      <H2>Expressions and compilation</H2>
+      <P>Now we turn our attention from the low-level language of assembler 
+      instructions to the high-level language of expressions. This section of 
+      code is placed in an <CODE>Expr</CODE> module:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Expr</CODE></P>
+      <P>This module will use our x86 backend so we open it:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;X86CodeGen;;</CODE></P>
+      <P>Our expressions are represented by the following <CODE>Expr</CODE> type 
+      that includes some handy operator overloads that simplify expressions are 
+      they are constructed:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Return&nbsp;of&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Arg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;IfLt&nbsp;of&nbsp;Expr&nbsp;*&nbsp;int&nbsp;*&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;of&nbsp;string&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(+)&nbsp;(f,&nbsp;g)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;f,&nbsp;g&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;m,&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;Int(m+n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;Add(g,&nbsp;h)&nbsp;-&gt;&nbsp;f&nbsp;+&nbsp;g&nbsp;+&nbsp;h<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(f,&nbsp;g),&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;Int&nbsp;n&nbsp;+&nbsp;f&nbsp;+&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;Int&nbsp;n&nbsp;+&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;g&nbsp;-&gt;&nbsp;Add(f,&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(-)&nbsp;(f,&nbsp;g)&nbsp;=&nbsp;f&nbsp;+&nbsp;Int&nbsp;-1&nbsp;*&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(*)&nbsp;(f,&nbsp;g)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;f,&nbsp;g&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;m,&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;Int(m*n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;Mul(g,&nbsp;h)&nbsp;-&gt;&nbsp;f&nbsp;*&nbsp;g&nbsp;*&nbsp;h<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul(f,&nbsp;g),&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;Int&nbsp;n&nbsp;*&nbsp;f&nbsp;*&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;Int&nbsp;n&nbsp;*&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;g&nbsp;-&gt;&nbsp;Mul(f,&nbsp;g);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Return&nbsp;of&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Arg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;IfLt&nbsp;of&nbsp;Expr&nbsp;*&nbsp;int&nbsp;*&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;of&nbsp;string&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;+&nbsp;)&nbsp;:&nbsp;f:Expr&nbsp;*&nbsp;g:Expr&nbsp;-&gt;&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;*&nbsp;)&nbsp;:&nbsp;f:Expr&nbsp;*&nbsp;g:Expr&nbsp;-&gt;&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;-&nbsp;)&nbsp;:&nbsp;f:Expr&nbsp;*&nbsp;g:Expr&nbsp;-&gt;&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>We shall use the following <CODE>id</CODE> function to obtain unique 
+      IDs in order to create unique labels during compilation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;id&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;ref&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;()&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;incr&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;!n;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;id&nbsp;:&nbsp;(unit&nbsp;-&gt;&nbsp;int)</CODE></P>
+      <P>The following <CODE>compileExpr</CODE> function compiles a high-level 
+      expression into a low-level sequence of assembler instructions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;compileExpr&nbsp;expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;code&nbsp;=&nbsp;ResizeArray[&nbsp;PushEbx;&nbsp;AddEsp&nbsp;-4;&nbsp;MovEbxEsp;&nbsp;StoreEaxAtEbx&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;compileExpr&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;code.AddRange[&nbsp;PushEax;&nbsp;MovEax&nbsp;n&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Arg&nbsp;-&gt;&nbsp;code.AddRange[&nbsp;PushEax;&nbsp;LoadEaxFromEbx&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(Int&nbsp;n,&nbsp;f)&nbsp;|&nbsp;Add(f,&nbsp;Int&nbsp;n)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.AddRange[&nbsp;AddEax&nbsp;n&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add(f,&nbsp;g)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.AddRange[&nbsp;AddFromEspToEax;&nbsp;AddEsp&nbsp;4&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul(f,&nbsp;g)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.AddRange[&nbsp;MulFromEspToEax;&nbsp;AddEsp&nbsp;4&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply(f,&nbsp;x)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.AddRange[&nbsp;Call&nbsp;f&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;IfLt(x,&nbsp;n,&nbsp;t,&nbsp;f)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fBlk&nbsp;=&nbsp;sprintf&nbsp;"fBlk%d"&nbsp;(id())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;kBlk&nbsp;=&nbsp;sprintf&nbsp;"kBlk%d"&nbsp;(id())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.AddRange[&nbsp;CmpEax&nbsp;n;&nbsp;JumpGE&nbsp;fBlk;&nbsp;PopEax&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.AddRange[&nbsp;Jump&nbsp;kBlk;&nbsp;Label&nbsp;fBlk;&nbsp;PopEax&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.AddRange[&nbsp;Label&nbsp;kBlk&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Return&nbsp;f&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.AddRange[&nbsp;AddEsp&nbsp;8;&nbsp;PopEbx;&nbsp;Ret&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileExpr&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;code.ToArray();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileExpr&nbsp;:&nbsp;Expr&nbsp;-&gt;&nbsp;instruction&lt;string&gt;&nbsp;[]</CODE></P>
+      <P>This part of the compiler is also little more than a big pattern match 
+      but, unlike the assembler, this is a recursive function that compiles 
+      inner expressions before compiling outer expressions.</P>
+      <P>The basic model is that of a stack machine. The match cases for 
+      <CODE>Int</CODE> and <CODE>Arg</CODE> expressions push integer literals 
+      and the function argument, respectively. We use the ebx register to store 
+      the location of the function argument and we permit only one argument and 
+      no locals.</P>
+      <P>These are followed by a special case for expressions that add an 
+      integer literal before the generic case of adding two expressions is 
+      handled by compiling each (leaving the two results on the stack) before 
+      emitting a template consisting of two assembler instructions. The case for 
+      <CODE>Mul</CODE> is similar. Function application causes the argument to 
+      be compiled followed by a <CODE>call</CODE> instruction.</P>
+      <P>The <CODE>if</CODE> expression is the most interesting match case 
+      because it is the only one that generates more instruction blocks. 
+      Firstly, two unique label names are created, one for the false branch and 
+      one for the code after the <CODE>if</CODE> expression. The predicate 
+      subexpression is compiled into the current instruction block followed by a 
+      test and branch to the false label if the predicate is not satisfied 
+      (hence <CODE>IfLt</CODE> causes a <CODE>JumpGE</CODE>). The true branch is 
+      compiled into the current instruction block followed by an unconditional 
+      jump to <CODE>kBlk</CODE> before the <CODE>fBlk</CODE> begins. The false 
+      branch is combined into the <CODE>fBlk</CODE> followed by the 
+      <CODE>kBlk</CODE>.</P>
+      <P>Finally, the <CODE>Return</CODE> expression returns the stack to its 
+      original state before returning.</P>
+      <P>The following <CODE>compileFunction</CODE> function compiles a function 
+      with the given name and body expression:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;compileFunction(name,&nbsp;body)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;yield!&nbsp;[&nbsp;LoadEaxFromEspOffset&nbsp;4;&nbsp;Label&nbsp;name&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;Return&nbsp;body&nbsp;|&gt;&nbsp;compileExpr&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileFunction&nbsp;:&nbsp;string&nbsp;*&nbsp;Expr&nbsp;-&gt;&nbsp;instruction&lt;string&gt;&nbsp;list</CODE></P>
+      <P>Note that a header is emitted first that loads the function's argument 
+      into eax.</P>
+      <H2>An execution engine</H2>
+      <P>Now for the code and allocates executable memory and provides an 
+      interface between F# and the generated code:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;ExecutionEngine</CODE></P>
+      <P>We begin by opening the following namespaces:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Runtime.InteropServices;;</CODE></P>
+      <P>We shall be using one of the possible allocation types:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;AllocationType&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;COMMIT=0x1000u;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;AllocationType&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;COMMIT&nbsp;&nbsp;=&nbsp;&nbsp;4096u</CODE></P>
+      <P>We require memory protection that allows the memory to be read from and 
+      written to as well as executed:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;MemoryProtection&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EXECUTE_READWRITE=0x40u;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MemoryProtection&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;EXECUTE_READWRITE&nbsp;&nbsp;=&nbsp;&nbsp;64u</CODE></P>
+      <P>Freeing the memory requires the following flag:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;FreeType&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DECOMMIT&nbsp;=&nbsp;0x4000u;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;FreeType&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DECOMMIT&nbsp;=&nbsp;0x4000u</CODE></P>
+      <P>The <CODE>VirtualAlloc</CODE> from the kernel32 DLL will be used to 
+      allocate executable memory directly from the OS:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;DllImport("kernel32.dll",&nbsp;SetLastError=true)&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;IntPtr&nbsp;VirtualAlloc(IntPtr&nbsp;lpAddress,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;UIntPtr&nbsp;dwSize,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AllocationType&nbsp;flAllocationType,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MemoryProtection&nbsp;flProtect);;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;VirtualAlloc&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IntPtr&nbsp;*&nbsp;UIntPtr&nbsp;*&nbsp;AllocationType&nbsp;*&nbsp;MemoryProtection&nbsp;-&gt;&nbsp;IntPtr</CODE></P>
+      <P>The <CODE>VirtualFree</CODE> function will be used to free it 
+again:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;DllImport("kernel32.dll",&nbsp;SetLastError=true)&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;bool&nbsp;VirtualFree(IntPtr&nbsp;lpAddress,&nbsp;UIntPtr&nbsp;dwSize,&nbsp;FreeType&nbsp;freeType);;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;VirtualFree&nbsp;:&nbsp;IntPtr&nbsp;*&nbsp;UIntPtr&nbsp;*&nbsp;FreeType&nbsp;-&gt;&nbsp;bool</CODE></P>
+      <P>Next, we declare a delegate that we can use from managed code as a 
+      funtion pointer:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;UnmanagedFunctionPointer(CallingConvention.Cdecl)&gt;]&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Ret1ArgDelegate&nbsp;=&nbsp;delegate&nbsp;of&nbsp;int32&nbsp;-&gt;&nbsp;int32;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Ret1ArgDelegate&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;delegate&nbsp;of&nbsp;int32&nbsp;-&gt;&nbsp;int32</CODE></P>
+      <P>The following <CODE>CompiledFunction</CODE> class encapsulates:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;CompiledFunction(name,&nbsp;body)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;code&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Expr.compileFunction(name,&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;X86CodeGen.simplify<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;X86CodeGen.assemble<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;size&nbsp;=&nbsp;UIntPtr(uint32&nbsp;code.Length)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;allocType&nbsp;=&nbsp;AllocationType.COMMIT<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;protection&nbsp;=&nbsp;MemoryProtection.EXECUTE_READWRITE<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;executableMemory&nbsp;=&nbsp;VirtualAlloc(IntPtr.Zero,&nbsp;size,&nbsp;allocType,&nbsp;protection)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ty&nbsp;=&nbsp;typeof&lt;Ret1ArgDelegate&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;jitedFun&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Marshal.GetDelegateForFunctionPointer(executableMemory,&nbsp;ty)&nbsp;:?&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ret1ArgDelegate<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Marshal.Copy(code,&nbsp;0,&nbsp;executableMemory,&nbsp;code.Length)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Invoke&nbsp;n&nbsp;=&nbsp;jitedFun.Invoke&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Dispose()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;VirtualFree(executableMemory,&nbsp;UIntPtr.Zero,&nbsp;FreeType.DECOMMIT)&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;CompiledFunction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;name:string&nbsp;*&nbsp;body:Expr.Expr&nbsp;-&gt;&nbsp;CompiledFunction<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Invoke&nbsp;:&nbsp;n:int32&nbsp;-&gt;&nbsp;int32<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Note the use of <CODE>IDisposable</CODE> to reclaim the allocated 
+      memory. An alternative would be to use a finalizer.</P>
+      <H2>Examples</H2>
+      <P>Finally, we provide a variety of examples in their own module:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Examples</CODE></P>
+      <P>We begin by opening our three namespaces:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;X86CodeGen<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;ExecutionEngine;;</CODE></P>
+      <P>Our first example is an identity function that simply returns the 
+      integer it is given:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;body&nbsp;=&nbsp;Arg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;identity&nbsp;=&nbsp;new&nbsp;CompiledFunction("identity",&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;input&nbsp;=&nbsp;10<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;output&nbsp;=&nbsp;identity.Invoke&nbsp;input<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%d&nbsp;=&nbsp;%d"&nbsp;input&nbsp;output;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;10&nbsp;=&nbsp;10<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>As expected, this produces the output <CODE>10=10</CODE>.</P>
+      <P>Next, we try using some arithmetic to compute a cubic:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;body&nbsp;=&nbsp;Arg*Arg*Arg&nbsp;-&nbsp;Arg&nbsp;-&nbsp;Int&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;cubic&nbsp;=&nbsp;new&nbsp;CompiledFunction("cubic",&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;input&nbsp;=&nbsp;3<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;output&nbsp;=&nbsp;cubic.Invoke&nbsp;input<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%d^3-%d-1&nbsp;=&nbsp;%d"&nbsp;input&nbsp;input&nbsp;output;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;3^3-3-1&nbsp;=&nbsp;23<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>Sure enough, <CODE>3^3-3-1=23</CODE>.</P>
+      <P>Arithmetic is nice but programs start to get interesting when 
+      conditionals and recursion get involved. Our compiler must then generate 
+      instruction blocks and jumps between them correctly. The next example is a 
+      recursive implementation of factorial:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;body&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IfLt(Arg,&nbsp;1,&nbsp;Int&nbsp;1,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Arg&nbsp;*&nbsp;Apply("factorial",&nbsp;Arg&nbsp;+&nbsp;Int&nbsp;-1))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;factorial&nbsp;=&nbsp;new&nbsp;CompiledFunction("factorial",&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;10<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;nFactorial&nbsp;=&nbsp;factorial.Invoke&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%d!&nbsp;=&nbsp;%d"&nbsp;n&nbsp;nFactorial;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;10!&nbsp;=&nbsp;3628800<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>To check this answer we can replicate the behaviour in F# itself:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;factorial&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;&lt;&nbsp;1&nbsp;then&nbsp;1&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n*factorial(n-1);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;factorial&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;factorial&nbsp;10;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;3628800</CODE></P>
+      <P>Sure enough, our compiler is generating code that produces the correct 
+      answer.</P>
+      <P>Finally, we compute the 40th Fibonacci number using a recursive 
+      algorithm to test the performance of the generated code:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;body&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IfLt(Arg,&nbsp;2,&nbsp;Arg,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Apply("fib",&nbsp;Arg&nbsp;+&nbsp;Int&nbsp;-1)&nbsp;+&nbsp;Apply("fib",&nbsp;Arg&nbsp;+&nbsp;Int&nbsp;-2))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;fib&nbsp;=&nbsp;new&nbsp;CompiledFunction("fib",&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;40<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fibn&nbsp;=&nbsp;fib.Invoke&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"fib&nbsp;%d&nbsp;=&nbsp;%d"&nbsp;n&nbsp;fibn;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;fib&nbsp;40&nbsp;=&nbsp;102334155<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:04.544,&nbsp;CPU:&nbsp;00:00:04.555,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>Here is the same calculation in F#:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;fib&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&lt;2&nbsp;then&nbsp;n&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fib(n-1)+fib(n-2);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fib&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;fib&nbsp;40;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:04.572,&nbsp;CPU:&nbsp;00:00:04.570,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;102334155</CODE></P>
+      <P>Not only is the answer correct but our JIT compiler has produced 
+      competitively-performant code!</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a tiny x86 
+      native code JIT compiler that is capable of compiling a variety of 
+      interesting little functions.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of code 
+      generation in the context of building new virtual 
+  machines.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20writing%20an%20x86%20JIT%20compiler_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

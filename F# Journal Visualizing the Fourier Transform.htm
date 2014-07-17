@@ -1,0 +1,323 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0074)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/fft2.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Visualizing the Fourier Transform</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Visualizing the Fourier Transform</TITLE>     
+<LINK href="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Visualizing the Fourier Transform</H1>
+      <P>The Fourier transform is one of the most important numerical methods 
+      and underpins most forms of spectral analysis. This article describes a 
+      simple image compression technique that uses the Fast Fourier Transform 
+      (FFT) to remove the high-frequency components of an image. The 2D FFT is 
+      efficiently parallelized and the resulting application provides a WPF GUI 
+      allowing the user to control the accuracy of the approximation.</P>
+      <H2>Radix-2 FFT</H2>
+      <P>A previous F#.NET Journal article described the efficient 
+      Danielson-Lanczos algorithm for computing the FFT and the Bluestein 
+      convolution as a method of generalizing the transform so that it can be 
+      applied to any number of samples. Rather than repeat the subject matter, 
+      this article assumes an integral power of two number of samples and uses 
+      the simpler radix-2 FFT in order to focus on the 2D transform and its 
+      subsequent use in this context.</P>
+      <P>The in-place radix-2 FFT algorithm is easily written in F#:</P>
+<PRE>&gt; #r "FSharp.PowerPack.dll";;
+--&gt; Referenced 'C:\Program Files\FSharp-1.9.6.16\bin\FSharp.PowerPack.dll'</PRE>
+<PRE>&gt; open Microsoft.FSharp.Math;;</PRE>
+<PRE>&gt; let rec fft dir (zs: _ array) =
+    match zs with
+    | [||] | [|_|] -&gt; ()
+    | _ -&gt;
+        let n = zs.Length
+        let zs1 = Array.init (n/2) (fun i -&gt; zs.[2*i])
+        let zs2 = Array.init (n/2) (fun i -&gt; zs.[2*i + 1])
+        fft dir zs1
+        fft dir zs2
+        let s = float dir * 2.0 * System.Math.PI
+        for k=0 to n/2 - 1 do
+          let t = s * float k / float n
+          let z1, z2 = zs1.[k], zs2.[k] * complex (cos t) (sin t)
+          zs.[k] &lt;- z1 + z2
+          zs.[k + n/2] &lt;- z1 - z2;;
+val fft : int -&gt; Complex array -&gt; unit</PRE>
+      <P>This function recursively decomposes an              <I>n</I> sample 
+      transform into two              <I>n/2</I> sample transforms until the 
+      base cases of an empty transform or the transform of a single element are 
+      reached.           </P>
+      <P>This is less efficient than the Danielson-Lanczos algorithm detailed in 
+      the previous article:</P>
+<PRE>&gt; let zs = Array.create 1048576 (complex 0.0 0.0);;
+val zs : complex array =
+  [|0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i;
+    0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; 0r+0i; ...|]</PRE>
+<PRE>&gt; #time;;</PRE>
+<PRE>--&gt; Timing now on</PRE>
+<PRE>&gt; fft 1 zs;;
+Real: 00:00:02.232, CPU: 00:00:02.293, GC gen0: 64, gen1: 20, gen2: 0
+val it : unit = ()</PRE>
+      <P>However, the radix-2 algorithm is much more amenable to parallelization 
+      because the two recursive calls to              <CODE>fft</CODE> are 
+      independent and may be performed simultaneously:           </P>
+<PRE>      if n &lt; 65536 then
+        fft dir zs1
+        fft dir zs2
+      else
+        let f = Tasks.Future.Create(fun () -&gt; fft dir zs1)
+        fft dir zs2
+        f.Value</PRE>
+      <P>For our application, the performance of this serial implementation is 
+      adequate because the 2D FFT exposes parallelism on a broader scale.</P>
+      <P>A function to compute a 1D FFT of an arbitrary sequence may be written 
+      by copying the sequence into an array, applying the              
+      <CODE>fft</CODE> function and then writing the results out with a scaling 
+      factor to preserve the L             <SUP>2</SUP> norm of the signal:      
+           </P>
+<PRE>&gt; let inline fourier_1d dir n get set =
+    let zs = Array.init n get
+    fft dir zs
+    let scale = 1.0 / sqrt(float n)
+    for i=0 to n-1 do
+      set i (scale * zs.[i]);;
+val inline fourier_1d :
+  int -&gt; int -&gt; (int -&gt; Complex) -&gt; (int -&gt; Complex -&gt; unit) -&gt; unit</PRE>
+      <H2>2D FFT</H2>
+      <P>The 2D FFT is easily expressed in terms of the 1D FFT as the FFTs of 
+      the rows of a matrix and then the columns of the matrix (or vice-versa). 
+      This is easily implemented in F# using the              
+      <CODE>fourier_1d</CODE> function from the previous section:           </P>
+<PRE>&gt; let fourier_2d dir (zs: complex [,]) =
+    let m, n = zs.GetLength 0, zs.GetLength 1
+    for i=0 to m-1 do
+      fourier_1d dir n (fun j -&gt; zs.[i, j]) (fun j z -&gt; zs.[i, j] &lt;- z))
+    for j=0 to n-1 do
+      fourier_1d dir m (fun i -&gt; zs.[i, j]) (fun i z -&gt; zs.[i, j] &lt;- z));;
+val fourier_2d : int -&gt; complex [,] -&gt; unit</PRE>
+      <P>This 2D FFT algorithm is even easier to parallelize than the radix-2 
+      algorithm. The two              <CODE>for</CODE> loops have independent 
+      bodies and, consequently, may be converted directly into parallel          
+          <CODE>for</CODE> loops using the higher-order              
+      <CODE>Parallel.For</CODE> function provided by the Task Parallel Library:  
+               </P>
+<PRE>&gt; #r "System.Threading.dll";;</PRE>
+<PRE>&gt; open System.Threading;;</PRE>
+<PRE>&gt; let fourier_2d dir (zs: complex [,]) =
+    let m, n = zs.GetLength 0, zs.GetLength 1
+    Parallel.For(0, m, fun i -&gt;
+      fourier_1d dir n (fun j -&gt; zs.[i, j]) (fun j z -&gt; zs.[i, j] &lt;- z))
+    Parallel.For(0, n, fun j -&gt;
+      fourier_1d dir m (fun i -&gt; zs.[i, j]) (fun i z -&gt; zs.[i, j] &lt;- z));;
+val fourier_2d : int -&gt; complex [,] -&gt; unit</PRE>
+      <P>This              <CODE>fourier_2d</CODE> function computes the 2D FFT 
+      of the given 2D .NET array of complex numbers using the given direction    
+                <CODE>dir</CODE> and is the core numerical method in the 
+      application detailed in the remainder of this article.           </P>
+      <H2>Visualization</H2>
+      <P>The most compelling visualization of this technique is to allow the 
+      user to control the accuracy of the approximation interactively, updating 
+      the view of the image in real time as the parameter is altered. This turns 
+      out to be quite easy using WPF.</P>
+      <P>The following function deconstructs a given image into an array of      
+              <CODE>complex</CODE> values representing the intensities:          
+       </P>
+<PRE>&gt; #r "PresentationCore.dll";;
+--&gt; Referenced 'c:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0\
+PresentationCore.dll'</PRE>
+<PRE>&gt; #r "PresentationFramework.dll";;
+--&gt; Referenced 'c:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0\
+PresentationFramework.dll'</PRE>
+<PRE>&gt; #r "WindowsBase.dll";;
+--&gt; Referenced 'c:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0\
+WindowsBase.dll'</PRE>
+<PRE>&gt; let deconstruct (image: Imaging.BitmapImage) =
+    let w, h = image.PixelWidth, image.PixelHeight
+    let bpp = image.Format.BitsPerPixel / 8
+    let pixel = Array.create (w * h * bpp) 0uy
+    image.CopyPixels(pixel, w * bpp, 0)
+    Array2D.init h w (fun i j -&gt;
+      complex (float pixel.[(i * w + j)*bpp]) 0.0);;
+val deconstruct : Imaging.BitmapImage -&gt; complex array array</PRE>
+      <P>This program is designed to work with grayscale images but we have been 
+      careful to account for any number of bits per pixel and extract the first 
+      bytes for each pixel (which might be the red channel in the case of a full 
+      color image).</P>
+      <P>Rather that drop frequency components programmatically, we shall create 
+      a lookup table that lists the components in increasing frequency:</P>
+<PRE>&gt; let points m n =
+    let sqr i = i * i
+    let f n i = if i &gt; n/2 then n-i else i
+    Array.sortBy (fun (i, j) -&gt; sqr(f m i) + sqr(f n j))
+      [|for i in 0..m-1 do
+          for j in 0..n-1 do
+            yield i, j|];;
+val points : int -&gt; int -&gt; (int * int) array</PRE>
+      <P>Note that the frequency of a component in 2D is its distance to the 
+      nearest corner of the matrix.</P>
+      <P>For example, the lowest frequency components for a 256×256 matrix are 
+      at the coordinates:</P>
+<PRE>&gt; points 256 256;;
+val points : (int * int) array =
+  [|(0, 0); (0, 255); (1, 0); (255, 0); (0, 1); (255, 255); (1, 1); (255, 1);
+    (1, 255); (0, 254); (2, 0); (254, 0); (0, 2); (2, 1); (255, 254); (255, 2);
+    (254, 255); (2, 255); (254, 1); (1, 2); (1, 254); (2, 2); (254, 2);
+    (254, 254); (2, 254); (0, 3); (0, 253); (253, 0); (3, 0); (3, 255);
+    (255, 253); (1, 3); (3, 1); (255, 3); (1, 253); (253, 255); (253, 1);
+    (3, 254); (253, 254); (254, 3); (3, 2); (253, 2); (2, 3); (2, 253);
+    (254, 253); (4, 0); (252, 0); (0, 252); (0, 4); (252, 255); (255, 4);
+    (4, 1); (1, 252); (252, 1); (1, 4); (4, 255); (255, 252); (253, 3); (3, 3);
+    (253, 253); (3, 253); (254, 4); (254, 252); (252, 2); (2, 4); (252, 254);
+    (2, 252); (4, 254); (4, 2); (0, 251); (253, 4); (251, 0); (3, 252);
+    (253, 252); (4, 3); (252, 3); (0, 5); (5, 0); (3, 4); (4, 253); (252, 253);
+    (1, 251); (251, 255); (255, 251); (1, 5); (5, 1); (255, 5); (5, 255);
+    (251, 1); (251, 2); (2, 5); (251, 254); (5, 254); (254, 251); (5, 2);
+    (2, 251); (254, 5); (4, 4); (252, 252); (4, 252); ...|]</PRE>
+      <P>The following function reconstructs an image using the first            
+        <CODE>k</CODE> lowest-frequency components of the FFT:           </P>
+<PRE>&gt; let reconstruct (points: (int * int) array) (zs: complex [,]) k =
+    let h, w = zs.GetLength 0, zs.GetLength 1
+    let zs' = Array2D.create h w Complex.Zero
+    for i, j in Array.sub points 0 k do
+      zs'.[i, j] &lt;- zs.[i, j]
+    fourier_2d -1 zs'
+    let pixel = Array.create (h * w) 0uy
+    for i=0 to h-1 do
+      for j=0 to w-1 do
+        let x = zs'.[i,j].RealPart
+        pixel.[i * w + j] &lt;- byte(max 0.0 (min 255. x))
+    Imaging.BitmapSource.Create(w, h, 1.0, 1.0, PixelFormats.Gray8, null, pixel, w);;
+val reconstruct :
+  (int * int) array -&gt; complex [,] -&gt; int -&gt; Imaging.BitmapSource</PRE>
+      <P>Finally, the following main program pulls everything together with a 
+      GUI:</P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    let file = Microsoft.Win32.OpenFileDialog()
+    if not &lt;| unbox(file.ShowDialog()) then exit 0</PRE>
+<PRE>    let image = Imaging.BitmapImage(System.Uri file.FileName)
+    let pixel = deconstruct image
+    let m, n = pixel.GetLength 0, pixel.GetLength 1
+    fourier_2d 1 pixel
+    
+    let label = Controls.Label(Content="100%", Width=100.)</PRE>
+<PRE>    let size = float m * float n
+    let slider = Controls.Slider(Minimum=1., Maximum=size, Value=size)
+    slider.SmallChange &lt;- 256.0
+    
+    let points = points m n
+    
+    let view = Controls.Image(Stretch=Stretch.Uniform)
+    view.Source &lt;- reconstruct points pixel (m * n)
+    
+    let panel = Controls.DockPanel(Margin=Thickness 11.)
+    let add control position =
+      Controls.DockPanel.SetDock(control, position)
+      panel.Children.Add control |&gt; ignore
+    add slider Controls.Dock.Top
+    add label Controls.Dock.Top
+    add view Controls.Dock.Bottom
+    
+    let window = Window(Content=panel, Margin=Thickness 11.)
+    window.Title &lt;- "Image compression via Fast Fourier Transform"</PRE>
+<PRE>    slider.ValueChanged.Add(fun e -&gt;
+      let k = int e.NewValue
+      label.Content &lt;- sprintf "%0.0f%%" (100. * float k / size)
+      view.Source &lt;- reconstruct points pixel k)</PRE>
+<PRE>    ignore((Application()).Run window);;</PRE>
+      <P>This asks the user to locate the image file using an open file dialog, 
+      loads the file from disk, deconstructs it and computes its FFT. Then a GUI 
+      is built with a slider to allow the user to alter              
+      <CODE>k</CODE> , a label to indicate the exact proportion of rows being 
+      used in the reconstruction and an image control that is used to visualize 
+      the current approximant of the original image. These are placed vertically 
+      in a DockPanel so that the image fills the remainder of the window. 
+      Finally, a callback is added to the slider in order to update the view of 
+      the image when the parameter is altered by the user.           </P>
+      <H2>Results</H2>
+      <P>We used the pedagogical 256×256 grayscale Lena image from the study of 
+      image processing. The exact representation with 100% of the Fourier 
+      components looks like this:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/lena100.gif"> 
+                  </P>
+      <P></P>
+      <P>Half of the Fourier components can be dropped without significantly 
+      degrading most of the image:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/lena50.gif"> 
+                  </P>
+      <P></P>
+      <P>Retaining only 10% of the Fourier components gives a noticeably blurry 
+      image:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/lena10.gif"> 
+                  </P>
+      <P></P>
+      <P>Note how this technique introduces waves around all of the sharp edges 
+      in the image. The visibility of these waves is a manifestation of          
+          <A href="http://en.wikipedia.org/wiki/Gibbs_phenomenon">Gibbs 
+      phenomenon</A> and may only be reduced or eliminated through the use of 
+      more sophisticated spectral methods such as the wavelet transform.         
+        </P>
+      <P>Using only 1% of the Fourier components gives a very blurry but still 
+      recognizable image:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/lena1.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has demonstrated how powerful numerical methods can be 
+      implemented succinctly and efficiently in the F# programming language and 
+      coupled with responsive interactive visualizations using Windows 
+      Presentation Foundation to create compelling demonstrations.</P>
+      <P>Future F#.NET Journal articles will revisit the topics of spectral 
+      methods, interactive visualization and data 
+compression.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Visualizing%20the%20Fourier%20Transform_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

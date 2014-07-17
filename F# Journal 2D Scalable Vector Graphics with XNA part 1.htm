@@ -1,0 +1,463 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0078)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/vector2d.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: 2D Scalable Vector Graphics with XNA: part 1</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: 2D Scalable Vector Graphics with XNA: part 
+1</TITLE>     <LINK href="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>2D Scalable Vector Graphics with XNA: part 1</H1>
+      <P>Vector graphics represent images in terms of lines and curves on a 
+      fictional canvas. This resolution-independent representation is ideal for 
+      high resolution output devices such as printers but the inevitable march 
+      of technology has ossified vector graphics on the desktop as a fundamental 
+      component of both Apple's and Microsoft's latest graphical user 
+      interfaces. Vector graphics are best represented as trees and manipulated 
+      using recursion. Consequently, F# is an extremely powerful tool for 
+      writing programs that manipulate vector graphics. This article describes 
+      the design and implementation of a simple library for 2D vector graphics 
+      written in F# and using XNA for visualization. This would be ideal for 
+      games that include 2D graphics with lots of zooming.</P>
+      <H2>Introduction</H2>
+      <P>The PostScript and PDF file formats are perhaps the best-known forms of 
+      vector graphics. The single most important benefit of vector graphics is 
+      the ability to zoom into images without incurring the blockiness inherent 
+      in pixmap formats such as JPEG, PNG and GIF.</P>
+      <P>Unusually, the PostScript format is actually a complete programming 
+      language capable of arbitrary computation. Years ago, many PostScript 
+      users wrote in this language by hand in order to generate diagrams and 
+      images for their documents.</P>
+      <P>The following excerpt from a PostScript vector graphic illustrates the 
+      core features of this format:</P>
+<PRE>newpath
+100 200 moveto
+200 250 lineto
+100 300 lineto
+closepath
+gsave
+0.5 setgray
+fill
+grestore
+4 setlinewidth
+0.75 setgray
+stroke</PRE>
+      <P>This is quite a readable format. The              <CODE>newpath</CODE> 
+      command denotes the start of a new path. A path is composed of line and 
+      curve segments. The              <CODE>moveto</CODE> instruction moves a 
+      fictional pen to the given location on a 2D plane and the subsequent       
+             <CODE>lineto</CODE> commands describe the outline of a shape. The 
+      path is closed, saved and filled before being restored and then stroked 
+      with a pen of the specified width.           </P>
+      <P>In this article, we shall develop a simple vector graphics renderer 
+      that provides the core functionality required to draw such vector 
+      graphics. In particular, we shall implement only the filling of (possibly 
+      non-concave) vector shapes.</P>
+      <P>Our program is composed of the following modules:</P>
+      <P>
+      <UL>
+        <LI>Segment module for straight line and cubic Bezier path 
+segments.</LI>
+        <LI>Contour module for open and closed paths of segments.</LI>
+        <LI>Tux module containing an example vector graphic of Linux logo.</LI>
+        <LI>Main program responsible for interoperating with XNA including 
+        vertex and pixel shaders and user interaction.</LI></UL>
+      <P></P>
+      <P>Let's examine each of these modules in turn.</P>
+      <H2>Path segments</H2>
+      <P>We begin with a              <CODE>Segment</CODE> module that we shall 
+      put in a separate Segment.fs file in order to structure the whole F# 
+      project nicely. The source code for this module is as follows:           
+      </P>
+<PRE>open Microsoft.Xna.Framework
+open Microsoft.Xna.Framework.Graphics</PRE>
+<PRE>type t =
+  | Line of Vector2
+  | Bezier of Vector2 * Vector2 * Vector2</PRE>
+<PRE>let point_to_line (a: Vector2) b c =
+  let ab = b - a
+  let lambda = Vector2.Dot(c - a, ab)
+  let lambda = max 0.f (min 1.f lambda)
+  let d = a + lambda * ab
+  (c - d).Length()</PRE>
+<PRE>let deviation s c1 c2 e =
+  max (point_to_line s e c1) (point_to_line s e c2)</PRE>
+<PRE>let private combine t (r1: Vector2) (r2: Vector2) =
+  t * r1 + (1.f - t) * r2</PRE>
+<PRE>let rec flatten_bezier delta f s1 c1 c2 e =
+  if deviation s1 c1 c2 e &lt; delta then f e else
+    let t = 0.5f
+    let b0, b1, b2 = combine t s1 c1, combine t c1 c2, combine t c2 e
+    let bb0, bb1 = combine t b0 b1, combine t b1 b2
+    let bbb = combine t bb0 bb1
+    flatten_bezier delta f s1 b0 bb0 bbb
+    flatten_bezier delta f bbb bb1 b2 e</PRE>
+<PRE>let flatten delta f s seg =
+  match seg with
+  | Line e -&gt; f e
+  | Bezier(c1, c2, e) -&gt; flatten_bezier delta f s c1 c2 e</PRE>
+<PRE>let get_end (Line e | Bezier(_, _, e)) = e</PRE>
+      <P>This is written in a classic OCaml style using a type called            
+        <CODE>Segment.t</CODE> to represent segments. This variant type contains 
+      lines and Bezier curves. Bezier curves are parametric in both              
+      <I>x</I> and              <I>y</I> and, in this case, we have decided to 
+      allow two control points so the curves are cubics. Note that the start 
+      point of a segment is implicit because it will be the end point of the 
+      previous segment in the path.           </P>
+      <P>The              <CODE>point_to_line</CODE> function computes the 
+      distance from the point              <CODE>c</CODE> to a finite line from  
+                  <CODE>a</CODE> to              <CODE>b</CODE> . Note that we 
+      are using the              <CODE>Vector2</CODE> type from XNA to represent 
+      coordinates.           </P>
+      <P>The              <CODE>deviation</CODE> function computes the maximum 
+      deviation of a Bezier curve              <CODE>(s, c1, c2, e)</CODE> from 
+      its straight-line approximant              <CODE>(s, e)</CODE> . Bezier 
+      curves are bounded by the convex hull of their start, end and control 
+      points so the maximum deviation cannot be greater than the distance from 
+      the line to either control point. We use this to calculate an upper bound 
+      on the deviation.           </P>
+      <P>The              <CODE>combine</CODE> function linearly interpolates 
+      from              <CODE>r2</CODE> to              <CODE>r1</CODE> using 
+      the parameter              <CODE>t</CODE> which is in the range 0..1.      
+           </P>
+      <P>The              <CODE>flatten_bezier</CODE> function recursively 
+      subdivides a Bezier curve, splitting it at its parametric coordinate t=0.5 
+      to create two Bezier curves that are subdivided until the deviation of the 
+      curve from its straight-line approximate is sufficiently small (subpixel) 
+      that the curve can be approximated to sufficient accuracy. This is a 
+      higher-order function similar to              <CODE>iter</CODE> that 
+      applies its function argument              <CODE>f</CODE> to point along 
+      the flattened approximant in turn.           </P>
+      <P>The              <CODE>flatten</CODE> function handles segments, 
+      returning lines immediately and using the              
+      <CODE>flatten_bezier</CODE> function to flatten curves.           </P>
+      <P>The              <CODE>get_end</CODE> function returns the end point of 
+      either kind of segment. Note that this is accomplished entirely using the 
+      pattern match in the argument of the function.           </P>
+      <H2>Paths</H2>
+      <P>Paths are sequences of segments. In the interests of generality, our 
+      representation of paths will handle both open and closed paths, although 
+      the renderer will only render the interiors of paths and, therefore, 
+      handles only closed paths:</P>
+<PRE>open Microsoft.Xna.Framework
+open Microsoft.Xna.Framework.Graphics</PRE>
+<PRE>type t =
+  | Open of Vector2 * Segment.t list
+  | Closed of Segment.t list</PRE>
+<PRE>let flatten_aux delta f s seg =
+  Segment.flatten delta f s seg
+  Segment.get_end seg</PRE>
+<PRE>let flatten delta f = function
+  | Open(s, segs) -&gt;
+      f s
+      List.fold (flatten_aux delta f) s segs
+      |&gt; ignore
+  | Closed [] -&gt; ()
+  | Closed(seg::segs) -&gt;
+      let s = Segment.get_end seg
+      let s = List.fold (flatten_aux delta f) s segs
+      Segment.flatten delta f s seg</PRE>
+      <P>Again, we use a type              <CODE>t</CODE> to represent the core 
+      data structure.           </P>
+      <P>The              <CODE>flatten_aux</CODE> function is an auxiliary 
+      function designed to be folded over a sequence of segments, flattening 
+      each in turn and accumulating the start point of the next segment as the 
+      end point of the previous segment.           </P>
+      <P>The              <CODE>flatten</CODE> function flattens an entire path 
+      by flattening each segment in turn. Open paths have an explicit start 
+      point. Closed paths start from the second segment, with the fold returning 
+      the end point of the last segment that is then used to flatten the first 
+      segment. Note how pattern matching is used to handle the both an empty 
+      closed path in one match case and to destructure the path, extracting the 
+      first segment, in the general case for a closed path.           </P>
+      <H2>Vertex and Pixel shader</H2>
+      <P>We define an XNA effect called              <CODE>Flat</CODE> that 
+      implements simple vertex and pixel shaders that simply transform the 2D 
+      position and copy the color information:           </P>
+<PRE>let hlsl =
+  "
+float4x4 view;
+float4x4 projection;</PRE>
+<PRE>struct Vertex
+{
+    float4 Position : POSITION;
+    float4 Color    : COLOR0;
+};</PRE>
+<PRE>Vertex VertexShader(float2 position : POSITION,
+                    float4 color : COLOR)
+{
+     Vertex output;
+     float4x4 wvp = mul(view, projection);
+     
+     output.Position = mul(float4(position, 0.0, 1.0), wvp);
+     output.Color = color;</PRE>
+<PRE>     return output;
+}</PRE>
+<PRE>float4 PixelShader(Vertex vertex) : COLOR0
+{
+	return vertex.Color;
+}</PRE>
+<PRE>technique Flat
+{
+	pass Pass0
+	{   
+		VertexShader = compile vs_2_0 VertexShader();
+		PixelShader  = compile ps_2_0 PixelShader();
+	}
+}"</PRE>
+      <H2>Main program</H2>
+      <P>We begin by defining a              <CODE>Vertex</CODE> struct type 
+      with a              <CODE>VertexElements</CODE> static member that XNA 
+      requires to handle custom vertex arrays:           </P>
+<PRE>open Microsoft.Xna.Framework
+open Microsoft.Xna.Framework.Input
+open Microsoft.Xna.Framework.Graphics</PRE>
+<PRE>type Vertex = struct
+  val Position : Vector2
+  val Color : Color
+  new(p, n, c) = { Position = p; Color = c }
+  
+  static member VertexElements =
+    let vec2 = VertexElementFormat.Vector2
+    let vec = VertexElementFormat.Color
+    let m = VertexElementMethod.Default
+    let o n = sizeof&lt;float32&gt; * n |&gt; int16
+    [|
+      VertexElement(0s, o 0, vec2, m, VertexElementUsage.Position, 0uy);
+      VertexElement(0s, o 2, vec, m, VertexElementUsage.Color, 0uy);
+    |]
+end</PRE>
+      <P>In this case, a vertex is simply a 2D position and a color.</P>
+      <P>The non-trivial aspect of rendering 2D vector graphics is handling 
+      non-concave polygons. There are two main solutions to this problem:</P>
+      <P>
+      <OL>
+        <LI>Tesselate the flattened path into a set of non-overlapping triangles 
+        in software and render them in hardware.</LI>
+        <LI>Use the hardware stencil buffer to determine coverage on a per-pixel 
+        basis.</LI></OL>
+      <P></P>
+      <P>The rule of thumb is that off-loading as much computation as possible 
+      onto the dedicated hardware of the graphics subsystem generally improves 
+      performance. However, that is not necessarily the case here. Firstly, the 
+      hardware stencil buffer solution is performing simple computations in 
+      parallel per pixel whereas the software tesselation solution is performing 
+      more complicated computations but only per triangle. Secondly, when 
+      animating 2D vector graphics there is high probability that a 
+      software-generated tesselation that was accurate enough from one frame of 
+      animation will still be accurate enough in the next. Consequently, a 
+      production-quality vector graphics implementation is likely to consider 
+      both solutions. However, we shall only implement the hardware-based 
+      solution here in the interests of simplicity because software tesselation 
+      is an extremely complicated subject.</P>
+      <P>Rendering vector graphics using the stencil buffer requires us to be 
+      able to render into the stencil buffer and not the color buffer. Thus, we 
+      use the two following functions to disable and enable rendering to the 
+      color buffer:</P>
+<PRE>let draw_disable (s: RenderState) =
+  s.AlphaBlendEnable &lt;- true
+  s.SourceBlend &lt;- Blend.Zero
+  s.DestinationBlend &lt;- Blend.One</PRE>
+<PRE>let draw_enable (s: RenderState) =
+  s.AlphaBlendEnable &lt;- false
+  s.SourceBlend &lt;- Blend.One
+  s.DestinationBlend &lt;- Blend.Zero</PRE>
+      <P>The following function renders a user vertex array as a triangle 
+      fan:</P>
+<PRE>let draw_trianglefan (gd: GraphicsDevice) (vertex: Vertex array) =
+  gd.DrawUserPrimitives(PrimitiveType.TriangleFan, vertex, 0, vertex.Length - 2)</PRE>
+      <P>XNA applications are implemented as a class derived from the XNA        
+            <CODE>Game</CODE> class:           </P>
+<PRE>type Tux() as this =
+  inherit Game()</PRE>
+      <P>Our class includes private data for the graphics device manager, 
+      effect, vertex declaration, projection and view matrices and the vertex 
+      array that will be rendered as well as a              <CODE>drag</CODE> 
+      option type used for user interaction:           </P>
+<PRE>  let mutable graphics : GraphicsDeviceManager = null
+  let mutable effect : Effect = null
+  let mutable vertexDeclaration : VertexDeclaration = null
+  let mutable projection = Matrix.Identity
+  let mutable view = Matrix.Identity
+  let vertex =
+    [|for color, paths in Tux.scene do
+        for path in paths do
+          let vertex = Microsoft.FSharp.Collections.ResizeArray()
+          Path.flatten 1.f (fun e -&gt; vertex.Add(Vertex(e, Vector3.Zero, color))) path
+          if vertex.Count &gt; 0 then vertex.Add vertex.[0]
+          yield vertex.ToArray()|]
+  let mutable drag = None</PRE>
+      <P>We are using an implicit class constructor so the initialization code 
+      for our class is placed in a              <CODE>do</CODE> block:           
+      </P>
+<PRE>  do
+    graphics &lt;- new GraphicsDeviceManager(this)
+    graphics.PreferredDepthStencilFormat &lt;- DepthFormat.Depth24Stencil8
+    this.IsMouseVisible &lt;- true</PRE>
+      <P>XNA calls our              <CODE>Initialize</CODE> member once it has 
+      been initialized:           </P>
+<PRE>  override this.Initialize() =
+    base.Initialize()
+    let gd = graphics.GraphicsDevice
+    let opts = CompilerOptions.None
+    let compiled =
+      let platform = TargetPlatform.Windows
+      Effect.CompileEffectFromSource(hlsl, [||], null, opts, platform)
+    if not compiled.Success then
+      printf "%s\n" compiled.ErrorsAndWarnings
+      exit 1
+    effect &lt;- new Effect(gd, compiled.GetEffectCode(), opts, null)
+    vertexDeclaration &lt;-
+      let elts = Vertex.VertexElements
+      new VertexDeclaration(gd, elts)</PRE>
+      <P>Note that we print any errors from the shader programs to the 
+      console.</P>
+      <P>The              <CODE>Update</CODE> member is called by XNA as an idle 
+      callback and is used to update state, in this case any user interaction:   
+              </P>
+<PRE>  override this.Update t =
+    base.Update t
+    let s = Input.Mouse.GetState()
+    let v = Vector2(float32 s.X, float32 s.Y)
+    match drag with
+    | None -&gt;
+        if s.LeftButton = ButtonState.Pressed then
+          drag &lt;- Some(view, v)
+    | Some(oview, u) -&gt;
+        let unproject (u: Vector2) =
+          let u = Vector3(u.X, u.Y, 0.0f)
+          let vp = graphics.GraphicsDevice.Viewport
+          vp.Unproject(u, projection, view, Matrix.Identity)
+        let d = unproject v - unproject u
+        view &lt;- oview * Matrix.CreateTranslation(d.X, d.Y, 0.f)
+        if s.LeftButton = ButtonState.Released then
+          drag &lt;- None</PRE>
+      <P>The user dragging the scene around with the mouse is represented by a 
+      simple state machine, with the state stored in the mutable              
+      <CODE>drag</CODE> option type. Pattern matching makes this logic 
+      programming very clear.           </P>
+      <P>If no drag is in progress then a drag is started if the left mouse 
+      button is pressed. The drag records the current view matrix and mouse 
+      coordinate.</P>
+      <P>If a drag is in progress then the old and new mouse coordinates are 
+      unprojected into world space in order to determine how far the drag has 
+      displaced the scene. The current view matrix is then updated from the old 
+      view matrix and this displacement. If the mouse is now released then the 
+      drag is cancelled.</P>
+      <P>The              <CODE>Draw</CODE> member handles the gory details of 
+      rendering, starting with clearing the color buffer to white:           
+</P>
+<PRE>  override this.Draw t =
+    base.Draw t
+    let gd = graphics.GraphicsDevice
+    gd.Clear Color.White</PRE>
+      <P>The projection matrix is then set to an offset orthographic 
+      projection:</P>
+<PRE>    projection &lt;-
+      let bound = this.Window.ClientBounds
+      let w, h = float32 bound.Width, float32 bound.Height
+      let s = max w h / min w h
+      Matrix.CreateOrthographicOffCenter(-s * w, s * w, -s * h, s * h, -1.f, 1.f)</PRE>
+      <P>Next, we enable the stencil buffer and initialize the vertex 
+      declaration, cull mode, technique and its parameters before looping over 
+      the techniques (only one in this case):</P>
+<PRE>    let s = gd.RenderState</PRE>
+<PRE>    s.StencilEnable &lt;- true
+    
+    gd.VertexDeclaration &lt;- vertexDeclaration
+    s.CullMode &lt;- CullMode.None
+    effect.CurrentTechnique &lt;- effect.Techniques.["Flat"]
+    effect.Parameters.["view"].SetValue(view)
+    effect.Parameters.["projection"].SetValue(projection)
+    effect.Begin()
+    for pass in effect.CurrentTechnique.Passes do
+      pass.Begin()</PRE>
+      <P>Then we loop over each path in the vector scene:</P>
+<PRE>      for vertex in vertex do</PRE>
+      <P>We clear the stencil buffer:</P>
+<PRE>        gd.Clear(ClearOptions.Stencil, Color.Black, 0.f, 0)</PRE>
+      <P>We disable drawing to the color buffer and render the path as a 
+      triangle fan into the stencil buffer, inverting the state of the stencil 
+      buffer every time a pixel is rendered:</P>
+<PRE>        draw_disable s
+        s.StencilFunction &lt;- CompareFunction.Always
+        s.StencilFail &lt;- StencilOperation.Keep
+        s.StencilDepthBufferFail &lt;- StencilOperation.Keep
+        s.StencilPass &lt;- StencilOperation.Invert
+        s.StencilMask &lt;- -1
+        draw_trianglefan gd vertex</PRE>
+      <P>This has left non-zeros in the stencil buffer for any pixels that are 
+      "inside" our path. Finally, we render the pixels inside our path by 
+      enabling the color buffer but setting the stencil mode such that only 
+      pixels with non-zero values are filled:</P>
+<PRE>        draw_enable s
+        s.StencilFunction &lt;- CompareFunction.NotEqual
+        s.StencilFail &lt;- StencilOperation.Keep
+        s.StencilDepthBufferFail &lt;- StencilOperation.Keep
+        s.StencilPass &lt;- StencilOperation.Keep
+        s.StencilMask &lt;- -1
+        draw_trianglefan gd vertex</PRE>
+<PRE>      pass.End()
+    effect.End()</PRE>
+      <P>Finally, we write the main program that constructs our class and called 
+      its              <CODE>Run</CODE> member to run the XNA program:           
+      </P>
+<PRE>do
+  use game = new Tux()
+  game.Window.AllowUserResizing &lt;- true
+  game.Run()</PRE>
+      <H2>Results</H2>
+      <P>When run, this program renders the following image and allows the user 
+      to drag the image around:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/tux.png"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has described a remarkably simple program that uses XNA 
+      and the hardware stencil buffer to render 2D vector graphics easily and 
+      efficiently.</P>
+      <P>Computer graphics provides a wealth of fascinating algorithms and data 
+      structures that are very rewarding and enlightening to implement. Thus, we 
+      shall revisit this subject in future F#.NET Journal articles as we evolve 
+      a much more powerful rendering engine.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%202D%20Scalable%20Vector%20Graphics%20with%20XNA%20part%201_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

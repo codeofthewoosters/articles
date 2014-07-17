@@ -1,0 +1,226 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0085)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/development2008.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: F# development with Visual Studio 2008</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: F# development with Visual Studio 2008</TITLE>   
+  <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>F# development with Visual Studio 2008</H1>
+      <P>The May 2009 Community Technology Preview (CTP) release of F# includes 
+      an advanced Visual Studio mode for F# development. This article describes 
+      how this may be installed (including the free version of Visual Studio) 
+      and used to evaluate F# code interactively and develop F# applications 
+      including the generation of standalone .NET executables suitable for 
+      redistribution and the static linking of other .NET assemblies (e.g. C# 
+      compiled to DLL) as well as new features in the development environment 
+      itself.</P>
+      <H2>Introduction</H2>
+      <P>The F# programming language from Microsoft began as a research project 
+      from Microsoft Research Cambridge (UK) but, since the              <A 
+      href="http://blogs.msdn.com/somasegar/archive/2007/10/17/f-a-functional-programming-language.aspx">announcement</A> 
+      in October 2007 that F# is to be productized, substantially more effort 
+      has been put into building a state-of-the-art integrated development 
+      environment for industrial-strength F# programming. The new development 
+      environment for Visual Studio 2008 is substantially more powerful and 
+      robust than the old development environment for Visual Studio 2005.        
+         </P>
+      <H2>Installation</H2>
+      <P>F# can be used with Visual Studio 2008 for free but, unlike the Express 
+      editions that include C# and VB, F# must be installed on top of the        
+            <A href="http://www.microsoft.com/downloads/details.aspx?FamilyId=40646580-97FA-4698-B65F-620D4B4B1ED7&amp;displaylang=en">Microsoft 
+      Visual Studio 2008 Shell (integrated mode)</A> . Note that the installer 
+      unpacks another installer in a              <CODE>VS 2008 Shell 
+      Redist</CODE> directory that must be run manually.           </P>
+      <P>Once installed, Visual Studio 2008 will look like this:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/vs.gif"> 
+                  </P>
+      <P></P>
+      <P>Note that the F# interactive session now appears integrated with the 
+      error list, compiler output and search results panes at the bottom.</P>
+      <H2>Creating an F# project</H2>
+      <P>F# projects may now co-exist alongside projects written in other 
+      languages in a single Visual Studio solution. Adding an F# project to an 
+      existing solution or creating a new project and solution presents a new 
+      set of options:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/addproject.gif"> 
+                  </P>
+      <P></P>
+      <P>The "F# Application" template creates a console application. The "F# 
+      Library" template creates a project that is compiled into a DLL. The "F# 
+      Tutorial" template begins with a wealth of simple examples showcasing the 
+      F# programming language.</P>
+      <P>GUI applications should be created by starting from the "F# 
+      Application" template and then setting the "Output type" option from the 
+      "Application" tab of the project's properties from "Console Application" 
+      to "Windows Application":</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/projectproperties.gif"> 
+                  </P>
+      <P></P>
+      <P>Console applications spawn a console window. Selecting "Windows 
+      Application" simply disables this behaviour (which is not usually 
+      desirable for a GUI application).</P>
+      <H2>Installing project templates</H2>
+      <P>The basic F# project templates provided in the F# distribution are 
+      sufficient to get started with console and window applications and DLLs. 
+      Third parties are also distributing some useful project templates that 
+      make it easier to get started using F# for other kinds of development.</P>
+      <P>For example, Luke Hoban has kindly released              <A href="http://blogs.msdn.com/lukeh/archive/2009/06/26/f-in-silverlight.aspx">F# 
+      Templates and Samples for Silverlight</A> . Once Visual Studio 2008, F#, 
+      Silverlight Tools and these Silverlight templates for F# have been 
+      installed the add project dialog will include two new templates:           
+      </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/silverlighttemplates.gif"> 
+                  </P>
+      <P></P>
+      <P>This makes it much easier to develop Silverlight projects in F#.</P>
+      <H2>Reordering files in a solution</H2>
+      <P>F# source files may only refer to definitions in those appearing above 
+      it in the Solution Explorer pane. Consequently, it is essential that 
+      source files are kept in the correct order:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/solutionsexplorer.gif"> 
+                  </P>
+      <P></P>
+      <P>The Visual Studio 2008 mode for F# now makes it much easier to reorder 
+      the files in a solution in order to satisfy dependencies. To move a source 
+      file within a project, simply click on the name of the source file in the 
+      Solution Explorer pane and press ALT+UP or ALT+DOWN to move it up or down, 
+      respectively.</P>
+      <H2>Statically linking (merging) .NET assemblies</H2>
+      <P>The ability to break a Visual Studio solution into separate projects is 
+      very useful but projects cannot target the same .NET assembly and, 
+      consequently, a Visual Studio solution combining (for example) C# and F# 
+      code will generate at least two separate assemblies. Particularly if these 
+      assemblies are to be redistributed to and used by customers, it is 
+      desirable to merge them into a single assembly in order to alleviate the 
+      burden of the customer having to reference two different assemblies.</P>
+      <P>Visual Studio does not provide a way to do this but Mike Barnett at 
+      Microsoft Research has released a tool called              <A href="http://research.microsoft.com/en-us/people/mbarnett/ilmerge.aspx">ILMerge</A> 
+      that allows .NET assemblies to be merged. Moreover, although this tool is 
+      distributed as an executable, it can be referenced as used as if it were a 
+      DLL.           </P>
+      <P>For example, the following F# script uses the              
+      <CODE>ILMerge</CODE> tool to merge two assemblies, A.dll and B.dll, into a 
+      single assembly called C.dll:           </P>
+<PRE>#r @"C:\Program Files\Microsoft\ILMerge\ILMerge.exe"</PRE>
+<PRE>open ILMerging</PRE>
+<PRE>let m = ILMerge()</PRE>
+<PRE>m.SetInputAssemblies
+  [|@"A.dll";
+    @"B.dll"|]
+m.OutputFile &lt;- @"C.dll"
+m.Internalize &lt;- true
+m.Merge()</PRE>
+      <P>The              <CODE>Internalize</CODE> property allows the code in 
+      all assemblies except the first to be make              
+      <CODE>internal</CODE> in order to hide them from the user. We use          
+          <CODE>ILMerge</CODE> to merge precompiled font data with our F# for 
+      Visualization software in order to distribute it as a single DLL.          
+       </P>
+      <H2>Lex and Yacc integration</H2>
+      <P>Although the fslex and fsyacc parsing tools are not properly integrated 
+      into Visual Studio 2008 it is possible to add build rules for fslex and 
+      fsyacc files to the "pre-build event command line" of the "Built Events" 
+      tab in the project's "Properties". This causes Visual Studio to recompile 
+      the lexing and parsing files into F# code before compiling the F# 
+code.</P>
+      <P>The source .fsl and .fsy files may then be placed in the project, 
+      compiled to produce corresponding .fs files and those added to the project 
+      to allow the remainder of the code to use the lexer and parser:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/lexyacc.gif"> 
+                  </P>
+      <P></P>
+      <P>When the lexer or parser is updated, a rebuild will bring the generated 
+      code up to date and a visual prompt allows the current versions to be 
+      overwritten. This is substantially easier than running the              
+      <CODE>fslex</CODE> and              <CODE>fsyacc</CODE> tools from the 
+      command line.           </P>
+      <P>An example calculator project set up to use this technique (with the 
+      May 2009 CTP version of F#) is available for download              <A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/54/LexYacc.zip">here</A>
+       .           </P>
+      <H2>Related improvements</H2>
+      <H3>Garbage collection</H3>
+      <P>.NET 3.5 SP1 introduced a new "background" garbage collector (GC) for 
+      the CLR. In particular, our benchmarks indicate that this GC is around 
+      2.5× faster than previous versions when dealing with heavily allocating 
+      code such as idiomatic functional code.</P>
+      <P>Maoni Stephens gave an interesting video interview about the new GC     
+               <A href="http://channel9.msdn.com/shows/Going+Deep/Maoni-Stephens-and-Andrew-Pardoe-CLR-4-Inside-Background-GC/">here</A>
+       .           </P>
+      <H3>LINQ</H3>
+      <P>As of .NET 3.5, LINQ is included as standard. Amongst other benefits, 
+      this simplifies the handling of XML. For example, the .NET 2 code to load 
+      XML over the internet:</P>
+<PRE>&gt; let url = "http://www.csparks.com/CygwinNFS/index.xhtml";;
+val url : string = "http://www.csparks.com/CygwinNFS/index.xhtml"</PRE>
+<PRE>&gt; let xml =
+    let request = System.Net.WebRequest.Create url
+    let response = request.GetResponse()
+    use stream = response.GetResponseStream()
+    let doc = System.Xml.XmlDocument()
+    doc.Load stream
+    doc;;
+val xml : System.Xml.XmlDocument</PRE>
+      <P>may now be written:</P>
+<PRE>&gt; #r "System.Xml.dll";;</PRE>
+<PRE>&gt; #r "System.Xml.Linq.dll";;</PRE>
+<PRE>&gt; let xml = System.Xml.Linq.XDocument.Load url;;
+val xml : System.Xml.Linq.XDocument = ...</PRE>
+      <H2>Summary</H2>
+      <P>This article has described how the May 2009 CTP release of F# can be 
+      used with Visual Studio 2008 to form an industrial-strength integrated 
+      development environment for a state-of-the-art programming language that 
+      can interoperate seamlessly with a major VM.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of Visual 
+      Studio integration and advancements in software development using F#, most 
+      notably the forthcoming Visual Studio 2010 release that will include the 
+      first fully-supported production version of F# as well as many exciting 
+      advancements with .NET 4!</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202008_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

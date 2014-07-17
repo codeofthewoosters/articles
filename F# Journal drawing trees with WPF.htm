@@ -1,0 +1,163 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0082)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/DrawingTrees.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20drawing%20trees%20with%20WPF_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20drawing%20trees%20with%20WPF_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20drawing%20trees%20with%20WPF_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20drawing%20trees%20with%20WPF_files/title.gif"> </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20drawing%20trees%20with%20WPF_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Drawing trees with WPF</H1>
+      <P>The ability to visualize trees is vitally important in many different 
+      applications. This article examines at a simple but effective algorithm 
+      for visualizing trees and uses WPF to draw the results.</P>
+      <H2>Layout</H2>
+      <P>Trees will be represented by values of the following recursive union 
+      type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Tree&lt;'a&gt;&nbsp;=&nbsp;Node&nbsp;of&nbsp;'a&nbsp;*&nbsp;(Tree&lt;'a&gt;&nbsp;list);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Tree&lt;'a&gt;&nbsp;=&nbsp;|&nbsp;Node&nbsp;of&nbsp;'a&nbsp;*&nbsp;Tree&lt;'a&gt;&nbsp;list</CODE></P>
+      <P>The ranges of <CODE>x</CODE> values covered by a tree will be 
+      represented by a list of pairs of <CODE>float</CODE> numbers. The 
+      following <CODE>moveExtent</CODE> function moves such a list of ranges 
+      horizontally:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;moveExtent&nbsp;e&nbsp;(dx:&nbsp;float)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;p,&nbsp;q&nbsp;in&nbsp;e&nbsp;-&gt;&nbsp;p&nbsp;+&nbsp;dx,&nbsp;q&nbsp;+&nbsp;dx&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;moveExtent&nbsp;:&nbsp;seq&lt;float&nbsp;*&nbsp;float&gt;&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;(float&nbsp;*&nbsp;float)&nbsp;list</CODE></P>
+      <P>For example, shifting the following extents to the right by 5 
+units:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;moveExtent&nbsp;[-1.0,&nbsp;1.0;&nbsp;-2.0,&nbsp;2.0]&nbsp;5.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(float&nbsp;*&nbsp;float)&nbsp;list&nbsp;=&nbsp;[(4.0,&nbsp;6.0);&nbsp;(3.0,&nbsp;7.0)]</CODE></P>
+      <P>The following <CODE>merge</CODE> function merges two lists of 
+      extents:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;merge&nbsp;ps&nbsp;qs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ps,&nbsp;qs&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[],&nbsp;xs&nbsp;|&nbsp;xs,&nbsp;[]&nbsp;-&gt;&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(p,&nbsp;_)::ps,&nbsp;(_,&nbsp;q)::qs&nbsp;-&gt;&nbsp;(p,&nbsp;q)::merge&nbsp;ps&nbsp;qs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;merge&nbsp;:&nbsp;('a&nbsp;*&nbsp;'b)&nbsp;list&nbsp;-&gt;&nbsp;('a&nbsp;*&nbsp;'b)&nbsp;list&nbsp;-&gt;&nbsp;('a&nbsp;*&nbsp;'b)&nbsp;list</CODE></P>
+      <P>This function is not tail recursive but, in practice, the program will 
+      not be required to draw trees that are ten thousand levels deep so this 
+      will not be a problem.</P>
+      <P>The following <CODE>fit</CODE> function determines the offset required 
+      to keep the rightmost branch of any subtree on the left the unit distance 
+      away from the leftmost branch of any subtree on the right:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;fit&nbsp;ps&nbsp;qs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.zip&nbsp;ps&nbsp;qs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.fold&nbsp;(fun&nbsp;a&nbsp;((_,&nbsp;p),&nbsp;(q,&nbsp;_))&nbsp;-&gt;&nbsp;p&nbsp;-&nbsp;q&nbsp;+&nbsp;1.0&nbsp;|&gt;&nbsp;max&nbsp;a)&nbsp;0.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fit&nbsp;:&nbsp;seq&lt;'a&nbsp;*&nbsp;float&gt;&nbsp;-&gt;&nbsp;seq&lt;float&nbsp;*&nbsp;'b&gt;&nbsp;-&gt;&nbsp;float</CODE></P>
+      <P>For example, fitting two trees that span (-1, 1) on the top level and 
+      (-2, 2) on the lower level requires a displacement of 5:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;fit&nbsp;[-1.,&nbsp;1.;&nbsp;-2.,&nbsp;2.]&nbsp;[-1.,&nbsp;1.;&nbsp;-2.,&nbsp;2.];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;=&nbsp;5.0</CODE></P>
+      <P>The following <CODE>fitsLeft</CODE> function returns the positions of 
+      subtrees packed to the left:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;fitsLeft&nbsp;es&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fitLeft&nbsp;(a,&nbsp;xs)&nbsp;e&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;fit&nbsp;a&nbsp;e<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;merge&nbsp;a&nbsp;(moveExtent&nbsp;e&nbsp;x),&nbsp;x::xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_,&nbsp;xs&nbsp;=&nbsp;List.fold&nbsp;fitLeft&nbsp;([],&nbsp;[])&nbsp;es<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List.rev&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fitsLeft&nbsp;:&nbsp;#seq&lt;float&nbsp;*&nbsp;float&gt;&nbsp;list&nbsp;-&gt;&nbsp;float&nbsp;list</CODE></P>
+      <P>And the following <CODE>fitsRight</CODE> function returns the positions 
+      of subtrees packed to the left:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;fitsRight&nbsp;es&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fitRight&nbsp;e&nbsp;(a,&nbsp;xs)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;-fit&nbsp;e&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;merge&nbsp;(moveExtent&nbsp;e&nbsp;x)&nbsp;a,&nbsp;x::xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_,&nbsp;xs&nbsp;=&nbsp;List.foldBack&nbsp;fitRight&nbsp;es&nbsp;([],&nbsp;[])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fitsRight&nbsp;:&nbsp;#seq&lt;float&nbsp;*&nbsp;float&gt;&nbsp;list&nbsp;-&gt;&nbsp;float&nbsp;list</CODE></P>
+      <P>In order to obtain as esthetic result we chose the average of the left- 
+      and right-packed positions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;fitList&nbsp;es&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;x,&nbsp;y&nbsp;in&nbsp;List.zip&nbsp;(fitsLeft&nbsp;es)&nbsp;(fitsRight&nbsp;es)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.5&nbsp;*&nbsp;(x&nbsp;+&nbsp;y)&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fitList&nbsp;:&nbsp;#seq&lt;float&nbsp;*&nbsp;float&gt;&nbsp;list&nbsp;-&gt;&nbsp;float&nbsp;list</CODE></P>
+      <P>The following <CODE>layout</CODE> function is the core of our tree 
+      visualization library, converting a tree of labels into a tree of label 
+      and position pairs with positions relative to the parent tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;layout&nbsp;tree&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;layout&nbsp;(Node(label,&nbsp;subtrees))&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;trees,&nbsp;extents&nbsp;=&nbsp;List.unzip&nbsp;(List.map&nbsp;layout&nbsp;subtrees)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;positions&nbsp;=&nbsp;fitList&nbsp;extents<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pTrees&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;Node((label,&nbsp;x),&nbsp;subtrees),&nbsp;dx&nbsp;in&nbsp;List.zip&nbsp;trees&nbsp;positions&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node((label,&nbsp;x&nbsp;+&nbsp;dx),&nbsp;subtrees)&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pExtents&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;extent,&nbsp;dx&nbsp;in&nbsp;List.zip&nbsp;extents&nbsp;positions&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;moveExtent&nbsp;extent&nbsp;dx&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node((label,&nbsp;0.0),&nbsp;pTrees),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(0.0,&nbsp;0.0)::List.fold&nbsp;merge&nbsp;[]&nbsp;pExtents<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;layout&nbsp;tree&nbsp;|&gt;&nbsp;fst;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;layout&nbsp;:&nbsp;Tree&lt;'a&gt;&nbsp;-&gt;&nbsp;Tree&lt;'a&nbsp;*&nbsp;float&gt;</CODE></P>
+      <P>The simplest way to describe a labelled tree is as a simple bracketed 
+      string so we write a little parser to convert such a string into our tree 
+      data structure using active patterns:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Tree|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;c::'('::Trees(ts,&nbsp;')'::cs)&nbsp;-&gt;&nbsp;Some(Node(string&nbsp;c,&nbsp;ts),&nbsp;cs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;c::cs&nbsp;when&nbsp;c&lt;&gt;')'&nbsp;-&gt;&nbsp;Some(Node(string&nbsp;c,&nbsp;[]),&nbsp;cs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;(|Trees|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Tree(t,&nbsp;Trees(ts,cs))&nbsp;-&gt;&nbsp;t::ts,&nbsp;cs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;cs&nbsp;-&gt;&nbsp;[],&nbsp;cs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Tree|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(Tree&lt;string&gt;&nbsp;*&nbsp;char&nbsp;list)&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Trees|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;Tree&lt;string&gt;&nbsp;list&nbsp;*&nbsp;char&nbsp;list</CODE></P>
+      <P>Here is our example tree encoded as a string:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;tree&nbsp;=&nbsp;"A(B(C(DE(F(G()H(IJKL)MN(O))))P(QR))S(T(UVW(X(Y)Z(abcd)))e(f(g)hi(j(klmn))))o(p(q(rstu)v(wx(yz)01)2)))";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;tree&nbsp;:&nbsp;string&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"A(B(C(DE(F(G()H(IJKL)MN(O))))P(QR))S(T(UVW(X(Y)Z(abcd)))e(f(g"+[40&nbsp;chars]</CODE></P>
+      <H2>Graphics</H2>
+      <P>We begin by referencing the standard four DLLs required for WPF 
+      development:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationCore.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationFramework.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Xaml.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"WindowsBase.dll";;</CODE></P>
+      <P>Definitions from the <CODE>System.Windows</CODE> namespace will be used 
+      heavily:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>The layout algorithms uses gaps of size <CODE>1.0</CODE> so we need to 
+      scale the resulting tree up in order to fit conventional WPF buttons 
+      inside them because the default height of a textual button is 
+      <CODE>20.0</CODE> so we choose a scale twice this size in order to leave 
+      space between the buttons for the lines that will convey the topology of 
+      the tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;scale&nbsp;=&nbsp;40.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;scale&nbsp;:&nbsp;float&nbsp;=&nbsp;40.0</CODE></P>
+      <P>The following <CODE>verticesOf</CODE> function returns a sequence of 
+      the coordinates of the tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;verticesOf&nbsp;(x,&nbsp;y)&nbsp;(Node((_,&nbsp;dx),&nbsp;ts))&nbsp;=&nbsp;seq&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x,&nbsp;y&nbsp;=&nbsp;x&nbsp;+&nbsp;scale&nbsp;*&nbsp;dx,&nbsp;y&nbsp;+&nbsp;scale<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;x,&nbsp;y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;t&nbsp;in&nbsp;ts&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;verticesOf&nbsp;(x,&nbsp;y)&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;verticesOf&nbsp;:&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;Tree&lt;'a&nbsp;*&nbsp;float&gt;&nbsp;-&gt;&nbsp;seq&lt;float&nbsp;*&nbsp;float&gt;</CODE></P>
+      <P>Note that the positions are now displaced by 
+      <CODE>scale&nbsp;*&nbsp;(dx,&nbsp;1)</CODE>.</P>
+      <P>The following <CODE>boundOf</CODE> function uses the 
+      <CODE>verticesOf</CODE> function to compute the bound of a tree and will 
+      be used to position the tree on a <CODE>Canvas</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;boundOf&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;bound&nbsp;((x0,&nbsp;y0),&nbsp;(x1,&nbsp;y1))&nbsp;(x,&nbsp;y)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(min&nbsp;x0&nbsp;x,&nbsp;min&nbsp;y0&nbsp;y),&nbsp;(max&nbsp;x1&nbsp;x,&nbsp;max&nbsp;y1&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p&nbsp;=&nbsp;0.0,&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;verticesOf&nbsp;p&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.fold&nbsp;bound&nbsp;(p,&nbsp;p);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;boundOf&nbsp;:&nbsp;Tree&lt;'a&nbsp;*&nbsp;float&gt;&nbsp;-&gt;&nbsp;(float&nbsp;*&nbsp;float)&nbsp;*&nbsp;(float&nbsp;*&nbsp;float)</CODE></P>
+      <P>The visualization of a tree requires the thickness of the lines and the 
+      approximate size of a label:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;thickness&nbsp;=&nbsp;1.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;thickness&nbsp;:&nbsp;float&nbsp;=&nbsp;1.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;size&nbsp;=&nbsp;0.5&nbsp;*&nbsp;scale;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;size&nbsp;:&nbsp;float&nbsp;=&nbsp;20.0</CODE></P>
+      <P>The following <CODE>line</CODE> function creates a WPF shape 
+      representing a line between two coordinates:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;line&nbsp;(x0,&nbsp;y0)&nbsp;(x1,&nbsp;y1)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;shape&nbsp;=&nbsp;Shapes.Line(X1=x0,&nbsp;Y1=y0,&nbsp;X2=x1,&nbsp;Y2=y1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.Stroke&nbsp;&lt;-&nbsp;Media.Brushes.Black<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.StrokeStartLineCap&nbsp;&lt;-&nbsp;Media.PenLineCap.Round<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.StrokeEndLineCap&nbsp;&lt;-&nbsp;Media.PenLineCap.Round<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape.StrokeThickness&nbsp;&lt;-&nbsp;thickness<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shape;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;line&nbsp;:&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;Shapes.Line</CODE></P>
+      <P>The following <CODE>labelAt</CODE> function draws a <CODE>Button</CODE> 
+      control centered at the given coordinate with the given content:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;labelAt&nbsp;label&nbsp;(x,&nbsp;y)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;label&nbsp;=&nbsp;Controls.Button(Content=label)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.Padding&nbsp;&lt;-&nbsp;Thickness(0.5*size,&nbsp;0.0,&nbsp;0.5*size,&nbsp;0.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.SizeChanged.Add(fun&nbsp;e&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;w,&nbsp;h&nbsp;=&nbsp;e.NewSize.Width,&nbsp;e.NewSize.Height<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label.RenderTransform&nbsp;&lt;-<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.TranslateTransform(x&nbsp;-&nbsp;0.5*w,&nbsp;y&nbsp;-&nbsp;0.5*h))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;label;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;labelAt&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;Controls.Button</CODE></P>
+      <P>Note that WPF does not provide any easy way to center a control at a 
+      coordinate. Moreover, the <CODE>Width</CODE> and <CODE>ActualWidth</CODE> 
+      properties do not return meaningful results at this point. So we work 
+      around this problem by registering a callback on the 
+      <CODE>SizeChanged</CODE> event that positions the <CODE>Button</CODE> once 
+      its size has been initialized.</P>
+      <P>The following <CODE>linesTo</CODE> function detects a tree with 
+      subtrees and draws a line down to a horizontal bar and then lines down 
+      from the bar to the children:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;linesTo&nbsp;(x1,&nbsp;y1)&nbsp;ts&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;match&nbsp;[&nbsp;for&nbsp;(Node((_,&nbsp;dx),&nbsp;_))&nbsp;in&nbsp;ts&nbsp;-&gt;&nbsp;x1&nbsp;+&nbsp;scale&nbsp;*&nbsp;dx&nbsp;]&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y&nbsp;=&nbsp;y1&nbsp;+&nbsp;0.5*scale<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;line&nbsp;(x1,&nbsp;y1)&nbsp;(x1,&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;line&nbsp;(Seq.min&nbsp;xs,&nbsp;y)&nbsp;(Seq.max&nbsp;xs,&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x&nbsp;in&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;line&nbsp;(x,&nbsp;y)&nbsp;(x,&nbsp;y1&nbsp;+&nbsp;scale)&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;linesTo&nbsp;:&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;seq&lt;Tree&lt;'a&nbsp;*&nbsp;float&gt;&gt;&nbsp;-&gt;&nbsp;Shapes.Line&nbsp;list</CODE></P>
+      <P>The following <CODE>draw</CODE> function draws an entire tree by 
+      drawing the lines and the labels themselves:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;draw&nbsp;(x0,&nbsp;y0)&nbsp;(Node((label,&nbsp;dx),&nbsp;ts))&nbsp;=&nbsp;seq&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x1,&nbsp;y1&nbsp;=&nbsp;x0&nbsp;+&nbsp;scale&nbsp;*&nbsp;dx,&nbsp;y0&nbsp;+&nbsp;scale<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;linesTo&nbsp;(x1,&nbsp;y1)&nbsp;ts,&nbsp;labelAt&nbsp;label&nbsp;(x1,&nbsp;y1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;t&nbsp;in&nbsp;ts&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;draw&nbsp;(x1,&nbsp;y1)&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;draw&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;Tree&lt;'a&nbsp;*&nbsp;float&gt;&nbsp;-&gt;&nbsp;seq&lt;Shapes.Line&nbsp;list&nbsp;*&nbsp;Controls.Button&gt;</CODE></P>
+      <P>Note that function creates the necessary WPF objects and returns them 
+      as a sequence of pairs. The first element of the pair is the lines to 
+      subtrees which much be drawn on a lower layer and the second element of 
+      each pair is the label that must be drawn on a layer above.</P>
+      <P>Finally, the main functon of our program is as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(Tree(tree,&nbsp;cs))&nbsp;=&nbsp;List.ofSeq&nbsp;tree<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tree&nbsp;=&nbsp;layout&nbsp;tree<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(x0,&nbsp;y0),&nbsp;(x1,&nbsp;y1)&nbsp;=&nbsp;boundOf&nbsp;tree<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(x0,&nbsp;y0),&nbsp;(x1,&nbsp;y1)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;d&nbsp;=&nbsp;thickness&nbsp;+&nbsp;size<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(x0-d,&nbsp;y0-d),&nbsp;(x1+d,&nbsp;y1+d)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;canvas&nbsp;=&nbsp;Controls.Canvas()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Width&nbsp;&lt;-&nbsp;x1&nbsp;-&nbsp;x0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Height&nbsp;&lt;-&nbsp;y1&nbsp;-&nbsp;y0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;shapes&nbsp;=&nbsp;draw&nbsp;(0.5&nbsp;*&nbsp;(x1&nbsp;-&nbsp;x0),&nbsp;0.0)&nbsp;tree<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;shapes,&nbsp;_&nbsp;in&nbsp;shapes&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;(canvas.Children.Add&nbsp;&gt;&gt;&nbsp;ignore)&nbsp;shapes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_,&nbsp;label&nbsp;in&nbsp;shapes&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Children.Add&nbsp;label&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;scroll&nbsp;=&nbsp;Controls.ScrollViewer(Content=canvas)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;scroll.HorizontalScrollBarVisibility&nbsp;&lt;-&nbsp;Controls.ScrollBarVisibility.Visible<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=scroll))&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <P>This function parses the string into a tree and then applies the 
+      <CODE>layout</CODE> function to calculate the layout of the tree. The 
+      bound of the tree is then calculated because the <CODE>Canvas</CODE> 
+      control requires us to move the contents such that they are cornered at 
+      the origin and the <CODE>Width</CODE> and <CODE>Height</CODE> properties 
+      of the <CODE>Canvas</CODE> must be set manually. The calculated bound of 
+      the vertices is then expanded by the line thickness and size of a label to 
+      make sure the whole GUI controls are contained within the bound as well. 
+      Two loops then draw the lines and labels, respectively. Finally, the 
+      <CODE>Canvas</CODE> is placed in a <CODE>ScrollViewer</CODE> with 
+      horizontal and vertical scroll bars.</P>
+      <P>In this case, we obtain the following image:</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of an F# 
+      program for displaying trees including WPF-based visualization.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of 
+      visualization in the context of directed acyclic graphs and general 
+      graphs.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2011</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20drawing%20trees%20with%20WPF_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

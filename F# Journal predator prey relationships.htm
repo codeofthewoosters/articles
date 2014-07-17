@@ -1,0 +1,131 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0082)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/predatorprey.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20predator%20prey%20relationships_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20predator%20prey%20relationships_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20predator%20prey%20relationships_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20predator%20prey%20relationships_files/title.gif"> 
+</TD>
+    <TD><IMG 
+      src="F%23%20Journal%20predator%20prey%20relationships_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Simulating predator-prey relationships</H1>
+      <P>This article describes the design and implementation of a Windows 
+      Presentation Foundation application that simulates and visualizes the 
+      evolution of the predator and prey populations over time. This involves 
+      the numerical integration of a differential equation and the resulting 
+      trajectory is visualized as a parametric plot using the new charting and 
+      graphing functionality provided with .NET 4. The parameters of the 
+      simulation can be adjusted by the user and the graph is updated in real 
+      time.</P>
+      <H2>4th-order Runge-Kutta numerical integrator</H2>
+      <P>The core numerical routine behind this application is required to 
+      numerically integrate differential equations. The traditional solution to 
+      this problem is a fourth-order Runge-Kutta numerical integrator. This may 
+      be written as follows in F#:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rk4&nbsp;dt&nbsp;(f,&nbsp;g)&nbsp;x&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k1&nbsp;=&nbsp;dt&nbsp;*&nbsp;f&nbsp;t&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k2&nbsp;=&nbsp;dt&nbsp;*&nbsp;f&nbsp;(t&nbsp;+&nbsp;0.5&nbsp;*&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;0.5&nbsp;*&nbsp;k1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k3&nbsp;=&nbsp;dt&nbsp;*&nbsp;f&nbsp;(t&nbsp;+&nbsp;0.5&nbsp;*&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;0.5&nbsp;*&nbsp;k2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k4&nbsp;=&nbsp;dt&nbsp;*&nbsp;f&nbsp;(t&nbsp;+&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;k3)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;+&nbsp;(k1&nbsp;+&nbsp;2.0&nbsp;*&nbsp;(k2&nbsp;+&nbsp;k3)&nbsp;*&nbsp;k4)&nbsp;/&nbsp;6.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;rk4&nbsp;:&nbsp;float&nbsp;-&gt;&nbsp;(float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float)&nbsp;*&nbsp;'a&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float</CODE></P>
+      <P>However, we require the ability to integrate both the predator 
+      population and the prey population simultaneously over time. This is 
+      accomplished by extending the numerical integrator to handle two variables 
+      as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rk4&nbsp;dt&nbsp;(f,&nbsp;g)&nbsp;(x,&nbsp;y)&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k1&nbsp;=&nbsp;dt&nbsp;*&nbsp;f&nbsp;t&nbsp;(x,&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;l1&nbsp;=&nbsp;dt&nbsp;*&nbsp;g&nbsp;t&nbsp;(x,&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k2&nbsp;=&nbsp;dt&nbsp;*&nbsp;f&nbsp;(t&nbsp;+&nbsp;0.5&nbsp;*&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;0.5&nbsp;*&nbsp;k1,&nbsp;y&nbsp;+&nbsp;0.5&nbsp;*&nbsp;l1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;l2&nbsp;=&nbsp;dt&nbsp;*&nbsp;g&nbsp;(t&nbsp;+&nbsp;0.5&nbsp;*&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;0.5&nbsp;*&nbsp;k1,&nbsp;y&nbsp;+&nbsp;0.5&nbsp;*&nbsp;l1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k3&nbsp;=&nbsp;dt&nbsp;*&nbsp;f&nbsp;(t&nbsp;+&nbsp;0.5&nbsp;*&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;0.5&nbsp;*&nbsp;k2,&nbsp;y&nbsp;+&nbsp;0.5&nbsp;*&nbsp;l2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;l3&nbsp;=&nbsp;dt&nbsp;*&nbsp;g&nbsp;(t&nbsp;+&nbsp;0.5&nbsp;*&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;0.5&nbsp;*&nbsp;k2,&nbsp;y&nbsp;+&nbsp;0.5&nbsp;*&nbsp;l2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k4&nbsp;=&nbsp;dt&nbsp;*&nbsp;f&nbsp;(t&nbsp;+&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;k3,&nbsp;y&nbsp;+&nbsp;l3)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;l4&nbsp;=&nbsp;dt&nbsp;*&nbsp;g&nbsp;(t&nbsp;+&nbsp;dt)&nbsp;(x&nbsp;+&nbsp;k3,&nbsp;y&nbsp;+&nbsp;l3)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;+&nbsp;(k1&nbsp;+&nbsp;2.0&nbsp;*&nbsp;(k2&nbsp;+&nbsp;k3)&nbsp;*&nbsp;k4)&nbsp;/&nbsp;6.0,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;+&nbsp;(l1&nbsp;+&nbsp;2.0&nbsp;*&nbsp;(l2&nbsp;+&nbsp;l3)&nbsp;*&nbsp;l4)&nbsp;/&nbsp;6.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;rk4&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(float&nbsp;-&gt;&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;float)&nbsp;*&nbsp;(float&nbsp;-&gt;&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float&nbsp;*&nbsp;float</CODE></P>
+      <P>A differential equation may now be integrated simply by applying the 
+      <CODE>scan</CODE> function to the initial conditions and using the 
+      <CODE>rk4</CODE> function to compute the values of the two variables at 
+      the next time step:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;trajectory&nbsp;g&nbsp;k&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;r1,&nbsp;r2,&nbsp;h,&nbsp;c,&nbsp;d&nbsp;=&nbsp;0.08,&nbsp;0.1,&nbsp;0.5,&nbsp;k,&nbsp;0.05<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dx&nbsp;_&nbsp;(x,&nbsp;y)&nbsp;=&nbsp;r1&nbsp;*&nbsp;x&nbsp;*&nbsp;(1.0&nbsp;-&nbsp;x)&nbsp;-&nbsp;c&nbsp;*&nbsp;x&nbsp;*&nbsp;y&nbsp;/&nbsp;(1.0&nbsp;+&nbsp;h&nbsp;*&nbsp;c&nbsp;*&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dy&nbsp;_&nbsp;(x,&nbsp;y)&nbsp;=&nbsp;y&nbsp;*&nbsp;(r2&nbsp;*&nbsp;c&nbsp;*&nbsp;x&nbsp;/&nbsp;(1.0&nbsp;+&nbsp;h&nbsp;*&nbsp;c&nbsp;*&nbsp;x)&nbsp;-&nbsp;d&nbsp;-&nbsp;g&nbsp;*&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dt&nbsp;=&nbsp;1.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.scan&nbsp;(rk4&nbsp;dt&nbsp;(dx,&nbsp;dy))&nbsp;(0.05,&nbsp;0.01)&nbsp;{1.0&nbsp;..&nbsp;float&nbsp;t};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;trajectory&nbsp;:&nbsp;float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;seq&lt;float&nbsp;*&nbsp;float&gt;</CODE></P>
+      <P>Here, we have used the conventional Lotka-Volterra equations that 
+      determine predator-prey relationships.</P>
+      <P>The remainder of the program is concerned with visualization and user 
+      interaction.</P>
+      <H2>User interface</H2>
+      <P>We begin by referencing the usual WPF DLLs:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"WindowsBase.dll"<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'c:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\WindowsBase.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationCore.dll"<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'c:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\PresentationCore.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationFramework.dll"<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'c:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\PresentationFramework.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Xaml.dll"<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Windows\Microsoft.NET\Framework\v4.0.30319\System.Xaml.dll'</CODE></P>
+      <P>In this case we shall also use the new graphing and charting 
+      functionality provided with .NET 4 which is for Windows Forms so we also 
+      reference Windows Forms, the DataVisualization DLL and Windows Forms 
+      Integration (in order to embed the Windows Forms control in a WPF 
+      application):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Windows.Forms.dll"<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Windows\Microsoft.NET\Framework\v4.0.30319\System.Windows.Forms.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Windows.Forms.DataVisualization.dll"<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Windows\Microsoft.NET\Framework\v4.0.30319\System.Windows.Forms.DataVisualization.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"WindowsFormsIntegration.dll"<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'c:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\WindowsFormsIntegration.dll'</CODE></P>
+      <P>Definitions from the following namespaces will be used heavily:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows.Forms;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows.Forms.DataVisualization.Charting;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>The following <CODE>add</CODE> function adds a WPF control to a 
+      <CODE>DockPanel</CODE> using the given dock style (e.g. <CODE>Top</CODE> 
+      or <CODE>Bottom</CODE>):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;add&nbsp;(panel:&nbsp;Controls.DockPanel)&nbsp;dock&nbsp;elt&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(elt,&nbsp;dock)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;panel.Children.Add&nbsp;elt&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;Controls.DockPanel&nbsp;-&gt;&nbsp;Controls.Dock&nbsp;-&gt;&nbsp;UIElement&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The following <CODE>slider</CODE> function creates a 
+      <CODE>Slider</CODE> control spanning the given range of values and 
+      starting with the given initial value and embeds this in a 
+      <CODE>DockPanel</CODE> with a <CODE>Label</CODE> control describing what 
+      the slider represents:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;slider&nbsp;label&nbsp;x0&nbsp;x&nbsp;x1&nbsp;callback&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;panel&nbsp;=&nbsp;Controls.DockPanel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;slider&nbsp;=&nbsp;Controls.Slider(Minimum=x0,&nbsp;Value=x,&nbsp;Maximum=x1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;slider.ValueChanged.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;callback&nbsp;slider.Value)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;panel&nbsp;Controls.Dock.Left&nbsp;label<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;panel&nbsp;Controls.Dock.Right&nbsp;slider<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;panel;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;slider&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;UIElement&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;(float&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;Controls.DockPanel</CODE></P>
+      <P>The following <CODE>label</CODE> function creates <CODE>Label</CODE> 
+      control containing the given value:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;label&nbsp;text&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Label(Content=text);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;label&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;Controls.Label</CODE></P>
+      <P>A <CODE>var</CODE> type is used to distinguish between the three 
+      parameters that we allow the user to adjust:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;var&nbsp;=&nbsp;G&nbsp;|&nbsp;K&nbsp;|&nbsp;T;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;var&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;G<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;K<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T</CODE></P>
+      <P>The following global mutable values <CODE>g</CODE>, <CODE>k</CODE> and 
+      <CODE>t</CODE> are the current values of these parameters:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mutable&nbsp;g&nbsp;=&nbsp;0.02;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;g&nbsp;:&nbsp;float&nbsp;=&nbsp;0.02<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mutable&nbsp;k&nbsp;=&nbsp;2.5;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;k&nbsp;:&nbsp;float&nbsp;=&nbsp;2.5<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mutable&nbsp;t&nbsp;=&nbsp;1e3;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;t&nbsp;:&nbsp;float&nbsp;=&nbsp;1000.0</CODE></P>
+      <P>The following <CODE>update</CODE> function redefines the points in the 
+      chart that form the parametric plot:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;update&nbsp;(series:&nbsp;Series)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;series.Points.Clear()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x,&nbsp;y&nbsp;in&nbsp;trajectory&nbsp;g&nbsp;k&nbsp;(int&nbsp;t)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;series.Points.AddXY(x,&nbsp;y)&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;update&nbsp;:&nbsp;Series&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The following <CODE>adjust</CODE> function updated the appropriate 
+      global variable after the user adjusts a slider and updates the 
+      visualization:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;adjust&nbsp;series&nbsp;var&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;var&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;G&nbsp;-&gt;&nbsp;g&nbsp;&lt;-&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;K&nbsp;-&gt;&nbsp;k&nbsp;&lt;-&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;-&gt;&nbsp;t&nbsp;&lt;-&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;update&nbsp;series;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;adjust&nbsp;:&nbsp;Series&nbsp;-&gt;&nbsp;var&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Three sliders are created, one for each variable, and returned in the 
+      following <CODE>sliders</CODE> list:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;sliders&nbsp;series&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;slider&nbsp;(label&nbsp;"G")&nbsp;0.0&nbsp;g&nbsp;1.0&nbsp;(adjust&nbsp;series&nbsp;G);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;slider&nbsp;(label&nbsp;"k")&nbsp;2.5&nbsp;k&nbsp;4.0&nbsp;(adjust&nbsp;series&nbsp;K);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;slider&nbsp;(label&nbsp;"T")&nbsp;1.0&nbsp;t&nbsp;5e3&nbsp;(adjust&nbsp;series&nbsp;T)&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;sliders&nbsp;:&nbsp;Series&nbsp;-&gt;&nbsp;Controls.DockPanel&nbsp;list</CODE></P>
+      <P>Finally, the main program creates the series and area of the chart 
+      before filling them in and creates a windows hosting the sliders and 
+      hosted Windows Forms control:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;series&nbsp;=&nbsp;new&nbsp;Series(ChartType=SeriesChartType.Line)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;area&nbsp;=&nbsp;new&nbsp;ChartArea()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;area.AxisX.Title&nbsp;&lt;-&nbsp;"Prey&nbsp;population"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;area.AxisX.Minimum&nbsp;&lt;-&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;area.AxisX.Maximum&nbsp;&lt;-&nbsp;0.8<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;area.AxisY.Title&nbsp;&lt;-&nbsp;"Predator&nbsp;population"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;area.AxisY.Minimum&nbsp;&lt;-&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;area.AxisY.Maximum&nbsp;&lt;-&nbsp;0.06<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;chart&nbsp;=&nbsp;new&nbsp;Chart(Dock=DockStyle.Fill)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chart.ChartAreas.Add&nbsp;area<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chart.Series.Add&nbsp;series<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;window&nbsp;=&nbsp;Window()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;host&nbsp;=&nbsp;new&nbsp;Forms.Integration.WindowsFormsHost(Child=chart)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;update&nbsp;series<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;panel&nbsp;=&nbsp;Controls.DockPanel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sliders&nbsp;series&nbsp;|&gt;&nbsp;Seq.iter&nbsp;(add&nbsp;panel&nbsp;Controls.Dock.Top)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;panel&nbsp;Controls.Dock.Bottom&nbsp;host<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=panel,&nbsp;Title="Predator-prey&nbsp;relationship"))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <H2>Results</H2>
+      <P>When run, this application looks as follows:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20predator%20prey%20relationships_files/PredPrey.png"></P>
+      <P>The user can control the simulation by adjusting the sliders and the 
+      result is reflected in the GUI in real time.</P>
+      <H2>Summary</H2>
+      <P>This article has described a production-quality numerical integrator 
+      that can be used to integrate a wide range of functions including 
+      differential equations and used this numerical method to simulate 
+      predator-prey dynamics, visualizing the result using Windows Presentation 
+      Foundation.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20predator%20prey%20relationships_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

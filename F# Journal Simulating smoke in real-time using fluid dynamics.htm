@@ -1,0 +1,372 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0084)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/fluid_dynamics.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Simulating smoke in real-time using fluid dynamics</TITLE> 
+  
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Simulating smoke in real-time using fluid 
+dynamics</TITLE>     <LINK href="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Simulating smoke in real-time using fluid dynamics</H1>
+      <P>In scientific computing, the task of simulating fluid flow accurately 
+      by solving the Navier-Stokes equation is notoriously difficult. However, 
+      it is possible to compute numerical approximations quickly enough that 
+      fluids dynamics may be simulated in real time. This article describes a 
+      simple fluid dynamics simulator that uses Microsoft's Task Parallel 
+      Library (TPL) to parallelize the computationally intensive operations and 
+      uses Windows Presentation Foundation to visualize the results in real 
+      time.</P>
+      <H2>Introduction</H2>
+      <P>Computer games can benefit enormously from realistic approximations to 
+      many natural phenomena such as smoke or water disturbed by a moving body. 
+      This article describes an implementation of a simple fluid dynamics 
+      simulation written in F# that is simple enough to run in real time but 
+      also surprisingly realistic.</P>
+      <P>The simulation uses three arrays              <CODE>dens</CODE> ,       
+             <CODE>u</CODE> and              <CODE>v</CODE> of floating point 
+      numbers that represent the density of the smoke and the x and y components 
+      of a velocity field. Two versions of these arrays are maintaining, the     
+               <CODE>0</CODE> versions represent the static contributions to the 
+      simulation (e.g. to add smoke and velocity) and are used as temporaries 
+      during the simulation and the              <CODE>1</CODE> versions 
+      represent the current state of the simulation and are used for 
+      visualization.           </P>
+      <H2>Implementation</H2>
+      <P>We begin by referencing the DLLs for the latest CTP of the Task 
+      Parallel Library (TPL) and Windows Presentation Foundation:</P>
+<PRE>&gt; #r "System.Threading.dll";;
+&gt; #r "PresentationCore.dll";;
+&gt; #r "PresentationFramework.dll";;
+&gt; #r "WindowsBase.dll";;</PRE>
+      <P>When batch compiled, these references must be added to the project via 
+      Solution Explorer.</P>
+      <P>We shall use a fixed-size square (n+2)             <SUP>2</SUP> grid 
+      where the outer border is used to handle boundary conditions efficiently:  
+               </P>
+<PRE>&gt; let n = 62;;</PRE>
+      <P>Many of the numerical algorithms require this value in floating point 
+      form as we shall use 32-bit floats throughout in the interests of 
+      performance (occupying half the memory makes 32-bit floats significantly 
+      more cache friendly):</P>
+<PRE>&gt; let n32 = float32 n;;</PRE>
+      <P>The optimal representation of our grids might be either a single array 
+      or an array of arrays or a .NET 2D array so we factor out the functions 
+      for getting and setting array elements so that the representation can be 
+      changed easily if necessary:</P>
+<PRE>&gt; let inline set (a: _ []) i j x =
+    a.[i + j*(n+2)] &lt;- x;;
+val inline set : 'a [] -&gt; int -&gt; int -&gt; 'a -&gt; unit</PRE>
+<PRE>&gt; let inline get (a: _ []) i j =
+    a.[i + j*(n+2)];;
+val inline get : 'a [] -&gt; int -&gt; int -&gt; 'a</PRE>
+      <P>The following higher-order              <CODE>loop2</CODE> function 
+      applies its function argument              <CODE>f</CODE> to each of the 
+      n×n elements of one of our arrays using a parallelized outer loop:         
+        </P>
+<PRE>&gt; let inline loop2 f =
+    System.Threading.Parallel.For(0, (n+15)/16, fun i0 -&gt;
+      for i=1+16*i0 to min n (16*i0 + 16) do
+        for j=1 to n do
+          f i j);;
+val inline loop2 : (int -&gt; int -&gt; unit) -&gt; unit</PRE>
+      <P>The following              <CODE>add_source</CODE> function increments 
+      each element of an array from another array scaled by the length of the 
+      time slice and will be used to update the densities and velocities:        
+         </P>
+<PRE>&gt; let add_source (x: float32 []) (s: _ []) dt =
+    for i=0 to (n + 2)*(n + 2) - 1 do
+      x.[i] &lt;- x.[i] + dt * s.[i];;
+val add_source : float32 [] -&gt; float32 [] -&gt; float32 -&gt; unit</PRE>
+      <P>The following              <CODE>set_bnd</CODE> function updates the 
+      simulation boundaries:           </P>
+<PRE>&gt; let inline set_bnd f1 f2 x =
+    for i=1 to n do
+      set x 0 i (f1 (get x 1 i))
+      set x (n+1) i (f1 (get x n i))
+      set x i 0 (f2 (get x i 1))
+      set x i (n+1) (f2 (get x i n))
+    set x 0 0 (0.5f * (get x 1 0 + get x 0 1))
+    set x 0 (n+1) (0.5f * (get x 1 (n+1) + get x 0 n))
+    set x (n+1) 0 (0.5f * (get x n 0 + get x (n+1) 1))
+    set x (n+1) (n+1) (0.5f * (get x n (n+1) + get x (n+1) n));;
+val inline set_bnd :
+  (float32 -&gt; float32) -&gt; (float32 -&gt; float32) -&gt; float32 [] -&gt; unit</PRE>
+      <P>The following              <CODE>linear_solve</CODE> function solves a 
+      system of linear equations iteratively using the Gauss-Seidel algorithm:   
+              </P>
+<PRE>&gt; let inline linear_solve f1 f2 x x0 a c =
+    for k=1 to 10 do
+      loop2 (fun i j -&gt;
+        set x i j
+          (c * (get x0 i j + a*(get x (i-1) j + get x (i+1) j +
+                                  get x i (j-1) + get x i (j+1)))))
+      set_bnd f1 f2 x;;
+val inline linear_solve :
+  (float32 -&gt; float32) -&gt; (float32 -&gt; float32) -&gt; float32 [] -&gt; float32 [] -&gt;
+  float32 -&gt; float32 -&gt; unit</PRE>
+      <P>The following              <CODE>diffuse</CODE> function spreads the 
+      smoke out as time goes by:           </P>
+<PRE>&gt; let inline diffuse f1 f2 x x0 diff dt =
+    if diff = 0.0f then Array.blit x0 0 x 0 ((n+2)*(n+2)) else
+      let a = n32 ** 2.0f * dt * diff
+      linear_solve f1 f2 x x0 a (1.0f / (1.0f + 4.0f * a));;
+val inline diffuse :
+  (float32 -&gt; float32) -&gt; (float32 -&gt; float32) -&gt; float32 [] -&gt; float32 [] -&gt;
+  float32 -&gt; float32 -&gt; unit</PRE>
+      <P>The following function clamps the given number between the given lower 
+      and upper limits:</P>
+<PRE>&gt; let clamp x0 x1 x = max x0 (min x1 x);;
+val clamp : 'a -&gt; 'a -&gt; 'a -&gt; 'a</PRE>
+      <P>The following              <CODE>advect</CODE> function blows the smoke 
+      density along the velocity field by solving the inverse problem of finding 
+      how much smoke was blown onto a given cell from other nearby cells over 
+      the last time step using the linear solver:           </P>
+<PRE>&gt; let inline advect f1 f2 d d0 u v dt =
+    let dt0 = dt * n32
+    loop2(fun i j -&gt;
+      let x = float32 i - dt0 * get u i j |&gt; clamp 0.5f (n32 + 0.5f)
+      let y = float32 j - dt0 * get v i j |&gt; clamp 0.5f (n32 + 0.5f)
+      let i0, j0 = int x, int y
+      let s1, t1 = x - float32 i0, y - float32 j0
+      let s0, t0 = 1.0f - s1, 1.0f - t1
+      set d i j
+        (s0*(t0 * get d0 i0 j0  + t1 * get d0 i0 (j0+1)) +
+          s1*(t0 * get d0 (i0+1) j0 + t1 * get d0 (i0+1) (j0+1))))
+    set_bnd f1 f2 d;;
+val inline advect :
+  (float32 -&gt; float32) -&gt; (float32 -&gt; float32) -&gt; float32 [] -&gt; float32 [] -&gt;
+  float32 [] -&gt; float32 [] -&gt; float32 -&gt; unit</PRE>
+      <P>The following              <CODE>density_step</CODE> function updates 
+      the smoke density for a single time step by diffusing the previous time 
+      step's smoke density              <CODE>x0</CODE> to create              
+      <CODE>x</CODE> and then advecting              <CODE>x</CODE> according to 
+      the velocity field represented by the scalar fields              
+      <CODE>u</CODE> and              <CODE>v</CODE> that represent the x and y 
+      components of the velocity, respectively:           </P>
+<PRE>&gt; let density_step x x0 u v diff dt =
+    add_source x x0 dt
+    diffuse (fun x -&gt; x) (fun x -&gt; x) x0 x diff dt
+    advect (fun x -&gt; x) (fun x -&gt; x) x x0 u v dt;;
+val density_step :
+  float32 [] -&gt; float32 [] -&gt; float32 [] -&gt; float32 [] -&gt; float32 -&gt; float32 -&gt;
+  unit</PRE>
+      <P>Next, we solve the harder problem of updating the velocity field. In 
+      fact, the process is quite similar because the velocity field is diffused 
+      to simulate viscosity and then advected to simulate self-advection (the 
+      velocity field blows itself along). However, an additional step is 
+      required to ensure conservation of momentum and that is implemented by the 
+      following              <CODE>project</CODE> function:           </P>
+<PRE>&gt; let project u v p div =
+    loop2(fun i j -&gt;
+      set div i j
+        (-0.5f / n32 * (get u (i+1) j - get u (i-1) j +
+                          get v i (j+1) - get v i (j-1)))
+      set p i j 0.0f)
+    set_bnd (fun x -&gt; x) (fun x -&gt; x) div
+    set_bnd (fun x -&gt; x) (fun x -&gt; x) p
+    
+    linear_solve (fun x -&gt; x) (fun x -&gt; x) p div 1.0f 0.25f
+    
+    loop2(fun i j -&gt;
+      set u i j
+        (get u i j - 0.5f * n32 * (get p (i+1) j - get p (i-1) j))
+      set v i j
+        (get v i j - 0.5f * n32 * (get p i (j+1) - get p i (j-1))))
+    set_bnd (fun x -&gt; -x) (fun x -&gt; x) u
+    set_bnd (fun x -&gt; x) (fun x -&gt; -x) v;;
+val project : float32 [] -&gt; float32 [] -&gt; float32 [] -&gt; float32 [] -&gt; unit</PRE>
+      <P>Velocity updates are performed by the following              
+      <CODE>velocity_step</CODE> function that diffuses and advects the velocity 
+      field:           </P>
+<PRE>&gt; let velocity_step u v u0 v0 visc dt =
+    add_source u u0 dt
+    add_source v v0 dt
+    diffuse (fun x -&gt; -x) (fun x -&gt; x) u0 u visc dt
+    diffuse (fun x -&gt; x) (fun x -&gt; -x) v0 v visc dt
+    project u0 v0 u v
+    advect (fun x -&gt; -x) (fun x -&gt; x) u u0 u0 v0 dt
+    advect (fun x -&gt; x) (fun x -&gt; -x) v v0 u0 v0 dt
+    project u v u0 v0;;
+val velocity_step :
+float32 [] -&gt; float32 [] -&gt; float32 [] -&gt; float32 [] -&gt; float32 -&gt; float32 -&gt;
+  unit</PRE>
+      <P>We can now define the actual arrays that will be used in our 
+      simulation:</P>
+<PRE>&gt; let u0, u1, v0, v1, dens0, dens1 =
+    let make() = Array.create ((n+2)*(n+2)) 0.0f;;
+    make(), make(), make(), make(), make(), make();;
+val v1 : float32 []
+val v0 : float32 []
+val u1 : float32 []
+val u0 : float32 []
+val dens1 : float32 []
+val dens0 : float32 []</PRE>
+      <P>Next, the viscosity and diffusion constants:</P>
+<PRE>&gt; let visc = 0.001f;;
+val visc : float32</PRE>
+<PRE>&gt; let diff = 0.0001f;;
+val diff : float32</PRE>
+      <P>The following              <CODE>time</CODE> function gives the time in 
+      seconds since it was last invoked:           </P>
+<PRE>&gt; let time =
+    let t = lazy(System.Diagnostics.Stopwatch.StartNew())
+    fun () -&gt;
+      let t = t.Force()
+      let dt = float32 t.ElapsedMilliseconds / 1e3f
+      t.Reset()
+      t.Start()
+      dt;;
+val time : (unit -&gt; float32)</PRE>
+      <P>The following              <CODE>update</CODE> function introduces 
+      smoke and velocity into the simulation before updating the simulation for 
+      the :           </P>
+<PRE>&gt; let update() =
+    for i=0 to (n + 2)*(n + 2) - 1 do
+      dens0.[i] &lt;- 0.0f
+      u0.[i] &lt;- 0.0f
+      v0.[i] &lt;- 0.0f
+    
+    let i, j = n/2, 2
+    let rand = System.Random()
+    for i=i-1 to i+1 do
+      set u0 i j (10.f * float32(rand.NextDouble()) - 5.f)
+      set v0 i j 10.f
+      set dens0 i j 30.f
+    
+    let dt = time()
+    velocity_step u1 v1 u0 v0 visc dt
+    density_step dens1 dens0 u1 v1 diff dt;;
+val update : unit -&gt; unit</PRE>
+      <P>Finally, we can write the GUI which makes use of the following 
+      namespaces:</P>
+<PRE>&gt; open System.Windows;;
+&gt; open System.Windows.Media;;
+&gt; open System.Windows.Media.Media3D;;</PRE>
+      <P>The              <CODE>make</CODE> function creates a WPF window 
+      visualizing a single textured quad:           </P>
+<PRE>&gt; let make() =
+    let mesh = MeshGeometry3D()
+    let points = [0, 0; 0, 1; 1, 1; 1, 0]
+    mesh.Positions &lt;-
+      Point3DCollection[for x, y in points -&gt; Point3D(float x, float y, 0.)]
+    mesh.TextureCoordinates &lt;-
+      PointCollection[for x, y in points -&gt; Point(float x, float y)]
+    mesh.TriangleIndices &lt;- Int32Collection[0;1;2;0;2;3]
+    
+    let format = PixelFormats.Rgb24
+    let stride = (n*format.BitsPerPixel + 7)/8
+    let pixels = Array.create (n*stride) 0uy
+    let image =
+      Imaging.BitmapSource.Create(n, n, 1., 1., format, null, pixels, stride)
+    
+    let geo = GeometryModel3D(Geometry=mesh,
+                              Material=DiffuseMaterial(ImageBrush image))
+    
+    let model = Model3DGroup()
+    model.Children.Add(DirectionalLight(Color=Colors.White,
+                                        Direction=Vector3D(0., 0., 1.)))
+    model.Children.Add geo
+    
+    let vp3d = Controls.Viewport3D()
+    vp3d.Children.Add(Media3D.ModelVisual3D(Content=model))
+    vp3d.Camera &lt;-
+      OrthographicCamera(Point3D(0.5, 0.5, -1.), Vector3D(0., 0., 1.),
+                         Vector3D(0., 1., 0.), 2.)
+    
+    format, stride, pixels, geo, Window(Title="Fluid dynamics", Content=vp3d);;
+val make : unit -&gt; PixelFormat * int * byte [] * GeometryModel3D * Window</PRE>
+      <P>The main program and uses the global rendering event to update the 
+      simulation and redraw the visualization:</P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    let format, stride, pixels, geo, window = make()
+    
+    let invalidate _ _ =
+      update()
+      
+      for i=0 to n-1 do
+        for j=0 to n-1 do
+          let g = get dens1 (i+1) (j+1)
+          for k, g in [2, g; 1, g-g**0.5f; 0, g-g**0.33f] do
+            pixels.[stride*i/n+k + stride*j] &lt;-
+              256.f * g |&gt; clamp 0.f 255.f |&gt; byte
+      
+      let image =
+        Imaging.BitmapSource.Create(n, n, 1., 1., format, null, pixels, stride)
+      geo.Material &lt;- DiffuseMaterial(ImageBrush image)
+      
+      window.InvalidateVisual()
+    CompositionTarget.add_Rendering(System.EventHandler invalidate)
+    (Application()).Run window
+    |&gt; ignore;;</PRE>
+      <P>This program is already very manageable in size but, in fact, smoke 
+      simulations suitable for games can be created with zero diffusion and 
+      viscosity constants, in which case the              <CODE>diffuse</CODE> 
+      function is not even required!           </P>
+      <H2>Results</H2>
+      <P>The simple program descibed above produces results like the 
+      following:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/smoke1.gif"> 
+                  </P>
+      <P></P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/smoke2.gif"> 
+                  </P>
+      <P></P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/smoke3.gif"> 
+                  </P>
+      <P></P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/smoke4.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article described a simple method of simulating fluid flow that is 
+      ideal for computer games because it is efficient and visually realistic. 
+      The results were visualized in real-time using Windows Presentation 
+      Foundation by texturing a single quad. This is an effective way to 
+      visualize pixmaps with linear interpolation (such as scalar fields like 
+      the smoke density).</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Simulating%20smoke%20in%20real-time%20using%20fluid%20dynamics_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

@@ -1,0 +1,135 @@
+BODY {
+	FONT-SIZE: 0.8em; FONT-FAMILY: Tahoma, Verdana, Arial, Helvetica, sans-serif; COLOR: #000000; BACKGROUND-COLOR: #ffffff
+}
+A:link {
+	COLOR: #000000
+}
+A:visited {
+	COLOR: #000000
+}
+A:active {
+	COLOR: #000000
+}
+A:hover {
+	COLOR: #003377
+}
+IMG {
+	BORDER-LEFT-WIDTH: 0px; BORDER-RIGHT-WIDTH: 0px; BORDER-BOTTOM-WIDTH: 0px; BORDER-TOP-WIDTH: 0px
+}
+H1 {
+	FONT-SIZE: 2em; FONT-FAMILY: Helvetica, sans-serif; FONT-WEIGHT: bold; COLOR: #000000; TEXT-ALIGN: center; MARGIN-LEFT: 5px; MARGIN-RIGHT: 5px
+}
+H2 {
+	FONT-SIZE: 1.75em; FONT-FAMILY: Helvetica, sans-serif; FONT-WEIGHT: bold; COLOR: #7777ff; MARGIN-LEFT: 5px; MARGIN-RIGHT: 15px
+}
+H3 {
+	FONT-SIZE: 1.5em; FONT-FAMILY: Helvetica, sans-serif; FONT-WEIGHT: bold; COLOR: #6666ff; MARGIN-LEFT: 10px; MARGIN-RIGHT: 15px
+}
+H4 {
+	FONT-SIZE: 1.25em; FONT-FAMILY: Helvetica, sans-serif; FONT-WEIGHT: bold; COLOR: #5555ff; MARGIN-LEFT: 12px; MARGIN-RIGHT: 15px
+}
+H5 {
+	FONT-SIZE: 1.12em; FONT-FAMILY: Helvetica, sans-serif; FONT-WEIGHT: bold; COLOR: #3333ff; MARGIN-LEFT: 14px; MARGIN-RIGHT: 15px
+}
+P {
+	MARGIN-LEFT: 15px; MARGIN-RIGHT: 15px
+}
+PRE {
+	FONT-SIZE: 1.1em; COLOR: #0033ff; MARGIN-LEFT: 15px; MARGIN-RIGHT: 15px
+}
+UL {
+	MARGIN-LEFT: 30px; MARGIN-RIGHT: 30px
+}
+DL {
+	MARGIN-LEFT: 30px; MARGIN-RIGHT: 30px
+}
+OL {
+	MARGIN-LEFT: 30px; MARGIN-RIGHT: 30px
+}
+LI {
+	MARGIN-LEFT: 30px; MARGIN-RIGHT: 30px
+}
+DT {
+	FONT-WEIGHT: bold; MARGIN-LEFT: 15px; MARGIN-RIGHT: 15px
+}
+DD {
+	MARGIN-LEFT: 35px; MARGIN-RIGHT: 15px
+}
+P.caption {
+	FONT-SIZE: 75%; FONT-STYLE: italic; TEXT-ALIGN: center
+}
+TABLE {
+	MARGIN-LEFT: auto; WIDTH: 100%; MARGIN-RIGHT: auto
+}
+TD {
+	VERTICAL-ALIGN: middle
+}
+CODE {
+	FONT-SIZE: 1.1em; FONT-FAMILY: monospace; COLOR: #0033ff
+}
+P.price {
+	FONT-SIZE: 2em; FONT-FAMILY: Tahoma, Verdana, Arial, Helvetica, sans-serif; FONT-STYLE: italic; TEXT-ALIGN: center
+}
+TABLE#logo {
+	BORDER-TOP: #ffbb77 2px solid; BORDER-RIGHT: #ffbb77 2px solid; BORDER-BOTTOM: #ffbb77 2px solid; TEXT-ALIGN: left; BORDER-LEFT: #ffbb77 2px solid; WIDTH: 960px; BACKGROUND-COLOR: #fff7f0
+}
+TABLE#menu {
+	WIDTH: 960px; BACKGROUND-COLOR: #ffbb77
+}
+TABLE#menu TD {
+	FONT-SIZE: 0.9em; FONT-FAMILY: Arial; TEXT-ALIGN: center; WIDTH: 200px
+}
+TABLE#page {
+	BORDER-TOP: #ffbb77 2px solid; BORDER-RIGHT: #ffbb77 2px solid; BORDER-BOTTOM: #ffbb77 2px solid; TEXT-ALIGN: left; BORDER-LEFT: #ffbb77 2px solid; WIDTH: 960px; BACKGROUND-COLOR: #fff7f0; align: center
+}
+TABLE#page TD {
+	BORDER-TOP: #ffbb77 2px solid; BORDER-RIGHT: #ffbb77 2px solid; VERTICAL-ALIGN: top; BORDER-BOTTOM: #ffbb77 2px solid; BORDER-LEFT: #ffbb77 2px solid; WIDTH: 300px
+}
+TABLE#items {
+	BORDER-TOP: #000000 0px solid; BORDER-RIGHT: #000000 0px solid; BORDER-BOTTOM: #000000 0px solid; BORDER-LEFT: #000000 0px solid; WIDTH: 300px
+}
+TABLE#items TD {
+	BORDER-TOP: #000000 0px solid; BORDER-RIGHT: #000000 0px solid; VERTICAL-ALIGN: middle; BORDER-BOTTOM: #000000 0px solid; BORDER-LEFT: #000000 0px solid
+}
+.title {
+	HEIGHT: 40px; VERTICAL-ALIGN: top; FONT-WEIGHT: bold; TEXT-ALIGN: center; BACKGROUND-COLOR: #ffbb77
+}
+.overview {
+	BACKGROUND-COLOR: #fff7f0
+}
+.details {
+	FONT-SIZE: 0.8em
+}
+TABLE#item {
+	
+}
+TABLE#item TD {
+	WIDTH: 0px
+}
+.view {
+	WIDTH: 128px
+}
+P.more {
+	FONT-SIZE: 0.9em
+}
+TABLE#footer {
+	FONT-SIZE: 0.9em; TEXT-ALIGN: right; WIDTH: 960px; BACKGROUND-COLOR: #ffbb77
+}
+TABLE#cards {
+	WIDTH: 900px
+}
+TABLE#cards TD {
+	TEXT-ALIGN: center
+}
+TABLE#advert {
+	WIDTH: 300px
+}
+TABLE#advert TD.image {
+	TEXT-ALIGN: center; WIDTH: 80px
+}
+TABLE#advert TD.description {
+	FONT-SIZE: 1.2em; VERTICAL-ALIGN: middle; TEXT-ALIGN: center
+}
+.center {
+	MARGIN-LEFT: auto; MARGIN-RIGHT: auto
+}

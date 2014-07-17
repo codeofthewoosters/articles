@@ -1,0 +1,746 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0088)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/numerical_examples.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Factoring numerical methods using combinators</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Factoring numerical methods using 
+combinators</TITLE>     <LINK href="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Factoring numerical methods using combinators</H1>
+      <P>The benefits of functional programming in certain areas like parsers 
+      and compilers are well known but functional programming can also be 
+      extremely beneficial in many other areas including numerical computation 
+      and technical computing. This articles shows how common functional 
+      constructs can be used to implement some numerical methods and even 
+      complete working programs much more quickly and easily. The clarity of the 
+      resulting implementations is remarkable thanks, in particular, to the use 
+      of combinators.</P>
+      <H2>The Nest combinator</H2>
+      <P>Many numerical algorithms are iterative and those that iterate a fixed 
+      number of times may be represented in terms of the following              
+      <CODE>nest</CODE> combinator:           </P>
+<PRE>&gt; #light;;
+&gt; let rec nest n f x =
+    if n=0 then x else nest (n - 1) f (f x);;
+val nest : int -&gt; ('a -&gt; 'a) -&gt; 'a -&gt; 'a</PRE>
+      <P>This polymorphic function accepts a number of repetitions              
+      <CODE>n</CODE> , a function              <CODE>f : 'a -&gt; 'a</CODE> and 
+      an initial value              <CODE>x : 'a</CODE> and computes the result 
+      of              <CODE>n</CODE> nested applications of the function         
+           <CODE>f</CODE> to              <CODE>x</CODE> , e.g.              
+      <CODE>nest 3 f x</CODE> computes              <CODE>f(f(f x))</CODE> .     
+            </P>
+      <H3>Building arithmetic operators</H3>
+      <P>The pedagogical example of the              <CODE>nest</CODE> 
+      combinator is the derivation of arithmetic operations in terms of this 
+      combinator in the context of the              <CODE>succ</CODE> function 
+      that returns the next int:           </P>
+<PRE>&gt; let succ n = n + 1;;
+val succ : int -&gt; int
+&gt; succ 3;;
+val it : int = 4</PRE>
+      <P>Natural number addition of              <CODE>m</CODE> by              
+      <CODE>n</CODE> may be written as              <CODE>n</CODE> nested 
+      applications of the              <CODE>succ</CODE> function to             
+       <CODE>m</CODE> :           </P>
+<PRE>&gt; let add n m =
+    nest n succ m;;
+val add : int -&gt; int -&gt; int
+&gt; add 3 5;;
+val it : int = 8</PRE>
+      <P>Multiplication of              <CODE>n</CODE> by              
+      <CODE>m</CODE> may be written as              <CODE>n</CODE> nested 
+      additions by              <CODE>m</CODE> to              <CODE>0</CODE> :  
+               </P>
+<PRE>&gt; let mul n m =
+    nest n (add m) 0;;
+val mul : int -&gt; int -&gt; int
+&gt; mul 3 5;;
+val it : int = 15</PRE>
+      <P>Raising              <CODE>n</CODE> to the power of              
+      <CODE>m</CODE> may be written as              <CODE>m</CODE> nested 
+      multiplications by              <CODE>n</CODE> of              
+      <CODE>1</CODE> :           </P>
+<PRE>&gt; let pow n m =
+    nest m (mul n) 1;;
+val pow : int -&gt; int -&gt; int
+&gt; pow 3 5;;
+val it : int = 243</PRE>
+      <P>Although these are toy examples they form a simple introduction to the 
+      use of functional constructs in numerical methods.</P>
+      <H3>Heavier parameterization</H3>
+      <P>In some cases, such as generic library code, it can be productive to 
+      parameterize code more heavily. For example, we might want to write the    
+                <CODE>add</CODE> ,              <CODE>mul</CODE> and             
+       <CODE>pow</CODE> functions in a more generic form by parameterizing them 
+      over their simpler predecessors. This can be used to write them in an 
+      number-agnostic way, so the same definitions can be used to create 
+      arithmetic operators for different numeric types.           </P>
+      <P>A generalization of the              <CODE>nest</CODE> combinator might 
+      be parameterized over the arithmetic used for counting:           </P>
+<PRE>&gt; let rec nest zero pred succ n f x =
+    if n = zero then x else
+      nest zero pred succ (pred n) f (f x);;
+val nest : 'a -&gt; ('a -&gt; 'a) -&gt; 'b -&gt; 'a -&gt; ('c -&gt; 'c) -&gt; 'c -&gt; 'c</PRE>
+      <P>Addition might be parameterized over the zero element of the 
+      arithmetic, the predecessor and successor functions and equality:</P>
+<PRE>&gt; let add zero pred succ n m =
+    nest zero pred succ n succ m;;
+val add : 'a -&gt; ('b -&gt; 'b) -&gt; ('c -&gt; 'c) -&gt; 'b -&gt; 'c -&gt; 'c</PRE>
+      <P>Note how the signature of the              <CODE>add</CODE> function is 
+      now almost entirely polymorphic and, in particular, there is no reference 
+      to the              <CODE>int</CODE> type because this definition is now 
+      general and can be applied to many different numeric representations.      
+           </P>
+      <P>This higher-order              <CODE>add</CODE> function can be applied 
+      to the              <CODE>int</CODE> type by specifying the              
+      <CODE>0</CODE> number,              <CODE>pred</CODE> and              
+      <CODE>succ</CODE> functions:           </P>
+<PRE>&gt; let pred n = n - 1;;
+val pred : int -&gt; int
+&gt; add 0 pred succ 3 5;;
+val it : int = 8</PRE>
+      <P>Multiplication might be parameterized and used similarly:</P>
+<PRE>&gt; let mul zero pred succ n m =
+    let add = add zero pred succ in
+    nest zero pred succ n (add m) zero;;
+val mul : 'a -&gt; ('b -&gt; 'b) -&gt; ('a -&gt; 'a) -&gt; 'b -&gt; 'b -&gt; 'a
+&gt; mul 0 pred succ 3 5;;
+val it : int = 15</PRE>
+      <P>Raise to the power:</P>
+<PRE>&gt; let pow zero pred succ n m =
+    let mul = mul zero pred succ in
+    nest zero pred succ m (mul n) (succ zero);;
+val pow : 'a -&gt; ('a -&gt; 'a) -&gt; ('a -&gt; 'a) -&gt; 'a -&gt; 'a -&gt; 'a
+&gt; pow 0 pred succ 3 5;;
+val it : int = 243</PRE>
+      <P>Unlike the original definitions of these functions from the first 
+      section, these implementations can be used with different kinds of numeric 
+      representations such as floating point numbers, big integers and big 
+      rationals:</P>
+<PRE>&gt; pow 0.0 (fun x -&gt; x - 1.0) (fun x -&gt; x + 1.0) 3.0 5.0;;
+val it : float = 243.0
+&gt; pow 0I (fun x -&gt; x - 1I) (fun x -&gt; x + 1I) 3I 5I;;
+val it : bigint = 243I</PRE>
+      <P>Such aggressive factoring can be useful but exclusive use of 
+      higher-order functions quickly becomes unwieldy in practice. In 
+      particular, the signatures of the functions involved grows very rapidly 
+      for higher order parameterizations, i.e. parameterizing over something 
+      that is itself parameterized. Function signatures more that a few lines 
+      long are typically considered too obfuscated and alternatives are sought. 
+      Fortunately, F#'s record types are an excellent alternative.</P>
+      <H3>Encapsulating related parameters in a record</H3>
+      <P>The previous demonstration of parameterization using higher-order 
+      functions can be simplified by encapsulating the related definitions in a 
+      record type:</P>
+<PRE>&gt; type 'a arithmetic =
+    { zero : 'a;
+      pred : 'a -&gt; 'a;
+      succ : 'a -&gt; 'a };;
+type 'a arithmetic = {
+  zero : 'a;
+  pred : 'a -&gt; 'a;
+  succ : 'a -&gt; 'a;
+}</PRE>
+      <P>Then we can write:</P>
+<PRE>&gt; let rec nest a n f x =
+    if n = a.zero then x else
+      nest a (a.pred n) f (f x);;
+val nest : 'a arithmetic -&gt; 'a -&gt; ('b -&gt; 'b) -&gt; 'b -&gt; 'b = &lt;fun&gt;
+&gt; let add a n m =
+    nest a n a.succ m;;
+val add : 'a arithmetic -&gt; 'a -&gt; 'a -&gt; 'a = &lt;fun&gt;
+&gt; let mul a n m =
+    nest a n (add a m) a.zero;;
+val mul : 'a arithmetic -&gt; 'a -&gt; 'a -&gt; 'a = &lt;fun&gt;
+&gt; let pow a n m =
+    nest a m (mul a n) (a.succ a.zero);;
+val pow : 'a arithmetic -&gt; 'a -&gt; 'a -&gt; 'a = &lt;fun&gt;</PRE>
+      <P>Note how the parameters are drawn from the record              
+      <CODE>a</CODE> in each case, and passed as a single argument, greatly 
+      simplifying the types of the functions involved.            </P>
+      <P>Instantiating the record type for a particular kind of arithmetic:</P>
+<PRE>&gt; let ints = { zero = 0; pred = pred; succ = succ };;
+val ints : int arithmetic = {zero = 0; pred = &lt;fun&gt;; succ = &lt;fun&gt; }</PRE>
+      <P>The arithmetic operations can be used by applying this encapsulated 
+      form of arithmetic:</P>
+<PRE>&gt; add ints 3 5;;
+val it : int = 8
+&gt; mul ints 3 5;;
+val it : int = 15
+&gt; pow ints 3 5;;
+val it : int = 243</PRE>
+      <P>Encapsulating related parameters in a record helps to keep the 
+      complexity under control. These definitions are now perfectly usable in 
+      their generic form, partly because use is simpler but also because the 
+      record type forms a "pinch point" for the type system that helps the 
+      static type system to catch errors earlier by clarifying the types 
+      involved.</P>
+      <H2>Fixed point combinator</H2>
+      <P>Another combinator similar to the              <CODE>nest</CODE> 
+      combinator that can also be useful in the context of numerical methods 
+      iterates to fixed point (i.e. until the accumulator stops changing) rather 
+      than iterating a set number of times. This may be written:           </P>
+<PRE>&gt; let rec fixed_point f x =
+    let f_x = f x in
+    if f_x = x then x else fixed_point f f_x;;
+val fixed_point : ('a -&gt; 'a) -&gt; 'a -&gt; 'a</PRE>
+      <P>Note that the equality              <CODE>=</CODE> used in this 
+      function is pulled from the values that it is comparing after run-time 
+      type specialization. Consequently, this function will be efficient when 
+      applied to primitive types such as              <CODE>float</CODE> but can 
+      also be made to use custom functions for classes. For example, a class 
+      might override comparison in order to use a custom comparison function 
+      that compares only certain parts of an accumulated value.           </P>
+      <P>For example, iterating the recurrence relation              <I>x        
+             <SUB>n+1</SUB> = sqrt(1+x               <SUB>n</SUB> )             
+      </I> to fixed point gives the Golden ratio:           </P>
+<PRE>&gt; fixed_point (fun x -&gt; sqrt(1.0 +. x)) 1.0;;
+val it : float = 1.6180339887498949</PRE>
+      <P>This recurrence relation never actually completes in the mathematical 
+      sense but this implementation terminates when subsequent iterations return 
+      the same answer to within numerical precision.</P>
+      <H2>The Numerical Derivative Combinator</H2>
+      <P>Mathematical operators are typically direct equivalents of combinators. 
+      For example, the numerical derivative combinator              
+      <CODE>d</CODE> described at the end of chapter 1 of              <A href="http://www.ffconsultancy.com/products/ocaml_for_scientists/">OCaml 
+      for Scientists</A> may be implemented as follows:           </P>
+<PRE>&gt; let delta = sqrt epsilon_float;;
+val delta : float = 1.49011611938476562e-08
+&gt; let d f x =
+    ((f (x + delta)) - (f (x - delta))) / (2.0 * delta);;
+val d : (float -&gt; float) -&gt; float -&gt; float</PRE>
+      <P>This combinator accepts a function              <CODE>f : float -&gt; 
+      float</CODE> and a value              <CODE>x : float</CODE> and 
+      calculates a numerical approximation to the derivative of              
+      <CODE>f</CODE> at              <CODE>x</CODE> .           </P>
+      <P>For example, the derivative of the function              <I>f(x) = x    
+                 <SUP>3</SUP> - x - 1             </I> is              <I>f'(x) 
+      = 3 x               <SUP>2</SUP> - 1             </I> which evaluates at   
+                 <I>x=2</I> to              <I>f'(2) = 11</I> :           </P>
+<PRE>&gt; let f x =
+    x ** 3.0 - x - 1.0;;
+val f : float -&gt; float
+&gt; let f' =
+    d f;;
+val f' : (float -&gt; float)
+&gt; f' 2.0;;
+val it : float = 11.0</PRE>
+      <P>Note how the F# language allows function names that include the symbol  
+                  <CODE>'</CODE> which may be productively used to denote 
+      derivatives.           </P>
+      <P>As the              <CODE>d</CODE> combinator was written in curried 
+      form it may be partially applied with a function              
+      <CODE>f</CODE> to obtain a derivative function without having to make any 
+      explicit statements about the final argument. This is known as the "point 
+      free" style of functional programming.           </P>
+      <P>Moreover, this              <CODE>d</CODE> combinator and the           
+         <CODE>nest</CODE> combinator may be composed in order to compute higher 
+      derivatives. For example, the first few derivatives of              
+      <CODE>f</CODE> are given by:           </P>
+<PRE>&gt; [|for n in 0 .. 4 -&gt;
+      nest n d f 2.0|];;
+val it : float array = [|5.0; 11.0; 12.0; 33554432.0; 0.0|]</PRE>
+      <P>The expected answers are 5, 11, 12, 6 and 0. Note that the higher 
+      derivatives suffer from numerical error and, in particular, this is 
+      catastrophic for the third derivative.</P>
+      <H2>Newton-Raphson root finding</H2>
+      <P>The one-dimensional Newton-Raphson root finding algorithm is a simple 
+      numerical method that might use the derivative and fixed point combinators 
+      described above.</P>
+      <P>The following              <CODE>newton_raphson</CODE> combinator 
+      iterates to fixed point, extrapolating the tangent at a point on a curve 
+      to the axis:           </P>
+<PRE>&gt; let newton_raphson f f' (x : float) =
+    fixed_point (fun x -&gt; x - f x / f' x) x;;
+val newton_raphson : (float -&gt; float) -&gt; (float -&gt; float) -&gt; float -&gt; float</PRE>
+      <P>Note that this combinator accepts the derivative function              
+      <CODE>f'</CODE> as well as the function              <CODE>f</CODE> 
+      itself. This allows a symbolic derivative to be used when one is available 
+      or the derivative combinator              <CODE>d</CODE> can be used to 
+      generate a numerical approximant easily if a symbolic derivative is not 
+      available.           </P>
+      <P>For example, the root of the previous cubic example function            
+        <CODE>f</CODE> can be found by starting iteration at              
+      <CODE>x=0</CODE> :           </P>
+<PRE>&gt; newton_raphson f (d f) 0.0;;
+val it : float = 1.324717957</PRE>
+      <P>This              <CODE>newton_raphson</CODE> combinator demonstrates 
+      how concepts from functional programming allow even simple numerical 
+      methods to be implemented with remarkable clarity compared to traditional 
+      implementations.           </P>
+      <H2>Numerical Grad combinator</H2>
+      <P>The              <CODE>d</CODE> combinator described in the previous 
+      section only handles a one-dimensional function, i.e. a function of one 
+      variable. A function of many variables may be represented by the type      
+              <CODE>vector -&gt; float</CODE> and the grad of such a function 
+      may be computed using the following definitions:           </P>
+<PRE>&gt; let partial_d f_xs f (xs : vector) i xi =
+    xs.[i] &lt;- xi + delta
+    try (f xs - f_xs) / delta finally
+    xs.[i] &lt;- xi;;
+val partial_d : float -&gt; (vector -&gt; float) -&gt; vector -&gt; int -&gt; float -&gt; float</PRE>
+      <P>Note the type annotation              <CODE>xs : vector</CODE> in the 
+      argument list of the              <CODE>partial_d</CODE> function that is 
+      required in order to disambiguate the use of the              
+      <CODE>Item</CODE> member's setter (the              <CODE>xs.[i] &lt;- 
+      ...</CODE>  notation) because many other classes also provide this, e.g. 
+      arrays and hash tables.           </P>
+      <P>In the interests of efficiency, the              <CODE>partial_d</CODE> 
+      function mutates the given vector              <CODE>xs</CODE> in-place 
+      but careful use of the              <CODE>try..finally</CODE> construct 
+      ensures that this state change is undone in the event of an exception 
+      being raised.           </P>
+      <P>The              <CODE>grad</CODE> combinator may then be written 
+      elegantly in terms of this              <CODE>partial_d</CODE> function:   
+              </P>
+<PRE>&gt; let grad f xs =
+    Math.Vector.mapi (partial_d (f xs) f xs) xs;;
+val grad : (vector -&gt; float) -&gt; vector -&gt; Math.vector</PRE>
+      <P>The              <CODE>partial_d</CODE> combinator updates a single 
+      dimension of the function              <CODE>f</CODE> and computes         
+           <CODE>f xs</CODE> at this new position in order to approximate the 
+      gradient in that direction. The              <CODE>grad</CODE> combinator 
+      maps this              <CODE>partial_d</CODE> function over all of the 
+      dimensions in order to compute the grad of the arbitrary-dimensional 
+      function.           </P>
+      <P>Note how higher-order functions, currying and partial application are 
+      instrumental in the elegant construction of this              
+      <CODE>grad</CODE> combinator. This implementation is not only much easier 
+      to define compared to a procedural or object-oriented equivalent but is 
+      also much easier to use.           </P>
+      <P>For example, consider the following two-dimensional function:</P>
+<PRE>&gt; let f2 (xs : vector) =
+    let x, y = xs.[0], xs.[1]
+    x ** 4.0 + y ** 2.0 - x ** 3.0 * y - 3.0 * x;;
+val f : vector -&gt; float</PRE>
+      <P>A numerical approximation to the grad of this function at the origin is 
+      given by:</P>
+<PRE>&gt; grad f2 (vector [0.0; 0.0]);;
+val it : Math.vector = vector [-3.0; 0.0]</PRE>
+      <P>The symbolic grad of              <I>f               <SUB>2</SUB> (x, 
+      y) = x               <SUP>4</SUP> + y               <SUP>2</SUP> - x       
+              <SUP>3</SUP> y - 3 x             </I> is &#8711;             <I>f        
+             <SUB>2</SUB> (x,y) = (4 x               <SUP>3</SUP> - 3 x          
+           <SUP>2</SUP> y - 3, 2 y - x               <SUP>3</SUP> )             
+      </I> which really does evaluate to              <I>(3, 0)</I> at the 
+      origin.           </P>
+      <P>This              <CODE>grad</CODE> combinator will be used in future 
+      examples.           </P>
+      <H2>Function minimization using the Gradient Descent method</H2>
+      <P>Function minimization (or equivalently maximization) is one of the most 
+      commonly used numerical methods. These techniques are used for everything 
+      from curve fitting (e.g. minimizing the sum of squares difference) to the 
+      analysis of the results of molecular dynamics simulations.</P>
+      <P>Gradient descent is one of the simplest numerical methods for 
+      minimizing a function. This approach repeatedly uses the grad of a 
+      function to determine the direction of steepest descent of the function 
+      with respect to its arguments and steps down the function towards a local 
+      minimum, i.e. tweaking the function arguments to reduce its value. The 
+      step size is gradually increased as the iterations progress until a step 
+      in the downward direction overshoots the minimum so far that the function 
+      increases, at which point the step size is drastically reduced. </P>
+      <P>One important advantage of the gradient descent algorithm is it allows 
+      numerical stability to be handled simply, yielding robust implementations. 
+      Specifically, the algorithm is made to terminate when both the function 
+      value and step size are left unchanged by an iteration. This occurs when a 
+      function's local minimum is reached to within numerical error, so the 
+      function value stops changing, at which point the step size in repeatedly 
+      decreased until it underflows to zero and then also stops changing. At 
+      this point, the gradient descent algorithm terminates safe in the 
+      knowledge that it can do no better. Consequently, more efficient and 
+      complicated function minimization algorithms often resort to gradient 
+      descent when they start to suffer from numerical error, e.g. in the 
+      vicinity of the local minimum.</P>
+      <P>The following              <CODE>descend</CODE> combinator performs a 
+      single iteration of gradient descent and is designed for use with 
+      combinators like              <CODE>nest</CODE> and              
+      <CODE>fixed_point</CODE> :           </P>
+<PRE>&gt; let descend alpha beta f f' (lambda, xs: vector, f_xs) =
+    let xs_2 = xs - lambda $* f' xs
+    let f_xs_2 = f xs_2
+    if f_xs_2 &gt;= f_xs then
+      alpha * lambda, xs, f_xs
+    else
+      beta * lambda, xs_2, f_xs_2;;
+val descend :
+  float -&gt; float -&gt; (Math.Vector&lt;float&gt; -&gt; 'a) -&gt; (vector -&gt; Math.Vector&lt;float&gt;) -&gt;
+  float * vector * 'a -&gt; float * vector * 'a</PRE>
+      <P>The parameters              <CODE>alpha</CODE> and              
+      <CODE>beta</CODE> are the proportions by which the step size is altered 
+      when the function evaluates to a higher or lower value than the previous 
+      iteration, respectively. So              <CODE>alpha</CODE> is 
+      significantly below one and              <CODE>beta</CODE> is slightly 
+      over one.           </P>
+      <P>The gradient descent algorithm may then be implemented as follows:</P>
+<PRE>&gt; let gradient_descent f f' xs =
+    let _, xs, _ = fixed_point (descend 0.5 1.1 f f') (1.0, xs, f xs)
+    xs;;
+val gradient_descent :
+  (Math.Vector&lt;float&gt; -&gt; 'a) -&gt; (vector -&gt; Math.Vector&lt;float&gt;) -&gt; vector -&gt;
+  vector</PRE>
+      <P>Note how neither the              <CODE>descend</CODE> nor              
+      <CODE>grad</CODE> functions are explicitly recursive. The recursion has 
+      been factored out into the              <CODE>fixed_point</CODE> 
+      combinator. The              <CODE>grad</CODE> combinator could even be 
+      parameterized over the kind of recursion that it uses by factoring out 
+      this combinator as another function argument to              
+      <CODE>grad</CODE> . This might be used to provide a              
+      <CODE>grad</CODE> combinator that always performs 100 iterations by 
+      supplying the              <CODE>nest</CODE> combinator.           </P>
+      <P>For example, the previous function              <CODE>f</CODE> of two 
+      variables may be minimized starting at the origin and using the numerical 
+      approximation to the grad:           </P>
+<PRE>&gt; let xs = gradient_descent f2 (grad f2) (vector [1.0; 1.0]);;
+val xs : vector
+&gt; xs;;
+val it : vector = vector [1.127452403; 0.7165799925]</PRE>
+      <P>At the point              <CODE>xs</CODE> , we find the value of the 
+      function is lower than it was (-2.28 instead of 0):           </P>
+<PRE>&gt; f [|0.0; 0.0|], f xs;;
+val it : float * float = (0., -2.2800244583083531)</PRE>
+      <P>and the gradient of the function is approximately the zero vector 
+      because this is a local minimum:</P>
+<PRE>&gt; grad f2 xs
+val it : Math.vector = vector [8.940696716e-08; 1.192092896e-07]</PRE>
+      <P>Despite its simplicity, this function minimizer is actually a useful 
+      tool. The remainder of this article describes one application of these 
+      combinators including a GUI to visualize the results of these functions as 
+      they work!</P>
+      <H2>Relaxing atomic configurations</H2>
+      <P>One application of function minimization is the relaxation or           
+         <I>quenching</I> of atomic configurations. This process is described as 
+      quenching because the result of a molecular dynamics simulation is an 
+      atomic configuration representing an instantaneous snapshop of a realistic 
+      model at a certain temperature. This temperature causes the atoms to 
+      oscillate about their equilibrium positions and, consequently, all of the 
+      atoms in such an instantaneous snapshop appear at random offsets from 
+      their equilibrium positions. Rapidly reducing the temperature of the 
+      atomic system causes the atoms to settle at their equilibrium positions. 
+      This can be achieved by minimizing the potential energy of the system with 
+      respect to the positions of the atoms.           </P>
+      <P>In fact, interesting results can be obtained by relaxing atomic 
+      configurations directly without even performing a proper simulation. This 
+      technique is actually used in cluster analysis to find the 3D structures 
+      of stable clusters of atoms. Clusters of atoms can be blasted off the 
+      surface of a material using experimental techniques like laser ablation 
+      and these clusters can be analysed experimentally and the results can be 
+      compared with the expected stable clusters of atoms in order to gain a 
+      better understanding of materials at this scale. So the application 
+      developed in this article is very closely related to real software used by 
+      scientists today.</P>
+      <H3>Representation of a cluster</H3>
+      <P>This program must be based upon some data structure that represents the 
+      coordinates of a system of atoms. We're going to focus on the 2D case 
+      simply because it is easier to visualize. The two main components of the 
+      system are the function minimization algorithm (primarily the              
+      <CODE>descend</CODE> function) and the potential energy function. However, 
+      the former requires the system to appear as a single vector whereas the 
+      latter requires a sequence of vectors (one for each atom). This "impedance 
+      mismatch" between the components of the program is often a major source of 
+      problems in software engineering. The simplest solution is to simply copy 
+      the data back and forth between the two representations as needed, but 
+      this is inefficient and would adversely affect the performance of the 
+      whole program.           </P>
+      <P>Fortunately, both functional programming and object oriented 
+      programming provide means of abstraction that can be used to cure this 
+      impedance mismatch easily and efficiently. The solution is to abstract 
+      some of the software components over the actual functionality that they 
+      require. In this case, the atomic system can be represented by a single 
+      vector where subvectors represent the coordinates of atoms. So the 
+      function that computes the potential energy of the atomic system acts upon 
+      a representation that can supply the number of atoms and a function that 
+      returns the position of the atom with the given index. However, this 
+      representation is abstract and, in fact, is nothing more than a shim layer 
+      over the flat vector representation that makes it appear to be an array of 
+      2D vectors (pairs of floats).</P>
+      <P>This shim layer is quantified by the following class definition:</P>
+<PRE>&gt; type shim(system: vector) =
+    member this.Length = system.Length/2
+    member this.Item
+      with get i = system.[2*i], system.[2*i+1];;</PRE>
+      <P>Note how this definition provides              <CODE>Length</CODE> and  
+                  <CODE>Item</CODE> members such that it is used in exactly the 
+      same way as a              <CODE>(float * float) array</CODE> would be. 
+      Thanks to this design, subsequent code is only specialized to this type by 
+      a single type annotation at the top of a function definition, so it can be 
+      replaced easily at a later date if required.           </P>
+      <P>An atomic system represented by a value of the              
+      <CODE>vector</CODE> type may be constructed at random using the following  
+                  <CODE>make_system</CODE> function:           </P>
+<PRE>&gt; let rand = new System.Random();;
+val rand : System.Random
+&gt; let make_system n =
+    Math.Vector.init (2*n) (fun _ -&gt; 10. * rand.NextDouble());;
+val make_system : int -&gt; Math.vector</PRE>
+      <H3>Calculating the potential energy of an atomic system</H3>
+      <P>In this case, atomic interactions are represented by a simple pair 
+      potential that gives the contribution of a pair of atoms to the total 
+      potential energy as a function of their positions. The following           
+         <CODE>phi</CODE> function is a simple pair potential with a relatively 
+      soft core:           </P>
+<PRE>&gt; let phi r =
+    1.0 / (r * r * r) - 2.0 / (r * r);;
+val phi : float -&gt; float</PRE>
+      <P>The following              <CODE>pair</CODE> function calculates the 
+      contribution of a pair of atoms to the potential energy by passing the 
+      atomic separation to the              <CODE>phi</CODE> function:           
+      </P>
+<PRE>&gt; let pair (x0, y0) (x1, y1) =
+    let dx, dy = x1 - x0, y1 - y0
+    phi (sqrt(dx * dx + dy * dy));;
+val pair : (float * float) -&gt; (float * float) -&gt; float</PRE>
+      <P>The potential energy of the atoms is given by the sum of the pair 
+      potentials over all pairs (we ignore double counting):</P>
+<PRE># let potential_energy (system: shim) =
+    let mutable e = 0.0 in
+    for i = 0 to n - 2 do
+      for j = i + 1 to n - 1 do
+        e &lt;- e + pair system.[i] system.[j]
+    e;;
+val potential_energy : shim -&gt; float</PRE>
+      <P>An atomic system may by quenched by applying a function minimization 
+      algorithm to this              <CODE>potential_energy</CODE> function.     
+            </P>
+      <H3>Quenching using Gradient Descent</H3>
+      <P>The following              <CODE>relax</CODE> function can be used to 
+      find a local minimum in the potential energy of this cluster:           
+      </P>
+<PRE>&gt; let relax system =
+    let f system = potential_energy (shim system) in
+    gradient_descent f (grad f) system;;
+val relax : vector -&gt; vector</PRE>
+      <P>Note that although we're using mutable arrays we actually building a 
+      new system of atoms at each step, i.e. in a purely functional style as if 
+      the array were immutable. However, the internal              
+      <CODE>grad</CODE> function is mutating the array. An alternative 
+      implementation might even avoid that mutation (e.g. to be trivially thread 
+      safe in order to exploit parallelism) by abstracting the lookup of array 
+      elements with another              <CODE>get</CODE> function and then 
+      overriding it for each dimension in turn to make another shim that looked 
+      like a mutated array.           </P>
+      <P>This is a complete working program that can already be used to study 
+      the characteristics of clusters. However, running this              
+      <CODE>relax</CODE> function and seeing a table of numbers is not exciting 
+      enough for the F#.NET Journal. So we shall now create a complete threaded 
+      GUI application that visualizes the results of the computation in real 
+      time!           </P>
+      <H3>Visualization</H3>
+      <P>A simple visualization can be built using only Windows Forms in this 
+      case. More sophisticated visualizations can be written quickly and easily 
+      in F# using our              <A href="http://www.ffconsultancy.com/products/fsharp_for_visualization">F# 
+      for Visualization</A> library.           </P>
+      <P>The following namespaces contain relevant definitions:</P>
+<PRE>&gt; open System.Drawing;;
+&gt; open System.Windows.Forms;;
+&gt; open System.Threading;;</PRE>
+      <P>Each particle with be drawn as an ellipse with the following 
+radius:</P>
+<PRE>&gt; let radius = 0.2;;</PRE>
+      <P>The following function computes the bound of the visualization, taking 
+      into account both the extreme particle positions and the radius:</P>
+<PRE>&gt; let bound (system: shim) =
+    let mutable lx = max_float
+    let mutable ly = max_float
+    let mutable ux = -max_float
+    let mutable uy = -max_float
+    for i=0 to system.Length - 1 do
+      let x, y = system.[i]
+      lx &lt;- min lx x
+      ly &lt;- min ly y
+      ux &lt;- max ux x
+      uy &lt;- max uy y
+    (lx - radius, ly - radius), (ux + radius, uy + radius);;
+val bound : shim -&gt; (float * float) * (float * float)</PRE>
+      <P>The following class definition describes a derived Windows Form that is 
+      responsible for its own rendering and uses double buffering:</P>
+<PRE>&gt; type View() =
+    inherit Form(Text="Clusters", Visible=true, TopMost=true, Width=1024, Height=1024) as base
+    let () = base.SetStyle(ControlStyles.DoubleBuffer, true)
+    let () = base.SetStyle(ControlStyles.UserPaint, true)
+    let () = base.SetStyle(ControlStyles.AllPaintingInWmPaint, true)
+    override this.OnPaintBackground _ = ();;
+type View = class
+              inherit Form
+            end
+            with
+              new : unit -&gt; View
+            end</PRE>
+      <P>This form class is instantiated to spawn a form representing by the 
+      following              <CODE>form</CODE> object:           </P>
+<PRE>&gt; let form = new View();;
+val form : View</PRE>
+      <P>The              <CODE>KeyDown</CODE> event is augmented with a handler 
+      than closes the form if the escape key is pressed:           </P>
+<PRE>&gt; form.KeyDown.Add(fun e -&gt; if e.KeyCode=Keys.Escape then form.Close());;
+val it : unit = ()</PRE>
+      <P>The following defines a              <CODE>state</CODE> variable that 
+      encapsulates the current state of the atomic system compatibly with the    
+                <CODE>descend</CODE> function:           </P>
+<PRE>&gt; let state =
+    let system = make_system 64
+    ref (epsilon_float, system, potential_energy(shim system));;
+val state : (float * Math.vector * float) ref</PRE>
+      <P>Note how the              <CODE>shim</CODE> class is used to dress the  
+                  <CODE>vector</CODE> representation of the atomic system up in 
+      a way that is compatible with the              
+      <CODE>potential_energy</CODE> function.           </P>
+      <P>The following spawns a background worker thread that repeatedly applies 
+      the gradient descent algorithm to the current state:</P>
+<PRE>&gt; let worker =
+    let run () =
+      while not form.IsDisposed do
+	let f system = potential_energy (shim system)
+	let state' = descend 0.5 1.1 f (grad f) (lock state (fun () -&gt; !state))
+	lock state (fun () -&gt; state := state')
+    let thread = new Thread(run, IsBackground=true)
+    thread.IsBackground &lt;- true
+    thread.Start()
+    thread;;
+val worker : Thread</PRE>
+      <P>We have chosen to explicitly terminate the loop in this thread when the 
+      form is disposed so that the program can be run in an interactive session 
+      as well as a standalone application.</P>
+      <P>Note that the state is locked each time it is read or written but not 
+      for the entire duration of the application of the              
+      <CODE>descend</CODE> function (which is likely to be comparatively slow).  
+               </P>
+      <P>The following defines a function that may be used as a paint callback 
+      for the form:</P>
+<PRE>&gt; let paint (e : PaintEventArgs) =
+    let _, system, _ = lock state (fun () -&gt; !state)
+    let system = shim system
+    let brush = (new Pen(Color.White)).Brush
+    e.Graphics.FillRectangle(brush, e.ClipRectangle)
+    let brush = (new Pen(Color.Black)).Brush
+    let (lx, ly), (ux, uy) = bound system
+    for i = 0 to system.Length - 1 do
+      let x, y = system.[i]
+      let r = form.ClientRectangle
+      let w, h = r.Width, r.Height
+      let fx x = x / (ux - lx) * float w |&gt; int
+      let fy y = y / (uy - ly) * float h |&gt; int
+      let rx = fx radius
+      let ry = fy radius
+      e.Graphics.FillEllipse(brush, fx(x-lx)-rx, fy(y-ly)-ry, 2*rx, 2*ry)
+      form.Invalidate();;
+val paint : PaintEventArgs -&gt; unit</PRE>
+      <P>This function reads the current state of the system (locking it to 
+      avoid reading during writes by the worker thread), computes the bounds of 
+      the scene and then draws each particle as an ellipse before invalidating 
+      the form to cause immediate redraw.</P>
+      <P>This implementation is not careful to deal with the aspect ratio of the 
+      window.</P>
+      <P>The following line registers the              <CODE>paint</CODE> 
+      function as a callback for the              <CODE>Paint</CODE> event of 
+      the form:           </P>
+<PRE>&gt; form.Paint.Add paint;;
+val it : unit = ()</PRE>
+      <P>The form is invalidated to start the redrawing:</P>
+<PRE>&gt; form.Invalidate();;
+val it : unit = ()</PRE>
+      <P>This results in a real-time visualization of the gradient descent 
+      function as it works. The visualization initially shows a random 
+      distribution of atoms:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/cluster64_start.gif"> 
+                  </P>
+      <P></P>
+      <P>As the potential energy of the atomic cluster is reduced, the atoms 
+      bond together into solid structures and the visualization zooms in to keep 
+      the view filled:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/cluster64_soft.gif"> 
+                  </P>
+      <P></P>
+      <P>Experimenting with this simple program is an excellent way to gain a 
+      better understanding of both the gradient descent algorithm and the 
+      properties of pair potentials.</P>
+      <P>Try to observe the following characteristics by playing with the 
+      program:</P>
+      <P>
+      <UL>
+        <LI>This implementation of the gradient descent algorithm accelerates 
+        changes to the system until the potential energy increases due to a 
+        particle collision, at which point it backtracks and starts again with 
+        smaller steps.</LI>
+        <LI>Pair potentials that use larger exponents (such as 12 in the 
+        Lennard-Jones pair potential) introduce                  <I>hard 
+        core</I> repulsion. This hardening of the core of the potential causes 
+        atoms relax into much more aligned, crystalline structures. Try altering 
+        the pair potential in the program to see this effect.               
+      </LI></UL>
+      <P></P>
+      <P>A 64-atom cluster interacting via the Lennard-Jones pair potential 
+      produces results like this:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/cluster64.gif"> 
+                  </P>
+      <P></P>
+      <P>As F# is a high-performance language and this implementation is 
+      reasonably efficient, you can simulate larger numbers of particles as 
+      well:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/cluster128_soft.gif"> 
+                  </P>
+      <P></P>
+      <P>The following code can be added in order to allow this program to be 
+      used both from an F# interactive session and as a standalone compiled 
+      program:</P>
+<PRE>#if COMPILED
+Application.Run form
+#endif</PRE>
+      <H2>Summary</H2>
+      <P>This article has shown how core numerical methods can benefit 
+      enormously from the use of functional programming. Several important 
+      numerical algorithms have been invented and the clarity of the resulting 
+      implementations is incredible.</P>
+      <P>The final threaded GUI application has demonstrated not only how easily 
+      visualizations can be created from F# programs using minimal tools but 
+      also how instructive a visualization can be.</P>
+      <P>Future F#.NET Journal articles will revisit many of the topics covered 
+      here. In particular, this program will be used as a case study for 
+      optimization and the agressive factoring of numerical methods using 
+      constructs from functional programming will be explored again in the 
+      context of linear algebra.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Factoring%20numerical%20methods%20using%20combinators_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

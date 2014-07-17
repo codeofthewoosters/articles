@@ -1,0 +1,427 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0073)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/bwt.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Optimizing the Burrows-Wheeler Transform</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Optimizing the Burrows-Wheeler Transform</TITLE> 
+    <LINK href="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Optimizing the Burrows-Wheeler Transform</H1>
+      <P>The Burrows-Wheeler Transform (BWT) is one of the few preconditioners 
+      used in data compression and, in particular, is the core of the popular 
+      bzip2 compression utility. This article describes a simple 12-line 
+      implementation of the BWT in F# and progressively optimizes the 
+      implementation to use a customized quicksort then shared-memory 
+      parallelism. On 8 cores, the final optimized implementation is over 1,000× 
+      faster than the original.</P>
+      <H2>Introduction</H2>
+      <P>The Burrows-Wheeler Transform (BWT) is a simple sort-based process that 
+      converts an input string into an output string and an integer where the 
+      output string is generally much more repetitious than the input string 
+      and, consequently, is more amenable to data compression algorithms such as 
+      Huffman compression. The associated integer contains only              
+      <I>O(log n)</I> bits where              <I>n</I> is the number of 
+      characters in the strings.           </P>
+      <P>David Wheeler was researching techniques similar to the BWT as early as 
+      1983 but only published the algorithm now known as the BWT with Michael 
+      Burrows in 1994. The publication was met with great excitement as the new 
+      BWT algorithm combined the performance of fast compressors like the 
+      Lempel-Ziv dictionary-based algorithms (using in ZIP) with the much higher 
+      compression ratios close to those of much slower algorithms like 
+      Prediction by Partial Matching (PPM). Today, the BWT is the foundation of 
+      the most popular compression software on Unix systems, the              <A 
+      href="http://www.bzip.org/">bzip2</A> tool. Since then, the variations on 
+      the BWT concept have been used to create state-of-the-art alignment 
+      algorithms for bioinformatics such as              <A href="http://bowtie-bio.sourceforge.net/index.shtml">Bowtie</A>
+       .           </P>
+      <P>The BWT is a remarkably simple transform. Given a string such as        
+            <CODE>GATTACA</CODE> , we begin by creating a matrix of rotated 
+      strings:           </P>
+<PRE>GATTACA
+AGATTAC
+CAGATTA
+ACAGATT
+TACAGAT
+TTACAGA
+ATTACAG</PRE>
+      <P>The rows of this matrix are then sorted into lexicographic order, 
+      treating the end of the original string as a character larger than any 
+      other:</P>
+<PRE>ACAGATT
+ATTACAG
+AGATTAC
+CAGATTA
+GATTACA
+TACAGAT
+TTACAGA</PRE>
+      <P>The output string is the final column of this matrix, in this case      
+              <CODE>TGCAATA</CODE> . The output integer is the row index of the 
+      original string in the matrix, in this case the input string appears as 
+      row 4.           </P>
+      <P>The inverse transform begins reconstructing the matrix with the final 
+      column. Every column is a permutation of the input and the first column is 
+      sorted. So the first column may be obtained from the final column by 
+      sorting it.</P>
+      <H2>Naive implementation</H2>
+      <P>To write a naive implementation we simply note that the matrix of 
+      rotated strings is easily written implicitly as a function mapping matrix 
+      coordinates via rotations into the original string and the sorted matrix 
+      is easily written as a permutation of that.</P>
+      <P>Thus, we begin by writing a              <CODE>cmp</CODE> function to 
+      compare two rows of the matrix:           </P>
+<PRE>&gt; let rec cmp str k i j =
+    let n = Array.length str
+    if k=n then 0 else
+      let c = compare str.[i] str.[j]
+      if c&lt;&gt;0 then c else
+        cmp str (k + 1) ((i + 1) % n) ((j + 1) % n);;
+val cmp : 'a array -&gt; int -&gt; int -&gt; int -&gt; int</PRE>
+      <P>The input string is              <CODE>str</CODE> , the counter         
+           <CODE>k</CODE> should be initialized to zero and the indexes          
+          <CODE>i</CODE> and              <CODE>j</CODE> give the first 
+      characters in the input string.           </P>
+      <P>A function to compute the BWT of a string may then be written:</P>
+<PRE>&gt; let bwt str =
+    let n = Array.length str
+    let a = [|0 .. n-1|]
+    Array.sortInPlaceWith (cmp str 0) a
+    Array.init n (fun i -&gt; str.[(a.[i] + n - 1) % n]),
+    Array.findIndex (( = ) 0) a;;
+val bwt : 'a array -&gt; 'a array * int</PRE>
+      <P>Note how this function elegantly reuses the              
+      <CODE>Array.sortInPlaceWith</CODE> function provided in the F# standard 
+      library.           </P>
+      <P>For example, the string given in Wheeler's original paper:</P>
+<PRE>&gt; bwt "abraca"B;;
+val it : byte array * int = ([|99uy; 97uy; 114uy; 97uy; 97uy; 98uy|], 1)</PRE>
+      <P>The output is incomprehensible in this form so it is useful for us to 
+      replace the built-in F# interactive pretty printer for the              
+      <CODE>byte array</CODE> type with one that generates the string-like 
+      representation. This may be done as follows:           </P>
+<PRE>&gt; fsi.AddPrinter(fun (a: byte array) -&gt;
+    String.init a.Length (fun i -&gt; sprintf "%c" (char a.[i])) |&gt; sprintf "%AB");;</PRE>
+      <P>The output is now presented as follows and, consequently, is easier to 
+      check:</P>
+<PRE>&gt; bwt "abraca"B;;
+val it : byte array * int = ("caraab"B, 1)</PRE>
+      <P>Note that the              <CODE>bwt</CODE> function returns both the 
+      transformed string and the key that is essential for reversing the 
+      transform.           </P>
+      <P>The inverse BWT may be written:</P>
+<PRE>&gt; let ibwt (l: byte array, i) =
+    let n = Array.length l
+    let p = Array.create n 0
+    let c = Array.create 256 0
+    for i=0 to n-1 do
+      let li = int l.[i]
+      p.[i] &lt;- c.[li]
+      c.[li] &lt;- c.[li] + 1
+    let mutable sum = 0
+    for i=0 to 255 do
+      sum &lt;- sum + c.[i]
+      c.[i] &lt;- sum - c.[i]
+    let s = Array.zeroCreate n
+    let mutable i = i
+    for j=n-1 downto 0 do
+      s.[j] &lt;- l.[i]
+      i &lt;- p.[i] + c.[int l.[i]]
+    s;;
+val ibwt : byte array * int -&gt; byte array</PRE>
+      <P>For example, we can recover the original data from our previous example 
+      transform:</P>
+<PRE>&gt; ibwt(bwt "abraca"B);;
+val it : string = "abraca"B</PRE>
+      <P>Transforming a longer string demonstrates how the BWT makes redundancy 
+      more accessible for subsequent compression:</P>
+<PRE>&gt; let s, i = bwt "The Burrows-Wheeler Transform (BWT) is a block-sorting data compression
+algorithm that acts as a preconditioner to dramatically improve the compression ratios of
+subsequent compression phases in many cases. This algorithm is the core of the bzip2 data
+compression utility that is ubiquitous on Unix and, in particular, is often much more
+effective than zip and gzip.";;
+val s : string =
+  "me.rnsstsnpxsaeyateaeg2oedys,),mtnhnsessnnanfemyfesrsnn Tdrskspp( W.   B- tt    crh
+  rmlp hchhddmru u i uo    e eainn  n hhhhrrvvrfh etuslnssrrrroofesonll ctpttTtttWTttttt
+  tssssttzzzb h   rrdultncueaaiablrhh a ooooi ooieioooaaaooiUaeatl   cccc 
+iiiicimcggfsitrriii   mmmmmeieeadT oopppppooopruaoiaiteoiuiiwebaanssss-eeee anaaaf
+      iiaruriac ici smqqcBo iooinlt gb"
+val i : int = 67</PRE>
+      <P>Note the large number of repetitions in the transformed string          
+          <CODE>s</CODE> .           </P>
+      <P>Once again, the              <CODE>ibwt</CODE> function can be used to 
+      recover the original exactly:           </P>
+<PRE>&gt; ibwt(s, i);;
+val it : string =
+"The Burrows-Wheeler Transform (BWT) is a block-sorting data compression algorithm that
+acts as a preconditioner to dramatically improve the compression ratios of subsequent
+compression phases in many cases. This algorithm is the core of the bzip2 data
+compression utility that is ubiquitous on Unix and, in particular, is often much more
+effective than zip and gzip."</PRE>
+      <P>We can use the following              <CODE>test</CODE> function to 
+      check and benchmark our transform:           </P>
+<PRE>&gt; let test bwt file =
+    use stream = System.IO.File.OpenRead file
+    let buf = Array.create (int stream.Length) 0uy
+    let n = stream.Read(buf, 0, buf.Length)
+    if n &lt;&gt; buf.Length then
+      failwith "Failed to load file"
+    assert(n = buf.Length)
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    let l, i = bwt buf
+    printf "%d in %dms\n" buf.Length t.ElapsedMilliseconds
+    if ibwt(l, i) &lt;&gt; buf then
+      failwith "Failed to recover original data";;
+val test : (byte array -&gt; byte array * int) -&gt; string -&gt; unit</PRE>
+      <P>The main problem with this initial implementation is that it is 
+      extremely inefficient, taking 1.5s to transform only 2,243 bytes and a 
+      whopping 30.8s to transform 43,334 bytes. This is far too slow to be 
+      useful as a general-purpose data compression tool.</P>
+      <P>Let us now focus on creating a faster implementation.</P>
+      <H2>Profiling</H2>
+      <P>A profile of the above code shows the following:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/profile1.gif"> 
+                  </P>
+      <P></P>
+      <P>Note the highlighted line indicating that over 93% of the total running 
+      time was spent in the              <I>generic</I> comparison function in 
+      the              <CODE>cmp</CODE> function.           </P>
+      <P>This may be surprising because .NET does per-type instantiation of 
+      generics and, therefore, generates separate optimized machine code when 
+      type variables in generic functions take on different concrete types. 
+      However, .NET only does this for value types and treats all reference 
+      types equivalently. In this case, the              <CODE>cmp</CODE> 
+      function is generic over the type of array and, consequently, only a 
+      single generic implementation of the              <CODE>cmp</CODE> 
+      function is generated. This generic implementation must use the generic 
+      comparison function and that is extremely inefficient.           </P>
+      <H2>Type specialization</H2>
+      <P>The simplest way to improve the performance of the naive implementation 
+      is, therefore, to add a type annotation to ensure that the              
+      <CODE>cmp</CODE> function is generated specifically for the              
+      <CODE>byte array</CODE> type:           </P>
+<PRE>&gt; let rec cmp (str: byte array) k i j =
+    let n = Array.length str
+    if k=n then 0 else
+      let c = compare str.[i] str.[j]
+      if c&lt;&gt;0 then c else
+        cmp str (k + 1) ((i + 1) % n) ((j + 1) % n);;
+val cmp : byte array -&gt; int -&gt; int -&gt; int -&gt; int</PRE>
+<PRE>&gt; let bwt str =
+    let n = Array.length str
+    let a = [|0 .. n-1|]
+    Array.sortInPlaceWith (cmp str 0) a
+    Array.init n (fun i -&gt; str.[(a.[i] + n - 1) % n]),
+    Array.findIndex (( = ) 0) a;;
+val bwt : byte array -&gt; byte array * int</PRE>
+      <P>This simple optimization makes the whole program 17× faster, reducing 
+      the time taken to compress 2,243 bytes from 1.5s down to only 0.09s.</P>
+      <H2>Inlining</H2>
+      <P>Type specialization is a simple workaround for the poor performance 
+      associated with .NET generics but in many cases it would be desirable to 
+      obtain optimal performance without sacrificing genericity.</P>
+      <P>The F#              <CODE>inline</CODE> keyword does exactly this by 
+      inlining the body of a non-recursive function at its call site where it 
+      benefits from local type information on a per-call basis.           </P>
+      <P>In this case, the              <CODE>bwt</CODE> function itself is 
+      generic so we must also inline that to ensure that the type information is 
+      available where the body of the              <CODE>cmp</CODE> function 
+      ends up:           </P>
+<PRE>&gt; let inline cmp (str: _ array) i j =
+    let rec cmp k i j =
+      let n = Array.length str
+      if k=n then 0 else
+        let c = compare str.[i] str.[j]
+        if c&lt;&gt;0 then c else
+          cmp (k + 1) ((i + 1) % n) ((j + 1) % n)
+    cmp 0 i j;;
+val inline cmp : 'a array -&gt; int -&gt; int -&gt; int -&gt; int</PRE>
+<PRE>&gt; let inline bwt str =
+    let n = Array.length str
+    let a = [|0 .. n-1|]
+    Array.sortInPlaceWith (cmp str) a
+    Array.init n (fun i -&gt; str.[(a.[i] + n - 1) % n]),
+    Array.findIndex (( = ) 0) a;;
+val inline bwt : 'a array -&gt; 'a array * int</PRE>
+      <P>This offers slightly better performance without losing the genericity 
+      of these functions, reducing the time taken to transform 43,334 bytes from 
+      30.8s down to 27.2s. This new implementation can compress 5,649,295 bytes 
+      of the King James Bible in 187s.</P>
+      <H2>Specializing the sort</H2>
+      <P>The F#              <CODE>inline</CODE> keyword is incredibly powerful 
+      when dealing with entirely self-contained F# code but it cannot help when 
+      dealing with functions written in other languages that do not support it, 
+      such as the C# implementation underlying the              
+      <CODE>Array.sortInPlaceWith</CODE> function.           </P>
+      <P>Moreover, this built-in sort function is not currently parallelized 
+      and, consequently, performance is much worse than necessary on this 8-core 
+      machine.</P>
+      <P>Given the properties of the transform, the sort is extremely unlikely 
+      to stumble upon the worst case scenarios of sequences that are invariant 
+      under many different rotations or where central pivots consistently lie 
+      away from the median. Thus, we may use the following simple quicksort 
+      implementation that chooses the central element of a range as a pivot and 
+      partitions in a single pass on the assumption that very few elements will 
+      be identical to the pivot:</P>
+<PRE>&gt; let inline sort cmp (a: _ array) =
+    let inline swap i j =
+      let t = a.[i]
+      a.[i] &lt;- a.[j]
+      a.[j] &lt;- t
+    let rec qsort l u =
+      if l &lt; u then
+        swap l ((l + u) / 2)
+        let mutable m = l
+        for i=l+1 to u do
+          if cmp a.[i] a.[l] &lt; 0 then
+            m &lt;- m + 1
+            swap m i
+        swap l m
+        qsort l (m-1)
+        qsort (m+1) u
+    qsort 0 (a.Length-1);;
+val inline sort : ('a -&gt; 'a -&gt; int) -&gt; 'a array -&gt; unit</PRE>
+<PRE>&gt; let inline bwt str =
+    let n = Array.length str
+    let a = [|0 .. n-1|]
+    sort (cmp str) a
+    Array.init n (fun i -&gt; str.[(a.[i] + n - 1) % n]),
+    Array.findIndex (( = ) 0) a;;
+val inline bwt : 'a array -&gt; 'a array * int</PRE>
+      <P>On the small data set, this is immediately 180× faster, reducing the 
+      time taken to transform 43,334 bytes from 27.2s down to only 0.155s. On 
+      the large data set, this reduces the time taken to transform from 187s to 
+      34.4s, which is still 5.4× faster.</P>
+      <P>A variety of other low-level optimizations may also be applied:</P>
+<PRE>&gt; let inline wrap n i =
+    let i = i + 1
+    if i = n then 0 else i;;
+val inline wrap : int -&gt; int -&gt; int</PRE>
+<PRE>&gt; let inline cmp (str: _ array) i j =
+    let n = Array.length str
+    let rec cmp k i j =
+      if k=0 then 0 else
+        let c = compare str.[i] str.[j]
+        if c&lt;&gt;0 then c else
+          cmp (k - 1) (wrap n i) (wrap n j)
+    cmp n i j;;
+val inline cmp : 'a array -&gt; int -&gt; int -&gt; int</PRE>
+<PRE>&gt; let inline sort str (a: _ array) =
+    let inline swap i j =
+      let t = a.[i]
+      a.[i] &lt;- a.[j]
+      a.[j] &lt;- t
+    let rec qsort l u =
+      if l &lt; u then
+        swap l ((l + u) / 2)
+        let mutable m = l
+        for i=l+1 to u do
+          if cmp str a.[i] a.[l] &lt; 0 then
+            m &lt;- m + 1
+            swap m i
+        swap l m
+        qsort l (m-1)
+        qsort (m+1) u
+    qsort 0 (a.Length-1);;
+val inline sort : 'a array -&gt; int array -&gt; unit</PRE>
+<PRE>&gt; let inline bwt str =
+    let n = Array.length str
+    let a = Array.init n (fun i -&gt; i)
+    sort str a
+    Array.init n (fun i -&gt; str.[(a.[i] + n - 1) % n]),
+    Array.findIndex (( = ) 0) a;;
+val inline bwt : 'a array -&gt; 'a array * int</PRE>
+      <P>A              <CODE>wrap</CODE> function has been used to replace the 
+      expensive modulo operation with a simple test. The call to              
+      <CODE>Array.length</CODE> has been hoisted from the inner              
+      <CODE>cmp</CODE> function and the loop of              <CODE>k</CODE> up 
+      to              <CODE>n</CODE> has been replaced with a loop down to zero. 
+      The              <CODE>sort</CODE> function now accepts the              
+      <CODE>str</CODE> array and calls              <CODE>cmp</CODE> directly, 
+      i.e. it no longer uses an arbitrary total order. We replace the array 
+      sequence expression used to generate              <CODE>a</CODE> with a 
+      call to              <CODE>Array.init</CODE> .           </P>
+      <P>These optimizations reduce the time taken to transform the bible from 
+      34.4s to 16.8s.</P>
+      <H2>Parallelism</H2>
+      <P>The last remaining optimization is parallelism. The recursive quicksort 
+      algorithm lends itself very well to parallelism because one of the two 
+      recursive calls can always be computed in parallel:</P>
+<PRE>&gt; let inline sort cmp (a: int array) =
+    let inline swap i j =
+      let t = a.[i]
+      a.[i] &lt;- a.[j]
+      a.[j] &lt;- t
+    let rec qsort l u =
+      if l &lt; u then
+        swap l ((l + u) / 2)
+        let mutable m = l
+        for i=l+1 to u do
+          if cmp a.[i] a.[l] &lt; 0 then
+            m &lt;- m + 1
+            swap m i
+        swap l m
+        if m-l &gt; 10000 then
+          let m = m
+          let f = Tasks.Future.Create(fun () -&gt; qsort l (m-1))
+          qsort (m+1) u
+          f.Value
+        else
+          qsort l (m-1)
+          qsort (m+1) u
+    qsort 0 (a.Length-1);;
+val inline sort : (int -&gt; int -&gt; int) -&gt; int array -&gt; unit</PRE>
+      <P>This reduces the time to transform the bible from 16.8s down to only 
+      2.49s on an 8 core machine.</P>
+      <H2>Results</H2>
+      <P>We can see the benefits of the transform by applying the gzip tool to 
+      the original and transformed versions of the bible. The original 
+      compresses from 5,510,867 down to 1,802,559 bytes whereas the transformed 
+      version compresses down to only 1,478,873 bytes. The BWT has allowed gzip 
+      to shrink this file another 20%, which is a valuable saving.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of the 
+      Burrows-Wheeler Transform as well as its subsequent optimization using 
+      low-level optimizatons, a custom sorting function and parallelism. The 
+      final implementation is over 1,000× faster than the 
+  original.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Optimizing%20the%20Burrows-Wheeler%20Transform_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

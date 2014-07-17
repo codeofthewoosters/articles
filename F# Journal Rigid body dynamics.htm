@@ -1,0 +1,466 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0075)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/rigid.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Rigid body dynamics</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Rigid%20body%20dynamics_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Rigid%20body%20dynamics_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Rigid%20body%20dynamics_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Rigid body dynamics</TITLE>     <LINK href="F%23%20Journal%20Rigid%20body%20dynamics_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Rigid%20body%20dynamics_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Rigid%20body%20dynamics_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Rigid%20body%20dynamics_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Rigid%20body%20dynamics_files/left.gif">    
+           </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Rigid body dynamics</H1>
+      <P>A common technique to simulate the dynamics of objects is to model them 
+      as interacting rigid components. This article describes the design and 
+      implementation of a simple F# program that uses rigid body dynamics to 
+      simulate balls bouncing around in 2D, using Windows Presentation 
+      Foundation for 2D visualization. Dynamics are computed on a worker thread 
+      while the GUI thread fetches and visualizes snapshots of the scene.</P>
+      <H2>Introduction</H2>
+      <P>A previous F#.NET Journal article ("Real-time Finite Element Materials 
+      simulation" 15th June 2008) examined the real-time simulation of flexible 
+      bodies represented by point masses connected by springs. This article 
+      examines the real-time simulation of rigid bodies, specifically disks. 
+      Calculating the physical effects of collisions between two rotating disks 
+      requires more sophisticated mathematics than the spring and point model 
+      but it allows more realistic objects to be modelled with much less 
+      computation.</P>
+      <P>Indeed, historically the use of rigid bodies appeared on the demo scene 
+      long before the use of non-trivial flexible dynamics because the latter 
+      requires far more computational effort to produce a similarly-appealing 
+      visual effect.</P>
+      <H2>Implementation</H2>
+      <P>We begin by referencing the F# PowerPack and WPF:</P>
+<PRE>&gt; #r "FSharp.PowerPack.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\FSharp-1.9.7.8\bin\FSharp.PowerPack.dll'</PRE>
+<PRE>&gt; #r "PresentationCore.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\PresentationCore.dll'</PRE>
+<PRE>&gt; #r "PresentationFramework.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\PresentationFramework.dll'</PRE>
+<PRE>&gt; #r "WindowsBase.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\WindowsBase.dll'</PRE>
+      <P>and opening the following namespaces:</P>
+<PRE>&gt; open System;;
+&gt; open System.Windows;;</PRE>
+      <P>We shall use the              <CODE>Vector</CODE> type provided by WPF 
+      to represent 2D vectors. Our use of this type can be simplified using some 
+      helper definitions:           </P>
+<PRE>&gt; let zero = Vector(0.0, 0.0);;
+val zero : Vector = 0,0</PRE>
+<PRE>&gt; let normal (r: Vector) = Vector(r.Y, -r.X);;
+val normal : Vector -&gt; Vector</PRE>
+<PRE>&gt; let dot (a: Vector) (b: Vector) = a * b;;
+val dot : Vector -&gt; Vector -&gt; float</PRE>
+<PRE>&gt; let length2 (r: Vector) = r.LengthSquared;;
+val length2 : Vector -&gt; float</PRE>
+<PRE>&gt; let length (r: Vector) = r.Length;;
+val length : Vector -&gt; float</PRE>
+<PRE>&gt; let unitize (r: Vector) = 1.0 / length r * r;;
+val unitize : Vector -&gt; Vector</PRE>
+      <P>The              <CODE>dot</CODE> ,              <CODE>length2</CODE> 
+      and              <CODE>length</CODE> functions are simple wrappers that 
+      convey static type information and, consequently, allow us to remove some 
+      type annotations that would have been required to remove ambiguities when 
+      members on values of unknown types were invoked.           </P>
+      <P>The              <CODE>unitize</CODE> function is similar to the        
+            <CODE>Normalize</CODE> member provided by the              
+      <CODE>Vector</CODE> type but returns a new vector rather than mutating 
+      in-place.           </P>
+      <P>The following              <CODE>circle</CODE> function creates vectors 
+      on the unit circle:           </P>
+<PRE>&gt; let circle x = Vector(cos x, sin x);;
+val circle : float -&gt; Vector</PRE>
+      <P>The following              <CODE>circle</CODE> record type will be used 
+      to represent circles by their positions and radii:           </P>
+<PRE>&gt; type circle = { center: Vector; radius: float };;
+type circle =
+  {center: Vector;
+   radius: float;}</PRE>
+      <P>The following              <CODE>ball</CODE> type will be used to 
+      represent balls including their circle geometry as well as their linear 
+      and angular velocities and current angle:           </P>
+<PRE>&gt; type ball =
+    { circle: circle;
+      velocity: Vector;
+      angle: float;
+      angular_velocity: float };;
+type ball =
+  {circle: circle;
+   velocity: Vector;
+   angle: float;
+   angular_velocity: float;}</PRE>
+      <P>Note how idiomatic ML type definitions, in this case record types, uses 
+      inclusion rather than inheritance to represent the relationship between a  
+                  <CODE>ball</CODE> and a              <CODE>circle</CODE> .     
+            </P>
+      <P>The following              <CODE>make_ball</CODE> helper function makes 
+      it easier for us to create balls:           </P>
+<PRE>&gt; let make_ball v r x y =
+    { circle = { center = Vector(x, y); radius = r };
+      velocity = v;
+      angle = 0.0;
+      angular_velocity = 0.0 };;
+val make_ball : Vector -&gt; float -&gt; float -&gt; float -&gt; ball</PRE>
+      <P>In order to allow for some interesting scenery that the balls can 
+      bounce off, we shall not only allow circles in the static scenery but also 
+      lines. This is easily expression as a union type in F#:</P>
+<PRE>&gt; type surface =
+    | Line of Vector * Vector
+    | Circle of circle;;
+type surface =
+  | Line of Vector * Vector
+  | Circle of circle</PRE>
+      <P>The following              <CODE>n_balls</CODE> value dictates how many 
+      balls will be placed in the scene:           </P>
+<PRE>&gt; let n_balls = 50;;
+val n_balls : int = 5</PRE>
+      <P>Now we can actually create an array of balls to be simulated:</P>
+<PRE>&gt; let mutable balls =
+    let n = 10
+    [|for x in 0..n_balls-1 -&gt;
+        make_ball zero 0.02
+          (0.2 + 0.03 * float((x/n) % 2) + 0.06 * float(x % n))
+          (0.03 + 0.04 * float(x/n))|];;
+val mutable balls : ball [] = ...</PRE>
+      <P>And an array of surfaces that make up the scenery the balls will bounce 
+      around on:</P>
+<PRE>&gt; let surfaces =
+    let n = 128
+    let aux i =
+      let r = circle (Math.PI * float i / float n) + Vector(-1.0, 0.0)
+      Vector(1.0 + 0.5 * r.X, r.Y)
+    [|yield Circle {center=Vector(0.37, 0.7); radius=0.11}
+      yield Circle {center=Vector(0.63, 0.7); radius=0.11}
+      for i in 0..n do
+        yield Line (aux (i-1), aux i);
+      yield Line(Vector(0.0, 0.05), Vector(0.7, 0.06))
+      yield Line(Vector(0.0, 0.0), Vector(1.0, 0.0))|];;
+val surfaces : surface [] = ...</PRE>
+      <P>Note the use of a sequence comprehension to combine individual elements 
+      for the circles and lid as well as a loop to build an elliptic 
+      surround.</P>
+      <P>We need to define the strength and direction of gravity as a 
+vector:</P>
+<PRE>&gt; let g = Vector(0.0, -0.5);;
+val g : Vector = 0,-0.5</PRE>
+      <P>The following              <CODE>clamp</CODE> function clamps the value 
+                   <CODE>x</CODE> to lie in the range              <I>l</I> &#8804;    
+               <I>x</I> &#8804;             <I>u</I> :           </P>
+<PRE>&gt; let clamp l u x = x |&gt; max l |&gt; min u;;
+val clamp : 'a -&gt; 'a -&gt; 'a -&gt; 'a when 'a : comparison</PRE>
+      <P>Before we can dive into the dynamical simulation we need some geometric 
+      routines to compute the intersections of balls with other balls and the 
+      scenery. The following              <CODE>circle_circle</CODE> function 
+      computes the point of closest approach between the surfaces of two circles 
+      and can be used to determine if and where two balls have hit:           
+      </P>
+<PRE>&gt; let circle_circle {center=c1; radius=r1} {center=c2; radius=r2} =
+    let s = c2 - c1
+    let len = length s
+    c1 + 0.5 * (len + r1 - r2) * 1.0 / len * s;;
+val circle_circle : circle -&gt; circle -&gt; Vector</PRE>
+      <P>The following              <CODE>point_of_impact</CODE> function finds 
+      the point of closest approach between the surface of a ball and a piece of 
+      scenery (either a finite line or another circle):           </P>
+<PRE>&gt; let point_of_impact circle = function
+    | Line (p1, p2) -&gt;
+        (* Find the closest approach of the finite line v1 -&gt; v2 to the point
+      	   r. *)
+        let p21 = p2 - p1
+        let x = clamp 0.0 1.0 (dot (circle.center - p1) p21 / length2 p21)
+        p1 + x * p21
+    | Circle circle2 -&gt; circle_circle circle circle2;;
+val point_of_impact : circle -&gt; surface -&gt; Vector</PRE>
+      <P>The following              <CODE>circle_circle_intersects</CODE> 
+      function determines if two circles have intersected:           </P>
+<PRE>&gt; let circle_circle_intersects c1 c2 =
+    let p = circle_circle c1 c2
+    length(c1.center - p) &lt; c1.radius;;
+val circle_circle_intersects : circle -&gt; circle -&gt; bool</PRE>
+      <P>Now we can begin to simulate the dynamics of the system. The following  
+                  <CODE>ball_surface</CODE> function simulates the effects, if 
+      any, of the surfaces in the scenery on the              <I>i</I>           
+        <SUP>th</SUP> ball, accumulating any collisions in              
+      <CODE>impacts</CODE> :           </P>
+<PRE>&gt; let rec ball_surface (balls: ball []) (impacts: _ ResizeArray []) i =
+    let mutable ball = balls.[i]
+    for surface in surfaces do
+      let p = point_of_impact ball.circle surface</PRE>
+<PRE>      let d = ball.circle.center - p</PRE>
+<PRE>      if length d &lt; ball.circle.radius then
+        let a = unitize d
+        let b = normal a
+        
+        (* Resolve the velocity at the point of impact into components through the
+           center and perpendicular. *)
+        let dva = dot ball.velocity a
+        if dva &lt; 0.0 then
+          let dvb = dot ball.velocity b
+          impacts.[i].Add p
+          ball &lt;-
+            { ball with
+                velocity = abs dva * a + dvb * b
+                angular_velocity = -dvb / ball.circle.radius }
+    balls.[i] &lt;- ball;;
+val ball_surface : ball [] -&gt; ResizeArray&lt;Vector&gt; [] -&gt; int -&gt; unit</PRE>
+      <P>This function loops over each surface in the scenery, checking to see 
+      if the ball has intersected it. If so, then the balls velocity is resolved 
+      into components directed from and perpendicular to the point of impact, 
+      i.e.              <CODE>ball.velocity = -dva * a + dvb * b</CODE> . The 
+      velocity of the ball is then reflected away from the point of 
+      intersection. In particular, the component of the velocity toward the 
+      impact is not simply negated because the discrete and numerical nature of 
+      the simulation means that collisions occur not when objects touch but when 
+      they have begun to overlap. Consequently, the ball and surface may overlap 
+      more than once in the simulation of a single physical collision. So we 
+      must ensure that the velocity points away from the point of impact after a 
+      collision. Hence the velocity becomes              <CODE>abs dva * a + dvb 
+      * b</CODE> rather than              <CODE>dva * a + dvb * b</CODE> . The 
+      angular velocity is set such that the surface of the ball and the scenery 
+      have the same linear velocity.           </P>
+      <P>Note that a more accurate physical simulation would account for 
+      friction.</P>
+      <P>The following              <CODE>ball_ball</CODE> function performs the 
+      more challenging task of simulating the dynamics of a collision between 
+      two rotating balls:           </P>
+<PRE>&gt; let ball_ball (balls: ball []) (impacts: _ ResizeArray []) i =
+    if i&gt;0 then
+      let b1 = balls.[i]
+      for j=0 to i-1 do
+        let b2 = balls.[j]
+        let c1 = b1.circle
+        let c2 = b2.circle
+        let p = circle_circle c1 c2
+        if length(c1.center - p) &lt; c1.radius then
+          let u1 = b1.velocity
+          let u2 = b2.velocity
+          let da1 = b1.angular_velocity
+          let da2 = b2.angular_velocity
+          let r1 = c1.radius
+          let r2 = c2.radius</PRE>
+<PRE>          let com = 0.5 * (u1 + u2)</PRE>
+<PRE>          let u1 = u1 - com
+          let u2 = u2 - com</PRE>
+<PRE>          let u = unitize (c2.center - c1.center)
+          let v = normal u
+          let impulse = u2 - u1 + (da1 * r1 - da2 * r2) * v
+          let impulse_u = dot u impulse * u
+          let impulse_v = dot v impulse
+          let v1 = u1 + impulse_u
+          let v2 = u2 - impulse_u
+          let da1' = da1 + impulse_v * r1
+          let da2' = da2 - impulse_v * r2
+          
+          let v1, v2, da1', da2' =
+            let I1, I2 = r1 * r1, r2 * r2
+            let ke1 = dot u1 u1 + dot u2 u2 + I1 * da1 * da1 + I2 * da2 * da2
+            let ke2 = dot v1 v1 + dot v2 v2 + I1 * da1' * da1' + I2 * da2' * da2'
+            let s = ke1 / ke2 |&gt; sqrt
+            s * v1, s * v2, s * da1', s * da2'</PRE>
+<PRE>          let v1 = v1 + com
+          let v2 = v2 + com</PRE>
+<PRE>          balls.[i] &lt;-
+            { balls.[i] with velocity = v1; angular_velocity = da1' }
+          balls.[j] &lt;-
+            { balls.[j] with velocity = v2; angular_velocity = da2' }
+          impacts.[i].Add p
+          impacts.[j].Add p;;
+val ball_ball : ball [] -&gt; ResizeArray&lt;Vector&gt; [] -&gt; int -&gt; unit</PRE>
+      <P>This is accomplished by computing the relative velocity of the Center 
+      Of Momentum (COM) frame and moving the velocities into the COM frame to 
+      simulate the effects of the collision before moving them back to their 
+      original frame. In the COM frame, the collision begins with the 
+      calculation of the impulse between the surfaces that transfers both linear 
+      and angular momentum between the balls. The force from this impulse is 
+      then imparted equally and oppositely to the two balls. In an attempt to 
+      counter act numerical instabilities, the linear velocities and angular 
+      velocities are scaled such that the sum of the linear and rotational 
+      kinetic energies is the same after the collision as before.</P>
+      <P>The following              <CODE>collide</CODE> function simulates the 
+      dynamics for a given time step:           </P>
+<PRE>&gt; let collide dt balls =
+    let impacts = Array.map (fun _ -&gt; ResizeArray()) balls
+    let n = Array.length balls</PRE>
+<PRE>    for i=0 to n-1 do
+      ball_surface balls impacts i
+      ball_ball balls impacts i</PRE>
+<PRE>    for i=0 to n-1 do
+      let b = balls.[i]
+      let r = b.circle.center
+      let a = b.angle
+      let da = b.angular_velocity
+      let mutable dr = b.velocity
+      for p in impacts.[i] do
+        let d = unitize(r - p)
+        dr &lt;- dr - min 0.0 (dot dr d) * d
+      balls.[i] &lt;-
+        { balls.[i] with
+            circle = { balls.[i].circle with center = r + dt * dr };
+            angle = (a + dt * da) % (2.0 * Math.PI);
+            velocity = dr - dt * g }
+      if impacts.[i].Count &gt; 1 then
+        balls.[i] &lt;- { balls.[i] with angular_velocity = 0.0 }
+    
+    balls, impacts;;
+val collide :
+  float -&gt;
+    float -&gt; float -&gt; ball [] -&gt; ball [] * Collections.Generic.List&lt;Vector&gt; []</PRE>
+      <P>Note that we are careful to accumulate impacts on each ball such that a 
+      ball subjected to multiple impacts has its resulting velocity adjusted to 
+      ensure that it does not have a component through any impact point.</P>
+      <P>The following              <CODE>update</CODE> function recursively 
+      subdivides a time span either if the span is too long of if it is found to 
+      span a collision:           </P>
+<PRE>&gt; let rec update t t' balls =
+    let dt = t' - t</PRE>
+<PRE>    let balls', impacts = collide dt (Array.copy balls)</PRE>
+<PRE>    let aux xs = ResizeArray.length xs &lt; 2
+    if dt &lt; 0.1 &amp;&amp; (Array.forall aux impacts || dt &lt; 0.01) then balls' else
+      let t2 = (t + t') * 0.5
+      update t2 t' (update t t2 balls);;
+val update : float -&gt; float -&gt; ball [] -&gt; ball []</PRE>
+      <P>Finally, we can build the infrastructure of the application itself 
+      starting with a function to simulate the dynamics of the balls in real 
+      time on a worker thread:</P>
+<PRE>&gt; let worker() =
+    let timer = System.Diagnostics.Stopwatch.StartNew()
+    let mutable t = 0.0
+    while true do
+      let t' = timer.Elapsed.TotalSeconds
+      balls &lt;- update t t' balls
+      t &lt;- t';;
+val worker : unit -&gt; unit</PRE>
+      <P>The following              <CODE>point</CODE> function converts a       
+             <CODE>Vector</CODE> into a              <CODE>Point</CODE> :        
+         </P>
+<PRE>&gt; let point (r: Vector) = Point(r.X, r.Y);;
+val point : Vector -&gt; Point</PRE>
+      <P>The following              <CODE>line</CODE> function creates a         
+           <CODE>PathSegment</CODE> representing a line to the given vector:     
+            </P>
+<PRE>&gt; let line r =
+    (Media.LineSegment(point r, true) :&gt; Media.PathSegment);;
+val line : Vector -&gt; Media.PathSegment</PRE>
+      <P>The following              <CODE>circle_figure</CODE> function creates 
+      a sequence of lines in a              <CODE>PathFigure</CODE> that 
+      approximate a circle:           </P>
+<PRE>&gt; let circle_figure {center=c; radius=r} =
+    let f t =
+      let t = 2.0 * Math.PI * t
+      c + r * Vector(cos t, sin t)
+    let n = 32
+    let segs = seq {for t in 1..n -&gt; float t / float n |&gt; f |&gt; line}
+    Media.PathFigure(f 0.0 |&gt; point, segs, true);;
+val circle_figure : circle -&gt; Media.PathFigure</PRE>
+      <P>The following              <CODE>draw</CODE> function takes a local 
+      reference to the              <CODE>balls</CODE> array and uses it to 
+      construct a              <CODE>PathGeometry</CODE> representing the 
+      scenery and balls:           </P>
+<PRE>&gt; let draw() =
+    let balls = balls
+    Media.PathGeometry
+      [ for surface in surfaces do
+          match surface with
+          | Line(a, b) -&gt;
+              yield Media.PathFigure(point a, [line b], true)
+          | Circle circle -&gt;
+              yield circle_figure circle
+        for ball in balls do
+          yield circle_figure ball.circle
+          let c, r = ball.circle.center, ball.circle.radius * circle ball.angle
+          yield Media.PathFigure(point(c + r), [line(c - r)], true) ];;
+val draw : unit -&gt; Media.PathGeometry</PRE>
+      <P>Note that reading a reference is an atomic operation on .NET so taking 
+      this local reference allows the UI thread to snapshot the state of the 
+      dynamical system without having to use any explicit synchronization.</P>
+      <P>Finally, the main program creates a              
+      <CODE>Shapes.Path</CODE> and uses the              <CODE>Rendering</CODE> 
+      event of the              <CODE>CompositionTarget</CODE> to update the     
+               <CODE>PathGeometry</CODE> of the              <CODE>Path</CODE> 
+      every frame of animation, with the simulation running simultaneously on a 
+      worker thread:           </P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    let path =
+      Shapes.Path(Stroke=Media.Brushes.Black,
+                  StrokeThickness=0.003)
+    
+    path.StrokeLineJoin &lt;- Media.PenLineJoin.Round
+    path.StrokeStartLineCap &lt;- Media.PenLineCap.Round
+    path.StrokeEndLineCap &lt;- Media.PenLineCap.Round
+    
+    Media.CompositionTarget.Rendering.Add(fun _ -&gt; path.Data &lt;- draw())
+    
+    let thread = System.Threading.Thread worker
+    thread.IsBackground &lt;- true
+    thread.Start()
+    
+    Window(Content=Controls.Viewbox(Child=path, Stretch=Media.Stretch.Uniform))
+    |&gt; Application().Run
+    |&gt; ignore;;</PRE>
+      <H2>Results</H2>
+      <P>The resulting program is available as a Visual Studio 2008 project      
+              <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/67/Balls.zip">here</A>
+       .           </P>
+      <P>When run, this program produces the following results:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Rigid%20body%20dynamics_files/rigid1.gif"> 
+                  </P>
+      <P></P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Rigid%20body%20dynamics_files/rigid2.gif"> 
+                  </P>
+      <P></P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Rigid%20body%20dynamics_files/rigid3.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has described a simple but effective method for simulating 
+      rigid body dynamics, producing a compelling visualization based upon 
+      Windows Presentation Foundation.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of rigid body 
+      dynamics, WPF-based visualization and the safe avoidance of 
+      synchronization. In particular, we shall revisit this subject in the 
+      context of the units of measure language feature provided by 
+  F#.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Rigid%20body%20dynamics_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

@@ -1,0 +1,246 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0090)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/silverlightraytracer.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20ray%20tracer%20silverlight_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20ray%20tracer%20silverlight_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20ray%20tracer%20silverlight_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20ray%20tracer%20silverlight_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20ray%20tracer%20silverlight_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Real-time ray tracing in Silverlight</H1>
+      <P>Ray tracing is a simple but powerful approach to photorealistic 
+      rendering and implementing a ray tracer is an excellent way to learn a 
+      programming language and, in particular, to learn about graphics and 
+      optimization in the context of numerical algorithms. This article walks 
+      through the design and implementation of a basic ray tracer that 
+      visualizes a 3D scene in a Silverlight bitmap and exploits parallelism in 
+      order to attain the performance required for real-time animation.</P>
+      <H2>Introduction</H2>
+      <P>Ray tracing is a technique for image synthesis: creating a 2D picture 
+      of a 3D world. In the real world, lights emit photons that are reflected 
+      off surfaces and refracted through surfaces before reaching a viewer. 
+      Although this direct approach can be simulated on computer using a 
+      technique called "forward ray tracing", this is very ineffecient because 
+      only a tiny proportion of the photons reach the camera. Conventional ray 
+      tracing uses "backward ray tracing" instead. The involves tracing rays out 
+      from the camera and into the 3D world. For a pixellated display, an 
+      individual ray might be shot through each pixel in a pin-hole camera 
+      model. Each ray is then intersected with the scene and the closest 
+      intersection point incurs further computation. In the simplest case, the 
+      color of the object in the 3D world that the ray hit might be used to 
+      color the pixel that the ray went through.</P>
+      <P>The beauty of ray tracing is the ease with which this simple model can 
+      be extended to account for a wide variety of real effects. The ray tracer 
+      described here taks the four effects covered by the previous version 
+      (diffuse and specular lighting, shadows and reflection) and adds 
+      parallelism, animation and Silverlight support.</P>
+      <H2>Ray tracing</H2>
+      <P>This application is developed using the Silverlight template that was 
+      described in the previous application. We begin by opening the 
+      <CODE>System.Windows</CODE> namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows</CODE></P>
+      <P>Silverlight is a stripped down alternative to Windows Presentation 
+      Foundation and, consequently, is missing a significant amount of 
+      functionality. In this case, we require a 3D vector equivalent to the 
+      <CODE>Vector3D</CODE> struct defined by Windows Presentation Foundation 
+      but this is not provided by Silverlight so we must define it 
+ourselves:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;[&lt;Struct&gt;]&nbsp;Vector3D&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;X&nbsp;:&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;Y&nbsp;:&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;Z&nbsp;:&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(x,&nbsp;y,&nbsp;z)&nbsp;=&nbsp;{X=x;&nbsp;Y=y;&nbsp;Z=z}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(~-)&nbsp;(u:&nbsp;Vector3D)&nbsp;=&nbsp;Vector3D(-u.X,&nbsp;-u.Y,&nbsp;-u.Z)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(+)&nbsp;(u:&nbsp;Vector3D,&nbsp;v:&nbsp;Vector3D)&nbsp;=&nbsp;Vector3D(u.X&nbsp;+&nbsp;v.X,&nbsp;u.Y&nbsp;+&nbsp;v.Y,&nbsp;u.Z&nbsp;+&nbsp;v.Z)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(-)&nbsp;(u:&nbsp;Vector3D,&nbsp;v:&nbsp;Vector3D)&nbsp;=&nbsp;Vector3D(u.X&nbsp;-&nbsp;v.X,&nbsp;u.Y&nbsp;-&nbsp;v.Y,&nbsp;u.Z&nbsp;-&nbsp;v.Z)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(*)&nbsp;(s,&nbsp;v:&nbsp;Vector3D)&nbsp;=&nbsp;Vector3D(s&nbsp;*&nbsp;v.X,&nbsp;s&nbsp;*&nbsp;v.Y,&nbsp;s&nbsp;*&nbsp;v.Z)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(*)&nbsp;(u:&nbsp;Vector3D,&nbsp;v:&nbsp;Vector3D)&nbsp;=&nbsp;u.X&nbsp;*&nbsp;v.X&nbsp;+&nbsp;u.Y&nbsp;*&nbsp;v.Y&nbsp;+&nbsp;u.Z&nbsp;*&nbsp;v.Z</CODE></P>
+      <P>Note how the <CODE>Struct</CODE> attribute is given to our 
+      <CODE>Vector3D</CODE> type definition, ensuring that it is represented as 
+      an unboxed struct. For example, a <CODE>Vector3D&nbsp;array</CODE> will 
+      now be stored as a single contiguous block of data rather than as an array 
+      of pointers to heap-allocated vectors. This is often significantly more 
+      efficient for small numerical types such as complex numbers and 
+      low-dimensional vectors and matrices.</P>
+      <P>Next, we define an <CODE>Options</CODE> module that contains the global 
+      options settable in this application:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Options&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;specular,&nbsp;shadows,&nbsp;reflect,&nbsp;animate&nbsp;=&nbsp;ref&nbsp;false,&nbsp;ref&nbsp;false,&nbsp;ref&nbsp;false,&nbsp;ref&nbsp;false</CODE></P>
+      <P>The <CODE>epsilon_float</CODE> constant is the smallest 
+      <CODE>float</CODE> for which <CODE>1.0&nbsp;+&nbsp;epsilon_float</CODE> is 
+      not equal to <CODE>1.0</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;epsilon_float&nbsp;=&nbsp;0x3CB0000000000000LF</CODE></P>
+      <P>Like many numerical methods, the ray tracer uses a small value derived 
+      from <CODE>epsilon_float</CODE> when dealing with "nearby" floating-point 
+      numbers:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;delta&nbsp;=&nbsp;epsilon_float&nbsp;**&nbsp;(1.0&nbsp;/&nbsp;3.0)</CODE></P>
+      <P>Specifically, self-shadowing due to numerical errors will be prevented 
+      by pushing intersection points slightly off the surface of an object 
+      before casting the shadow ray to determine whether or not the intersection 
+      point has line-of-sight to the light.</P>
+      <P>The <CODE>sqr</CODE> function squares a float:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sqr&nbsp;(x&nbsp;:&nbsp;float)&nbsp;=&nbsp;x&nbsp;*&nbsp;x</CODE></P>
+      <P>The value <CODE>zero</CODE> is the zero vector:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;zero&nbsp;=&nbsp;Vector3D(0.0,&nbsp;0.0,&nbsp;0.0)</CODE></P>
+      <P>The <CODE>norm</CODE> function computes the length of a vector:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;norm&nbsp;(u:&nbsp;Vector3D)&nbsp;=&nbsp;sqrt(u&nbsp;*&nbsp;u)</CODE></P>
+      <P>The <CODE>normalize</CODE> function scales a vector by the inverse of 
+      its length, resulting in a vector in the same direction but of unit 
+      length:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;normalize&nbsp;r&nbsp;=&nbsp;1.&nbsp;/&nbsp;norm&nbsp;r&nbsp;*&nbsp;r</CODE></P>
+      <P>The ray tracers is built around a small collection of basic types. The 
+      <CODE>ray</CODE> type represents a ray with a starting point 
+      <CODE>orig</CODE> and direction <CODE>dir</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ray&nbsp;=&nbsp;{&nbsp;orig:&nbsp;Vector3D;&nbsp;dir:&nbsp;Vector3D&nbsp;}</CODE></P>
+      <P>A sphere is represented by its center and radius:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;sphere&nbsp;=&nbsp;{&nbsp;center:&nbsp;Vector3D;&nbsp;radius:&nbsp;float&nbsp;}</CODE></P>
+      <P>A plane is represented by its normal vector and offset (the factor the 
+      normal must be scaled by to get from the origin to the plane):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;plane&nbsp;=&nbsp;{&nbsp;normal:&nbsp;Vector3D;&nbsp;offset:&nbsp;float&nbsp;}</CODE></P>
+      <P>The <CODE>sphere</CODE> and <CODE>plane</CODE> types are combined into 
+      a union type <CODE>shape</CODE> that allows scene to be composed of both 
+      spheres and planes:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;shape&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sphere&nbsp;of&nbsp;sphere<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Plane&nbsp;of&nbsp;plane</CODE></P>
+      <P>The <CODE>solid</CODE> type conveys not only the geometry of an object 
+      (sphere or plane) but also its surface characteristics such as 
+      reflectivity:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;solid&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;diffuse:&nbsp;Vector3D;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;specular:&nbsp;Vector3D;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shininess:&nbsp;float;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reflectivity:&nbsp;float;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;geometry:&nbsp;shape<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</CODE></P>
+      <P>Finally, a <CODE>scene</CODE> is composed of a light and an array of 
+      solids:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;scene&nbsp;=&nbsp;{&nbsp;light:&nbsp;Vector3D;&nbsp;solids:&nbsp;solid&nbsp;array&nbsp;}</CODE></P>
+      <P>The following function computes the normal vector from an object at a 
+      given intersection point, quantified by the ray and the distance 
+      <CODE>lambda</CODE> along the ray:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;normal&nbsp;ray&nbsp;lambda&nbsp;shape&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;point&nbsp;=&nbsp;ray.orig&nbsp;+&nbsp;lambda&nbsp;*&nbsp;ray.dir<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;shape&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sphere&nbsp;sphere&nbsp;-&gt;&nbsp;normalize(point&nbsp;-&nbsp;sphere.center)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Plane&nbsp;plane&nbsp;-&gt;&nbsp;plane.normal</CODE></P>
+      <P>An intersection is defined as the (possibly infinite) distance along 
+      the ray of the intersection point and the solid (if any) that has been 
+      intersected:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;hit&nbsp;=&nbsp;{&nbsp;lambda:&nbsp;float;&nbsp;surface:&nbsp;solid&nbsp;option&nbsp;}</CODE></P>
+      <P>We use OCaml's shorthand name for infinity:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;infinity&nbsp;=&nbsp;System.Double.PositiveInfinity</CODE></P>
+      <P>The core of the ray tracer is the following ray-solid intersection 
+      function that determines the point of intersection (if any) of a ray with 
+      a given solid:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;intersect_aux&nbsp;ray&nbsp;hit&nbsp;solid&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lambda&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;solid.geometry&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sphere&nbsp;sphere&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;v&nbsp;=&nbsp;sphere.center&nbsp;-&nbsp;ray.orig<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;b&nbsp;=&nbsp;v&nbsp;*&nbsp;ray.dir<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;disc&nbsp;=&nbsp;sqr&nbsp;b&nbsp;-&nbsp;v&nbsp;*&nbsp;v&nbsp;+&nbsp;sqr&nbsp;sphere.radius<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;disc&nbsp;&lt;&nbsp;0.0&nbsp;then&nbsp;infinity&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;disc&nbsp;=&nbsp;sqrt&nbsp;disc<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;t2&nbsp;=&nbsp;b&nbsp;+&nbsp;disc<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t2&nbsp;&lt;&nbsp;0.0&nbsp;then&nbsp;infinity&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;t1&nbsp;=&nbsp;b&nbsp;-&nbsp;disc<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t1&nbsp;&gt;&nbsp;0.0&nbsp;then&nbsp;t1&nbsp;else&nbsp;t2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Plane&nbsp;plane&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;vd&nbsp;=&nbsp;plane.normal&nbsp;*&nbsp;ray.dir<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;vo&nbsp;=&nbsp;-(plane.normal&nbsp;*&nbsp;ray.orig&nbsp;+&nbsp;plane.offset)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lambda&nbsp;=&nbsp;vo&nbsp;/&nbsp;vd<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lambda&nbsp;&lt;=&nbsp;0.0&nbsp;then&nbsp;infinity&nbsp;else&nbsp;lambda<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;lambda&nbsp;&gt;=&nbsp;hit.lambda&nbsp;then&nbsp;hit&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;lambda&nbsp;=&nbsp;lambda;&nbsp;surface&nbsp;=&nbsp;Some&nbsp;solid&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;intersect&nbsp;ray&nbsp;solids&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.fold&nbsp;(intersect_aux&nbsp;ray)&nbsp;{&nbsp;lambda&nbsp;=&nbsp;infinity;&nbsp;surface&nbsp;=&nbsp;None&nbsp;}&nbsp;solids</CODE></P>
+      <P>The following function determines whether or not an intersection point 
+      has line-of-sight to the light and, therefore, whether or not it is in 
+      shadow:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;is_lit&nbsp;point&nbsp;light&nbsp;solids&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;shadow_ray&nbsp;=&nbsp;{&nbsp;orig&nbsp;=&nbsp;point;&nbsp;dir&nbsp;=&nbsp;-light&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;intersect&nbsp;shadow_ray&nbsp;solids&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;{&nbsp;surface&nbsp;=&nbsp;Some&nbsp;_&nbsp;}&nbsp;-&gt;&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;{&nbsp;surface&nbsp;=&nbsp;None&nbsp;}&nbsp;-&gt;&nbsp;true</CODE></P>
+      <P>Finally, the following <CODE>trace</CODE> function uses the 
+      <CODE>intersect</CODE> function to find the intersections of a ray with 
+      the solids in a scene and uses this information to compute the color for 
+      the ray, casting extra rays for shadows and reflections as necessary:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;trace&nbsp;weight&nbsp;ray&nbsp;scene&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;intersect&nbsp;ray&nbsp;scene.solids&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;{&nbsp;surface&nbsp;=&nbsp;None&nbsp;}&nbsp;-&gt;&nbsp;zero<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;{&nbsp;lambda&nbsp;=&nbsp;lambda;&nbsp;surface&nbsp;=&nbsp;Some&nbsp;surface&nbsp;}&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;normal&nbsp;=&nbsp;normal&nbsp;ray&nbsp;lambda&nbsp;surface.geometry<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;point&nbsp;=&nbsp;ray.orig&nbsp;+&nbsp;lambda&nbsp;*&nbsp;ray.dir&nbsp;+&nbsp;delta&nbsp;*&nbsp;normal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lit&nbsp;=&nbsp;not&nbsp;!Options.shadows&nbsp;||&nbsp;is_lit&nbsp;point&nbsp;scene.light&nbsp;scene.solids<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;diffuse&nbsp;=&nbsp;if&nbsp;lit&nbsp;then&nbsp;max&nbsp;0.0&nbsp;(-&nbsp;normal&nbsp;*&nbsp;scene.light)&nbsp;else&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;specular&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;lit&nbsp;||&nbsp;not&nbsp;!Options.specular&nbsp;then&nbsp;0.&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;halfway&nbsp;=&nbsp;normalize(normalize(ray.orig&nbsp;-&nbsp;point)&nbsp;-&nbsp;scene.light)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;max&nbsp;0.0&nbsp;(normal&nbsp;*&nbsp;halfway)&nbsp;**&nbsp;surface.shininess<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;reflected&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;weight&nbsp;=&nbsp;weight&nbsp;*&nbsp;surface.reflectivity<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;!Options.reflect&nbsp;||&nbsp;weight&nbsp;&lt;&nbsp;0.1&nbsp;then&nbsp;zero&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ray&nbsp;=&nbsp;{&nbsp;orig&nbsp;=&nbsp;point;&nbsp;dir&nbsp;=&nbsp;ray.dir&nbsp;-&nbsp;2.0&nbsp;*&nbsp;(ray.dir&nbsp;*&nbsp;normal)&nbsp;*&nbsp;normal&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;trace&nbsp;weight&nbsp;ray&nbsp;scene<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;diffuse&nbsp;*&nbsp;surface.diffuse&nbsp;+<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;specular&nbsp;*&nbsp;surface.specular&nbsp;+<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;surface.reflectivity&nbsp;*&nbsp;reflected</CODE></P>
+      <P>This completes the code for ray tracing. The remainder of the program 
+      is devoted to defining the scene, calling the <CODE>trace</CODE> function 
+      in parallel and painting the resulting colors onto a Silverlight 
+      bitmap.</P>
+      <H2>Efficient rendering for interactive use</H2>
+      <P>In order to animate the scene, we begin by obtaining the initial tick 
+      count:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;start&nbsp;=&nbsp;System.Environment.TickCount</CODE></P>
+      <P>We use <CODE>TickCount</CODE> as a timer because the usual 
+      <CODE>StopWatch</CODE> timer is not available to Silverlight programs.</P>
+      <P>We define the scene as an impure functions that uses the current tick 
+      count:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;scene()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;t&nbsp;=&nbsp;float(System.Environment.TickCount&nbsp;-&nbsp;start)&nbsp;/&nbsp;1e3<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cos,&nbsp;sin&nbsp;=&nbsp;cos&nbsp;t,&nbsp;sin&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;unitSphere(x,&nbsp;y,&nbsp;z)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x,&nbsp;z&nbsp;=&nbsp;cos&nbsp;*&nbsp;x&nbsp;-&nbsp;sin&nbsp;*&nbsp;z,&nbsp;sin&nbsp;*&nbsp;x&nbsp;+&nbsp;cos&nbsp;*&nbsp;z<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sphere&nbsp;{&nbsp;center&nbsp;=&nbsp;Vector3D(x,&nbsp;y,&nbsp;z);&nbsp;radius&nbsp;=&nbsp;1.0&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;solid&nbsp;(diffuse,&nbsp;reflectivity,&nbsp;geometry)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;diffuse&nbsp;=&nbsp;diffuse;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;specular&nbsp;=&nbsp;Vector3D(1.0,&nbsp;1.0,&nbsp;1.0);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;shininess&nbsp;=&nbsp;30.0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reflectivity&nbsp;=&nbsp;reflectivity;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;geometry&nbsp;=&nbsp;geometry<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;light&nbsp;=&nbsp;Vector3D(-1.0,&nbsp;-3.0,&nbsp;1.0)&nbsp;|&gt;&nbsp;normalize;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;solids&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Vector3D(1.0,&nbsp;0.0,&nbsp;0.0),&nbsp;0.3,&nbsp;unitSphere(-1.0,&nbsp;-0.7,&nbsp;0.0);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Vector3D(0.0,&nbsp;1.0,&nbsp;0.0),&nbsp;0.3,&nbsp;unitSphere(1.0,&nbsp;-0.7,&nbsp;0.0);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Vector3D(0.0,&nbsp;0.0,&nbsp;1.0),&nbsp;0.3,&nbsp;unitSphere(0.0,&nbsp;-0.7,&nbsp;sqrt&nbsp;3.0);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Vector3D(1.0,&nbsp;1.0,&nbsp;1.0),&nbsp;0.3,&nbsp;unitSphere(0.0,&nbsp;sqrt(8.0&nbsp;/&nbsp;3.0)&nbsp;-&nbsp;0.7,&nbsp;sqrt(1.0&nbsp;/&nbsp;3.0));<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Vector3D(0.3,&nbsp;0.3,&nbsp;0.3),&nbsp;0.8,&nbsp;Plane{normal&nbsp;=&nbsp;Vector3D(0.0,&nbsp;1.0,&nbsp;0.0);&nbsp;offset&nbsp;=&nbsp;1.7};<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.map&nbsp;solid<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</CODE></P>
+      <P>This is a pyramid of four spheres and a plane for the ground.</P>
+      <P>Next, we define the size of our bitmap:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;256</CODE></P>
+      <P>A row of pixels at a given <CODE>y</CODE> coordinate may be computed as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;row&nbsp;scene&nbsp;y&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;i&nbsp;=&nbsp;float(2&nbsp;*&nbsp;i&nbsp;-&nbsp;n)&nbsp;/&nbsp;float&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ray&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;orig&nbsp;=&nbsp;Vector3D(0.0,&nbsp;0.0,&nbsp;-4.0);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dir&nbsp;=&nbsp;normalize(Vector3D(f&nbsp;x,&nbsp;f&nbsp;(n&nbsp;-&nbsp;y&nbsp;-&nbsp;1),&nbsp;1.0))&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;color&nbsp;=&nbsp;trace&nbsp;1.0&nbsp;ray&nbsp;scene<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;x&nbsp;=&nbsp;int(256.0&nbsp;*&nbsp;x)&nbsp;|&gt;&nbsp;max&nbsp;0&nbsp;|&gt;&nbsp;min&nbsp;255<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0xff000000&nbsp;+&nbsp;(f&nbsp;color.X&nbsp;&lt;&lt;&lt;&nbsp;16)&nbsp;+&nbsp;(f&nbsp;color.Y&nbsp;&lt;&lt;&lt;&nbsp;8)&nbsp;+&nbsp;f&nbsp;color.Z)</CODE></P>
+      <P>This <CODE>row</CODE> function provides a sufficiently-coarse 
+      granularity (i.e. it requires significant computation) that it can be used 
+      as the basis of a parallel renderer. Ordinarily, we would just use a 
+      <CODE>Parallel.For</CODE> loop but, again, this functionality is not yet 
+      available from Silverlight so we shall resort to the substantially less 
+      efficient use of asynchronous workflows and a 
+      <CODE>MailboxProcessor</CODE> instead.</P>
+      <P>The <CODE>MailboxProcessor</CODE> will handle the following kinds of 
+      messages:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Refresh<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Completed&nbsp;of&nbsp;int&nbsp;*&nbsp;int&nbsp;array<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Query&nbsp;of&nbsp;(Map&lt;int,&nbsp;int&nbsp;array&gt;&nbsp;-&gt;&nbsp;unit)</CODE></P>
+      <P>The <CODE>Refresh</CODE> message will be used to cancel any outstanding 
+      asynchronous workflows and spawn new workflows to render each row of 
+      pixels in the image. The <CODE>Completed</CODE> message is passed back to 
+      the <CODE>MailboxProcessor</CODE> by a workflow to convey the completion 
+      of a row and its results. Finally, the <CODE>Query</CODE> message is 
+      posted synchronously from the Silverlight rendering loop in order to 
+      obtain the latest frame of animation.</P>
+      <P>The <CODE>renderer</CODE> is the <CODE>MailboxProcessor</CODE> 
+      responsible for farming out the rendering of rows of pixels in parallel 
+      and returning the current result synchronously:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;renderer&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;MailboxProcessor&lt;_&gt;(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;i&nbsp;cancel&nbsp;rows&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Refresh&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cancel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cancel&nbsp;=&nbsp;new&nbsp;System.Threading.CancellationTokenSource()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;scene&nbsp;=&nbsp;scene()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;y=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async.Start(async&nbsp;{&nbsp;inbox.Post(Completed(y,&nbsp;row&nbsp;scene&nbsp;y))&nbsp;},&nbsp;cancel.Token)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;n&nbsp;cancel.Cancel&nbsp;rows<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Completed(x,&nbsp;cs)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i=1&nbsp;&amp;&amp;&nbsp;!Options.animate&nbsp;then&nbsp;inbox.Post&nbsp;Refresh<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;(i-1)&nbsp;cancel&nbsp;(Map.add&nbsp;x&nbsp;cs&nbsp;rows)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Query&nbsp;reply&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reply&nbsp;rows<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;i&nbsp;cancel&nbsp;Map.empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cancel&nbsp;=&nbsp;new&nbsp;System.Threading.CancellationTokenSource()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;0&nbsp;cancel.Cancel&nbsp;Map.empty)</CODE></P>
+      <P>The interesting aspect of this <CODE>MailboxProcessor</CODE> is the way 
+      it uses a <CODE>CancellationToken</CODE> to cull outstanding workflows 
+      that are still rendering the previous frame of animation. Various 
+      different techniques could be used here, such as rendering pixels in a 
+      pre-determined random order so the image updated gradually from one frame 
+      to the next.</P>
+      <H2>Embedding in Silverlight</H2>
+      <P>In this final section, we consider how to visualize the result in 
+      Silverlight including GUI controls for the optional parameters to the 
+      renderer. We begin by defining a <CODE>MainPage</CODE> control derived 
+      from the built-in Silverlight <CODE>UserControl</CODE> as usual:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MainPage()&nbsp;as&nbsp;this&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inherit&nbsp;Controls.UserControl()</CODE></P>
+      <P>Our control contains a writeable bitmap:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;image&nbsp;=&nbsp;Media.Imaging.WriteableBitmap(n,&nbsp;n)</CODE></P>
+      <P>The remaining work is defined in the constructor. A <CODE>Grid</CODE> 
+      control is used to separate the GUI controls from the bitmap:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;column&nbsp;in&nbsp;0..1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ColumnDefinition()&nbsp;|&gt;&nbsp;grid.ColumnDefinitions.Add</CODE></P>
+      <P>Again, we would usually use a <CODE>DockPanel</CODE> but this is not 
+      yet available in Silverlight.</P>
+      <P>The following <CODE>add</CODE> function provides an easy way to add 
+      controls to the grid:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;add&nbsp;i&nbsp;j&nbsp;control&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(control,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(control,&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;control</CODE></P>
+      <P>We place the GUI controls in a <CODE>StackPanel</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;panel&nbsp;=&nbsp;Controls.StackPanel(Margin=Thickness&nbsp;11.0)</CODE></P>
+      <P>The following <CODE>makeCheckBox</CODE> function creates a check box 
+      with the given text that reflects its setting in a given mutable reference 
+      to a boolean and adds it to our stack panel:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;makeCheckBox&nbsp;text&nbsp;setting&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;checkBox&nbsp;=&nbsp;Controls.CheckBox(Content=text)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;isSet()&nbsp;=&nbsp;checkBox.IsChecked.HasValue&nbsp;&amp;&amp;&nbsp;checkBox.IsChecked.Value<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;checkBox.Click.Add(fun&nbsp;e&nbsp;-&gt;&nbsp;setting&nbsp;:=&nbsp;isSet();&nbsp;renderer.Post&nbsp;Refresh)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;checkBox&nbsp;|&gt;&nbsp;panel.Children.Add</CODE></P>
+      <P>We use this function to create four check boxes, one for each available 
+      option:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;makeCheckBox&nbsp;"Specular&nbsp;reflections"&nbsp;Options.specular<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;makeCheckBox&nbsp;"Shadows"&nbsp;Options.shadows<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;makeCheckBox&nbsp;"Reflections"&nbsp;Options.reflect<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;makeCheckBox&nbsp;"Animation"&nbsp;Options.animate</CODE></P>
+      <P>We insert the stack panel and image of the bitmap into the grid and set 
+      the grid as the root UI element for our <CODE>MainPage</CODE> control:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;panel&nbsp;|&gt;&nbsp;add&nbsp;0&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Image(Source=image)&nbsp;|&gt;&nbsp;add&nbsp;1&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.Content&nbsp;&lt;-&nbsp;grid</CODE></P>
+      <P>We start the <CODE>MailboxProcessor</CODE> and post an initial 
+      <CODE>Refresh</CODE> message:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;renderer.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;renderer.Post&nbsp;Refresh</CODE></P>
+      <P>We register a callback handler for the <CODE>Rendering</CODE> event in 
+      order to update our bitmap from the current rendering result as often as 
+      possible:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.CompositionTarget.Rendering.Add(fun&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pixel&nbsp;=&nbsp;image.Pixels<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;renderer.PostAndReply(fun&nbsp;reply&nbsp;-&gt;&nbsp;Query&nbsp;reply.Reply)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Map.iter&nbsp;(fun&nbsp;y&nbsp;cs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pixel.[x&nbsp;+&nbsp;y*n]&nbsp;&lt;-&nbsp;cs.[x])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image.Invalidate())</CODE></P>
+      <P>This completes our real-time Silverlight ray tracer.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a simple 
+      ray tracer using Silverlight that uses parallelism to render a small scene 
+      in real time.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of real-time 
+      animation in Silverlight.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20ray%20tracer%20silverlight_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

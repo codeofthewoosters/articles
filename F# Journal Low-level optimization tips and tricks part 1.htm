@@ -1,0 +1,409 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/optimization1.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Low-level optimization tips and tricks: part 1</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Low-level optimization tips and tricks: part 
+1</TITLE>     <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Low-level optimization tips and tricks: part 1</H1>
+      <P>The F# programming language is a fantastic tool for technical computing 
+      because it combines easy interactive high-level programming with excellent 
+      performance and multicore capability. This makes it feasible to solve a 
+      wide variety of problems without having to drop to low-level languages 
+      like C for performance. This article describes some of the low-level 
+      optimizations that underpin the ability to write performant F# programs by 
+      leveraging knowledge about the F# compiler as well as the few situations 
+      where F# is currently unable to provide competitive performance.</P>
+      <H2>Introduction</H2>
+      <P>Although the .NET platform makes it as easy as possible to develop 
+      projects in multiple languages, using a single language is always alluring 
+      because it helps to reduce complexity. However, it is only feasible to 
+      write a project entirely in one language when that language combines the 
+      necessary benefits. In the case of F#, we have a high-level language with 
+      integrated support for interactive computing that is also competitively 
+      performant for many tasks even when solutions are written using different 
+      paradigms. So problems are often solved using high-level but not 
+      necessarily optimally-performant designs for the majority of the code and 
+      a low-level programming style for performance-critical sections.</P>
+      <P>In particular, the design of F# and .NET make it very easy to write 
+      parallel algorithms that leverage now-ubiquitous multicore computers. 
+      Moreover, these programs benefit from good numerical performance and a 
+      rich selection of data structure implementations.</P>
+      <H2>Compiler flags</H2>
+      <P>The first port of call for improving performance with low-level 
+      alterations is to adjust the optimization settings of the compiler. F# 
+      code developed in Visual Studio has optimizations disabled for Debug 
+      builds and enabled for Release builds by default but the optimization 
+      setting may also be set manually for each build type of a given project 
+      via the Build tab of the project's Properties dialog:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/optimization_settings.gif"> 
+                  </P>
+      <P></P>
+      <H2>Allocation related</H2>
+      <P>Although the F# programming language is derived from functional 
+      languages, primarily              <A href="http://www.ffconsultancy.com/products/ocaml_journal/?fsj">OCaml</A>
+       , it is built upon the CLR which is heavily optimized for C#. 
+      Consequently, F# has unusual performance characteristics for a functional 
+      language and this affects the way efficient F# code is written. The 
+      solution is largely to follow the optimization advice for C# but there are 
+      some areas where F# differs.           </P>
+      <H3>Deforesting</H3>
+      <P>Simple use of functional constructs in languages with strict evaluation 
+      semantics like F# often leads to the generation of intermediate data 
+      structures that are unnecessary. The creation and subsequent collection of 
+      these unnecessary data structures can often be avoided. The elimination of 
+      intermediate data structures is referring to as              
+      <I>deforesting</I> .           </P>
+      <P>Computing the Shannon entropy of a list is a simple example where 
+      intermediate data structures can be avoided in order to improve 
+      performance. A naive implementation might be written:</P>
+<PRE>&gt; let log2 x =
+    log x /. log 2.;;
+val log2 : float -&gt; float
+&gt; let entropy list =
+    List.fold_left ( -. ) 0. (List.map2 ( *. ) list (List.map log2 list));;
+val entropy : float list -&gt; float</PRE>
+      <P>For example, a channel transmitting an alphabet containing a single 
+      character conveys zero bits of information:</P>
+<PRE>&gt; entropy [1.];;
+val it : float = 0.0</PRE>
+      <P>and a channel transmitting an alphabet of two characters both with the 
+      same probability of 0.5 conveys a single bit of information per 
+      character:</P>
+<PRE>&gt; entropy [0.5; 0.5];;
+val it : float = 1.</PRE>
+      <P>This implementation of the              <CODE>entropy</CODE> function 
+      builds an intermediate list using the              <CODE>map</CODE> 
+      function and then another intermediate list using the              
+      <CODE>map2</CODE> function. These intermediate lists may be avoided by 
+      performing the entire computation within the function passed to the 
+      higher-order              <CODE>fold_left</CODE> function:           </P>
+<PRE>&gt; let entropy2 list =
+    List.fold_left (fun t h -&gt; t -. h *. log2 h) 0. list;;
+val entropy : float list -&gt; float = &lt;fun&gt;</PRE>
+      <P>This seemingly-innocuous transformation can actually dramatically 
+      improve performance when the amount of space spent on intermediate values 
+      is reduced, particularly when it is made algorithmically smaller as it is 
+      here: from O(n) extra storage to O(1).</P>
+      <P>For a 10             <SUP>6</SUP> -element list, we find that the 
+      deforested              <CODE>entopy2</CODE> function is 8× faster than 
+      the original              <CODE>entropy</CODE> function:           </P>
+<PRE>&gt; let list =
+    [ for _ in 1 .. 1000000 -&gt;
+        1. ];;
+val list : float list
+&gt; time entropy list;;
+Took 974ms
+&gt; time entropy2 list;;
+Took 117ms</PRE>
+      <H3>Avoiding copying</H3>
+      <P>The current F# implementation makes no attempt to spot when immutable 
+      data structures are deconstructed and subsequently reconstructed 
+      identically to the original. In such cases, the original data structure 
+      may be reused without having to incur the cost of copying and, in 
+      particular, allocation.</P>
+      <P>Consider the task of accumulating the domain of a sequence of 
+      integers:</P>
+<PRE>&gt; type bound = { x0: int; x1: int };;
+type bound = { x0: int; x1: int }</PRE>
+<PRE>&gt; let minmax { x0 = x0; x1 = x1 } x =
+    { x0 = min x0 x; x1 = max x x1 };;
+val minmax : bound -&gt; int -&gt; bound</PRE>
+      <P>This simple implementation always constructs a new value of the record 
+      type              <CODE>bound</CODE> even if the new value is identical to 
+      the given value. The unnecessary copying involves allocation, which is 
+      costly. Fortunately, a simple test can be used to return the given value 
+      uncopied when possible:           </P>
+<PRE>&gt; let minmax2 ({ x0 = x0; x1 = x1 } as range) (x: int) =
+    let x0' = min x0 x
+    let x1' = max x x1
+    if x0 = x0' &amp;&amp; x1 = x1' then range else { x0 = x0'; x1 = x1' };;
+val minmax : bound -&gt; int -&gt; bound</PRE>
+      <P>These functions may be benchmarked as follows:</P>
+<PRE>&gt; let array = Array.init 10000000 (fun _ -&gt; 1)
+val array : int array</PRE>
+<PRE>&gt; time (Array.fold_left minmax {x0=0; x1=0}) array;;
+Took 473ms
+val it : bound = {x0 = 0;
+                  x1 = 1;}</PRE>
+<PRE>&gt; time (Array.fold_left minmax2 {x0=0; x1=0}) array;;
+Took 329ms
+val it : bound = {x0 = 0;
+                  x1 = 1;}</PRE>
+      <P>So the              <CODE>minmax2</CODE> function is almost 50% faster 
+      than the              <CODE>minmax</CODE> function.           </P>
+      <H3>Avoiding boxing</H3>
+      <P>The term              <I>boxing</I> refers to storing a value in an 
+      allocated block of memory (the box) and referring to it by a pointer to 
+      that block. Record types are boxed in F#.           </P>
+      <P>Boxing can be inefficient when types are used to represent simple 
+      values such as complex numbers or the parameters of a triangle in a mesh, 
+      particularly when these values are stored in an array. Using boxed types 
+      such as record types, the array contains pointers. By using an unboxed 
+      type, it is possible for each array element to actually contain the 
+      subtypes contiguously in memory.</P>
+      <P>Fortunately, .NET provides              <CODE>struct</CODE> types that 
+      are stored unboxed whenever possible. The best example use of a            
+        <CODE>struct</CODE> type is F#'s internal representation of complex 
+      numbers:           </P>
+<PRE>[&lt;Struct&gt;]
+[&lt;StructuralEquality(false); StructuralComparison(false)&gt;]
+type Complex = 
+    /// The real part of a complex number
+    member r: float
+    /// The imaginary part of a complex number
+    member i: float
+    ...</PRE>
+      <P>Let us consider the related task of implementing 2D vectors. The 
+      following record type              <CODE>vec2</CODE> may be used to 
+      represent a 2D vector:           </P>
+<PRE>&gt; type vec2 = { x: float; y: float } with
+    member r.Normalized =
+      let il = 1. / sqrt(r.x * r.x + r.y * r.y)
+      { x = il * r.x; y = il * r.y };;
+type vec2 =
+  {x: float;
+   y: float;}
+  with
+    member Normalized : vec2
+  end</PRE>
+      <P>The following defines an array of 2D vectors using the              
+      <CODE>vec2</CODE> type:           </P>
+<PRE>&gt; let array =
+    let rand = System.Random()
+    [|for _ in 1 .. 1000000 -&gt;
+        { x = rand.NextDouble(); y = rand.NextDouble()|];;
+val array : vec2 array</PRE>
+      <P>In contrast, the following defines what appears to be a class with an 
+      implicit constructor but the preceding attribute              
+      <CODE>[&lt;Struct&gt;]</CODE> causes a .NET struct to be emitted instead:  
+               </P>
+<PRE>&gt; [&lt;Struct&gt;]
+  type vec2'(x, y) =
+    member r.x = x
+    member r.y = y
+    member r.Normalized =
+      let il = 1. / sqrt(x * x + y * y)
+      vec2'(il * x, il * y);;
+type vec2' =
+    struct
+      new : x:float * y:float -&gt; vec2'
+      member Normalized : vec2'
+      member x : float
+      member y : float
+    end</PRE>
+      <P>The following represents the previous array using the new              
+      <CODE>vec2'</CODE> type:           </P>
+<PRE>&gt; let array' = array |&gt; Array.map (fun r -&gt; vec2'(r.x, r.y));;
+val array' : vec2' array</PRE>
+      <P>The different performance characteristics of records and structs may be 
+      highlighted by creating an array of normalized vectors using the           
+         <CODE>Array.map</CODE> function:           </P>
+<PRE>&gt; time (Array.map (fun (r: vec2) -&gt; r.Normalized)) array |&gt; ignore;;
+Took 222ms
+&gt; time (Array.map (fun (r: vec2') -&gt; r.Normalized)) array' |&gt; ignore;;
+Took 53ms</PRE>
+      <P>Note that the unboxed representation based upon a              
+      <CODE>struct</CODE> is around 4× faster than the boxed record type. The 
+      reason for this performance discrepancy is primarily that using the record 
+      type requires an allocation for the resulting array and an allocation for 
+      each element whereas the array of the struct type              
+      <CODE>vec2'</CODE> is stored contiguously in memory and, consequently, the 
+      allocation of the array itself is all that is needed to create space for 
+      the elements of the array.           </P>
+      <P>Unlike the previous generation of language implementations based upon 
+      used static compilation that required a uniform run-time representation 
+      where values were required to fit into a single 31- or 63-bit word and 
+      values of the type              <CODE>float</CODE> were therefore boxed, 
+      .NET uses ahead-of-time compilation to generate type-specialized native 
+      code for any given generic definition. So there is no longer any need for 
+      a uniform representation and primitive types like              
+      <CODE>float</CODE> are always stored unboxed. Consequently, unboxing is 
+      less of a concern in F# but it can still be a productive optimization.     
+            </P>
+      <H3>Use mutation</H3>
+      <P>Perhaps the most obvious way to avoid allocation is to make maximal 
+      reuse of previous allocations by writing over them. This implies an 
+      imperative style with mutation rather than a purely functional style. 
+      However, mutation can be used for performance critical sections of 
+      low-level code without having to expose it across APIs.</P>
+      <P>The previous example              <CODE>sum</CODE> functions 
+      demonstrate imperative code using mutation that is hidden behind a purely 
+      functional API. This style is even equally thread safe because the mutable 
+      variables are local to the function.           </P>
+      <P>Consequently, performance critical code that does not require 
+      persistence can also benefit from the use of higher-level mutable data 
+      structures. Counting the number of occurrences of elements in a sequence 
+      is one such application where an immutable map can be replaced with a 
+      mutable hash table to improve performance. This may be implemented 
+      functionally using a              <CODE>Map</CODE> :           </P>
+<PRE>&gt; let freqs1 xs =
+    let aux k map =
+      match Map.tryfind k map with
+      | Some n -&gt; n + 1
+      | None -&gt; 1
+    let aux map k =
+      Map.add k (aux k map) map
+    let map = Array.fold_left aux Map.empty xs
+    Map.fold_right (fun k v t -&gt; (k, v)::t) map [];;
+val freqs1 : 'a [] -&gt; ('a * int) list</PRE>
+      <P>or imperatively using the .NET hash table implementation in             
+       <CODE>System.Collections.Generic.Dictionary</CODE> (and a little more 
+      effort!):           </P>
+<PRE>&gt; let freqs2 xs =
+    let map = System.Collections.Generic.Dictionary()
+    let aux k =
+      let v = ref(ref 0)
+      if map.TryGetValue(k, v) then
+        incr !v
+      else
+        map.Add(k, ref 1)
+    Array.iter aux xs
+    let a = Array.zero_create map.Count
+    let mutable i = 0
+    for kv in map do
+      a.[i] &lt;- (kv.Key, !kv.Value)
+      i &lt;- i + 1
+    Array.sort compare a
+    Array.to_list a;;
+val freqs2 : 'a [] -&gt; ('a * int) list</PRE>
+      <P>When the number of unique keys is very small, the functional map 
+      performs competitively with the hash table because its internal balanced 
+      binary tree is very shallow and traversing the tree is cheap. When the 
+      number of unique keys is very large, performance is limited by the cost of 
+      cache misses and both approaches perform similarly. However, for a 
+      substantial range of unique keys, hash tables are up to 60× faster than 
+      functional maps:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/map_vs_hashtbl.gif"> 
+                  </P>
+      <P></P>
+      <P>Due to this large performance discrepancy over a wide range of 
+      practically-important sizes, hash tables are almost always preferred to 
+      functional maps when performance is at all important.</P>
+      <H3>Type specialization</H3>
+      <P>Although the F# programming language provides several different ways to 
+      solve problems abstractly, these abstractions often incur run-time 
+      performance penalties and performance sensitive applications may need to 
+      resort to specialized code in order to maintain the best possible 
+      performance. Type specialization is often the most productive form of 
+      specialization-based optimization.</P>
+      <P>Although polymorphism itself is implemented efficiently in .NET, some 
+      design patterns related to polymorphism are not fully optimized.</P>
+      <P>A simple example is the comparison of tuples. One might imagine that 
+      the two following functions are executed in the same fashion:</P>
+<PRE>&gt; let compare2 a b c d = compare (a, b) (c, d);;
+val compare2 : 'a -&gt; 'b -&gt; 'a -&gt; 'b -&gt; int</PRE>
+<PRE>&gt; let compare2' a b c d =
+    let c = compare a c
+    if c&lt;&gt;0 then c else compare b d;;
+val compare2 : 'a -&gt; 'b -&gt; 'a -&gt; 'b -&gt; int</PRE>
+      <P>Benchmarking these functions we actually find that the second solution 
+      is around 2× faster:</P>
+<PRE>&gt; let inline loop f () =
+    for i=1 to 1000000 do
+      f 0 1 2 3 |&gt; ignore;;
+val inline loop : (int -&gt; int -&gt; int -&gt; int -&gt; 'a) -&gt; unit -&gt; unit</PRE>
+<PRE>&gt; time (loop compare2) ();;
+Took 557ms</PRE>
+<PRE>&gt; time (loop compare2') ();;
+Took 272ms</PRE>
+      <P>The reason is that .NET's type specialization only handles primitive 
+      types and the implementation of the former              
+      <CODE>compare2</CODE> function results in two tuples being constructed and 
+      passed to a generic structural equality function           </P>
+      <H2>Avoid writing to the same cache line from multiple threads</H2>
+      <P>Modern multicore machines try to maintain the illusion that shared 
+      memory is equally accessible from all cores but the reality is quite 
+      different. This is manifested as complicated performance characteristics 
+      when different cores try to mutate the same part shared memory at the same 
+      time.</P>
+      <P>The following parallel implementations of the              
+      <CODE>Array.init</CODE> function demonstrate this. The              
+      <CODE>init1</CODE> function spawns two parallel computations that write 
+      alternate array elements, i.e. one writes odd indices and the other writes 
+      even indices:           </P>
+<PRE>&gt; let init1 n f =
+    let a = Array.zero_create n
+    let m = 2
+    System.Threading.Parallel.For(0, m,
+      fun i -&gt;
+        for j in i .. m .. n-1 do
+          a.[j] &lt;- f j)
+    a;;
+val init1 : int -&gt; (int -&gt; 'a) -&gt; 'a []</PRE>
+      <P>The following              <CODE>init2</CODE> function simply uses a 
+      different subdivision of the problem, with one parallel task filling the 
+      first half of the array and the other filling the second half:           
+      </P>
+<PRE>&gt; let init2 n f =
+    let a = Array.zero_create n
+    let m = 2
+    System.Threading.Parallel.For(0, 2,
+      fun i -&gt;
+        for j in n*i/m .. n*(i + 1)/m - 1 do
+          a.[j] &lt;- f j)
+    a;;
+val init2 : int -&gt; (int -&gt; 'a) -&gt; 'a []</PRE>
+      <P>Despite their similarities, these two implementations have wildly 
+      different performance characteristics:</P>
+<PRE>&gt; time (init1 1000000) float = time (init2 1000000) float
+  |&gt; printf "%A\n";;
+Took 226ms
+Took 14ms</PRE>
+      <P>The latter implementation is 16× faster because the former 
+      implementation introduces heavy contention between cores for the same 
+      cache line, i.e. the latter implementation is faster because the threads 
+      are writing to different cache lines. This is such a large effect that it 
+      is very important to bear this performance characteristic in mind when 
+      parallelizing algorithms.</P>
+      <H2>Summary</H2>
+      <P>This article has examined several unrelated techniques that can be used 
+      to improve the performance of F# programs. As low-level optimizations, the 
+      improvement is only a constant factor but, as we have seen, this factor 
+      may be as high as 60× faster. The next article in this two-part series 
+      will cover a further selection of techniques that may also be used to 
+      improve performance.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Low-level%20optimization%20tips%20and%20tricks%20part%201_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

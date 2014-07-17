@@ -1,0 +1,171 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0082)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/symboltables.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20symbol%20tables_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20symbol%20tables_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20symbol%20tables_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20symbol%20tables_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20symbol%20tables_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Symbol tables</H1>
+      <P>Computations such as graph traversals are often most naturally 
+      expressed in terms of raw data such as the strings names of the entities 
+      involved. This simplicity is valuable but comes at a cost in terms of 
+      performance because operations over strings from a finite set are 
+      substantially slower than operators over an equivalent representation. 
+      Symbol tables offer the ability to replacing strings with ints in order to 
+      accelerate computations over them. This article looks at a typical example 
+      application that stands to benefit from the use of a symbol table and then 
+      demonstrates how a symbol table can be implemented along with an efficient 
+      specialized dictionary for keys that are symbols.</P>
+      <H2>Introduction</H2>
+      <P>Many problems can be solved in terms of graph traversals and the 
+      vertices and edges of those graphs often have a significant data 
+      associated with them. The simplest way to implement such a solution is to 
+      keep the association between each vertex and its neighbors in a dictionary 
+      such as the .NET <CODE>Dictionary</CODE> collection or the F# 
+      <CODE>Map</CODE> collection. Lookups are expensive in these kinds of 
+      generic dictionaries. Keys often include strings and those strings are 
+      often similar (e.g. sharing significant prefixes). These strings are 
+      either hashed or compared, both of which are expensive operations. 
+      Non-trivial data structures are then traversed in order to search for the 
+      given key in the dictionary.</P>
+      <P>For example, the following creates a loop-shaped graph with string 
+      vertices and a dictionary is used to map each string onto its successor. 
+      Ten million edge traversals are then performed and timed:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;iters&nbsp;=&nbsp;10000000;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;iters&nbsp;:&nbsp;int&nbsp;=&nbsp;10000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Array.init&nbsp;1000&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;d&nbsp;=&nbsp;Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d.[xs.[i]]&nbsp;&lt;-&nbsp;xs.[(i&nbsp;+&nbsp;1)&nbsp;%&nbsp;xs.Length]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;k&nbsp;=&nbsp;xs.[0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;iters&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k&nbsp;&lt;-&nbsp;d.[k]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%gs:&nbsp;%A"&nbsp;timer.Elapsed.TotalSeconds&nbsp;k;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;1.84104s:&nbsp;"0"</CODE></P>
+      <P>The time taken to perform these traversals is, of course, dominated by 
+      the <CODE>Find</CODE> member of the <CODE>Dictionary</CODE> 
+collection.</P>
+      <P>However, these kinds of problems often use relatively small sets of 
+      keys or small sets of each field within the key. In such cases, a global 
+      conversion table can be used to replace any given key with a unique, 
+      small, positive <CODE>int</CODE>. Such tables are known a "symbol tables". 
+      More importantly, these small <CODE>int</CODE> keys make it possible to 
+      implement dictionaries as arrays, using the <CODE>int</CODE> as an index 
+      into the array. This massively reduces the complexity of searching the 
+      dictionary for a given key, making it possible to traverse graphs much 
+      more quickly. Moreover, the procedure is not very invasive, making it 
+      possible to speed up existing code considerably simply by using a symbol 
+      table library.</P>
+      <P>The remainder of this article is devoted to the design and 
+      implementation of a symbol table including a specialized dictionary data 
+      structure with symbols as keys.</P>
+      <H2>Symbols</H2>
+      <P>The core data type at the center of symbol tables is the symbol itself. 
+      This might be represented directly as an <CODE>int</CODE> but it is useful 
+      to distinguish symbols from other <CODE>int</CODE> values. Moreover, it is 
+      useful to convey the underlying type from which a symbol is derived in a 
+      generic type argument to the <CODE>Symbol</CODE> type. Generic type 
+      variables added to types despite the fact that they do not actually appear 
+      in their definition are known as "phantom types" and are a useful example 
+      of typeful programming (i.e. using the type system to catch errors at 
+      compile time).</P>
+      <P>A suitable <CODE>Symbol</CODE> type may therefore be implemented as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Symbol&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;internal&nbsp;id&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal&nbsp;new(id)&nbsp;=&nbsp;{id=id};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Symbol&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal&nbsp;new&nbsp;:&nbsp;id:int&nbsp;-&gt;&nbsp;Symbol&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;internal&nbsp;id:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Note how the type variable <CODE>'T</CODE> appears in the type name but 
+      not its actual definition, i.e. this is a phantom type. Consequently, 
+      accidentally trying to use a symbol that was derived from a 
+      <CODE>string</CODE> with one derived from a UUID results in a type error 
+      at compile time even if the underlying <CODE>int</CODE> fields are the 
+      same:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Symbol&lt;string&gt;(1)&nbsp;=&nbsp;Symbol&lt;System.Uri&gt;(1);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;SymbolTable.fs(20,21):&nbsp;error&nbsp;FS0001:&nbsp;Type&nbsp;mismatch.&nbsp;Expecting&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Symbol&lt;string&gt;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;but&nbsp;given&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Symbol&lt;System.Uri&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;The&nbsp;type&nbsp;'string'&nbsp;does&nbsp;not&nbsp;match&nbsp;the&nbsp;type&nbsp;'int'</CODE></P>
+      <P>This <CODE>Symbol</CODE> type lies at the core of both the specialized 
+      dictionary and the symbol table.</P>
+      <H2>Specialized dictionaries</H2>
+      <P>The next challenge is to design a dictionary for <CODE>Symbol</CODE> 
+      keys. This is best done by indexing an array directly by the 
+      <CODE>int</CODE> conveyed by the <CODE>Symbol</CODE> but each key is only 
+      optionally associated with a value so we also store a bit vector to 
+      signify whether the corresponding value in the array is a real value or a 
+      dummy value. These bits are stored in a space-efficient format using the 
+      .NET <CODE>BitArray</CODE> class. The dummy values are created using 
+      <CODE>Unchecked.defaultof&lt;_&gt;</CODE>. This is a very useful VM 
+      primitive that was designed for exactly this kind of application.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Collections.Generic;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;SymbolDictionary&lt;'T,&nbsp;'Value&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;used&nbsp;:&nbsp;System.Collections.BitArray<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;arr&nbsp;:&nbsp;'Value&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal&nbsp;new(count)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;used&nbsp;=&nbsp;System.Collections.BitArray(count,&nbsp;false)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;arr&nbsp;=&nbsp;Array.zeroCreate&nbsp;count&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;dict.Item<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;get(id:&nbsp;Symbol&lt;'T&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dict.used.[id.id]&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dict.arr.[id.id]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;raise(KeyNotFoundException())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;set&nbsp;(id:&nbsp;Symbol&lt;'T&gt;)&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dict.used.[id.id]&nbsp;&lt;-&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dict.arr.[id.id]&nbsp;&lt;-&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;dict.Remove&nbsp;(id:&nbsp;Symbol&lt;'T&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dict.used.[id.id]&nbsp;&lt;-&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dict.arr.[id.id]&nbsp;&lt;-&nbsp;Unchecked.defaultof&lt;_&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;dict.TryFind&nbsp;(id:&nbsp;Symbol&lt;'T&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dict.used.[id.id]&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;dict.arr.[id.id]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;SymbolDictionary&lt;'T,'Value&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;internal&nbsp;new&nbsp;:&nbsp;count:int&nbsp;-&gt;&nbsp;SymbolDictionary&lt;'T,'Value&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;used:&nbsp;System.Collections.BitArray<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;arr:&nbsp;'Value&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Remove&nbsp;:&nbsp;id:Symbol&lt;'T&gt;&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;TryFind&nbsp;:&nbsp;id:Symbol&lt;'T&gt;&nbsp;-&gt;&nbsp;'Value&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Item&nbsp;:&nbsp;id:Symbol&lt;'T&gt;&nbsp;-&gt;&nbsp;'Value&nbsp;with&nbsp;get<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Item&nbsp;:&nbsp;id:Symbol&lt;'T&gt;&nbsp;-&gt;&nbsp;'Value&nbsp;with&nbsp;set<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>In addition, when a key-value pair is removed from our specialized 
+      dictionary, we overwrite its value in the array with 
+      <CODE>Unchecked.defaultof&lt;_&gt;</CODE>. This ensures that our 
+      dictionary will not "leak" removed values by keeping a reference to them 
+      unnecessarily and, therefore, preventing them from being garbage 
+      collected.</P>
+      <P>We could have used an array of <CODE>'Value&nbsp;option</CODE> values 
+      as the internal representation but the option type is a reference type 
+      and, therefore, this would have boxed every value in the dictionary. If 
+      these values are value types (e.g. <CODE>int</CODE> or 
+      <CODE>Symbol&lt;_&gt;</CODE> itself) then this boxing would be expensive. 
+      Our representation never introduces unnecessary boxing. However, this is 
+      an SoA (structure of arrays) representation rather than an AoS (array of 
+      structures) representation and that is somewhat cache unfriendly on modern 
+      CPUs because the "used" bit and its associated value (if any) are stored 
+      on different cache lines. Another representation that might be slightly 
+      more efficient (particularly if the dictionary's access pattern barely 
+      fits in cache) would be to use an array of struct types with each struct 
+      storing the "used" bit and corresponding value. However, the "used" bit 
+      would be padding to at least a byte and .NET and F# do not handle value 
+      types very efficiently (compared to, say, LLVM) so this is not a clear win 
+      compared to the strategy employed here.</P>
+      <H2>Symbol tables</H2>
+      <P>Finally, we can get on to the implementation of the symbol table 
+      itself. This class is constructed from the set of all possible values of a 
+      specific type that need symbols and maintains dictionaries mapping values 
+      to their corresponding symbols and vice-versa. This may be implemented as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;SymbolTable&lt;'T&nbsp;when&nbsp;'T:&nbsp;equality&gt;(symbols:&nbsp;'T&nbsp;seq)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;toID&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.mapi&nbsp;(fun&nbsp;id&nbsp;symbol&nbsp;-&gt;&nbsp;symbol,&nbsp;Symbol&lt;'T&gt;&nbsp;id)&nbsp;symbols<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;dict<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;toSymbol&nbsp;=&nbsp;Array.zeroCreate&nbsp;toID.Count<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;kv&nbsp;in&nbsp;toID&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toSymbol.[kv.Value.id]&nbsp;&lt;-&nbsp;kv.Key<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;table.GetSymbol(id:&nbsp;Symbol&lt;'T&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toSymbol.[id.id]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;table.Get(symbol:&nbsp;'T)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toID.[symbol]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;table.Dictionary()&nbsp;:&nbsp;SymbolDictionary&lt;'T,&nbsp;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;SymbolDictionary&nbsp;toSymbol.Length;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;SymbolTable&lt;'T&nbsp;when&nbsp;'T&nbsp;:&nbsp;equality&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;symbols:seq&lt;'T&gt;&nbsp;-&gt;&nbsp;SymbolTable&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Dictionary&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;SymbolDictionary&lt;'T,'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Get&nbsp;:&nbsp;symbol:'T&nbsp;-&gt;&nbsp;Symbol&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;GetSymbol&nbsp;:&nbsp;id:Symbol&lt;'T&gt;&nbsp;-&gt;&nbsp;'T<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>We have also included a <CODE>Dictionary</CODE> property that 
+      constructs a <CODE>SymbolDictionary</CODE> large enough to accommodate 
+      every possible key.</P>
+      <H2>Results</H2>
+      <P>Our example application with a loop of 1,000 vertices each referring to 
+      the next is traversed 14x faster if we convert the string keys into 
+      symbols and use one of our specialized <CODE>SymbolDictionary</CODE> 
+      classes instead of the generic <CODE>Dictionary</CODE> class:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Array.init&nbsp;1000&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;table&nbsp;=&nbsp;SymbolTable&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ys&nbsp;=&nbsp;Array.map&nbsp;table.Get&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;d&nbsp;=&nbsp;table.Dictionary&lt;Symbol&lt;string&gt;&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d.[ys.[i]]&nbsp;&lt;-&nbsp;ys.[i+1]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d.[ys.[ys.Length-1]]&nbsp;&lt;-&nbsp;ys.[0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;k&nbsp;=&nbsp;ys.[0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;iters&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;k&nbsp;&lt;-&nbsp;d.[k]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k&nbsp;=&nbsp;table.GetSymbol&nbsp;k<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%gs:&nbsp;%A"&nbsp;timer.Elapsed.TotalSeconds&nbsp;k;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;0.13506s:&nbsp;"0"</CODE></P>
+      <P>This is clearly a substantial performance improvement so the technique 
+      has obvious value in real programs.</P>
+      <H2>Summary</H2>
+      <P>This article has examined the design and implementation of a symbol 
+      table and specialized dictionary that allows finite sets of any type that 
+      are used as keys with generic dictionaries to be replaced with a much more 
+      efficient representation. Applications that spend significant time in 
+      dictionary lookups stand to benefit significantly from the adoption of 
+      this general-purpose technique. Moreover, our implementation uses phantom 
+      types to improve type safety and <CODE>Unchecked.defaultof&lt;_&gt;</CODE> 
+      to avoid memory leaks.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of data 
+      structures.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20symbol%20tables_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

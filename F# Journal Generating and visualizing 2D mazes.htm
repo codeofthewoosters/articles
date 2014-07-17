@@ -1,0 +1,243 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0074)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/maze.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Generating and visualizing 2D mazes</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Generating and visualizing 2D mazes</TITLE>     
+<LINK href="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Generating and visualizing 2D mazes</H1>
+      <P>Maze generation is a remarkably complex and diverse subject that 
+      essentially falls into the category of network or graph theory but is most 
+      often seen in the context of games and puzzles. The characteristics that 
+      make a maze interesting for humans to try to navigate are subjective and 
+      not easily defined and, consequently, the design and implementation of an 
+      automatic maze generator is as much an art as it is a science. This 
+      article describes the design and implementation of a simple but effective 
+      maze generation algorithm including OpenGL-based visualization. The 
+      algorithm is elegantly expressed in terms of recursive functions and 
+      purely functional data structures.</P>
+      <H2>Introduction</H2>
+      <P>On order to avoid wasting inaccessible space, maze generation is often 
+      required to implement a spanning tree. A spanning tree of a graph          
+          <B>G</B> is a tree containing all of the vertices and a subset of the 
+      edges of              <B>G</B> .           </P>
+      <P>The maze generating algorithm produces a spanning tree that is most 
+      easily expressed as a simple tree in F#. However, the cyclic nature of 
+      this tree data structure cannot be expressed directly so we define a union 
+      type              <CODE>tree</CODE> with a union case              
+      <CODE>Tree</CODE> instead:           </P>
+<PRE>&gt; type tree = Tree of (int * int) * tree list;;
+type tree = | Tree of Coord.t * tree list</PRE>
+      <P>The following              <CODE>mk_free</CODE> function creates a set 
+      of coordinates in a grid that the maze generator will regard as the set of 
+      unvisited coordinates:           </P>
+<PRE>&gt; let mk_free n =
+    seq { for x in 0..n-1 do
+            for y in 0..n-1 do
+              yield x, y }
+    |&gt; set;;
+val mk_free : int -&gt; Set&lt;int * int&gt;</PRE>
+      <P>Note the use of a sequence expression to represent the grid of 
+      coordinates and the              <CODE>set</CODE> function to build a      
+              <CODE>Set</CODE> data structure from a sequence of elements.       
+          </P>
+      <P>The following              <CODE>search</CODE> function is the core of 
+      the maze generator:           </P>
+<PRE>&gt; let rand = System.Random();;
+val rand : System.Random</PRE>
+<PRE>&gt; let rec search free (i, j as ij) =
+    let moves =
+      match rand.Next 4 with
+      | 0 -&gt; [i-1, j; i, j+1; i+1, j; i, j-1]
+      | 1 -&gt; [i, j+1; i+1, j; i, j-1; i-1, j]
+      | 2 -&gt; [i+1, j; i, j-1; i-1, j; i, j+1]
+      | _ -&gt; [i, j-1; i-1, j; i, j+1; i+1, j]
+    Seq.fold search_aux (Set.remove ij free, Tree(ij, [])) moves
+  and search_aux (free, Tree(ij', trees)) ij =
+    if Set.contains ij free then
+      let free, tree = search free ij
+      free, Tree(ij', tree::trees)
+    else
+      free, Tree(ij', trees);;
+val search : Set&lt;int * int&gt; -&gt; int * int -&gt; Set&lt;int * int&gt; * tree
+val search_aux : Set&lt;int * int&gt; * tree -&gt; int * int -&gt; Set&lt;int * int&gt; * tree</PRE>
+      <P>The              <CODE>search</CODE> function begins by picking a set 
+      of directions to try at random. Each direction in the set is tried in turn 
+      and a depth first search is performed, with the              
+      <CODE>free</CODE> being accumulated as the search visits cells. The 
+      accumulated spanning tree is returned as a value of the              
+      <CODE>tree</CODE> type.           </P>
+      <P>For example, a randomized 3×3 maze may be generated as follows:</P>
+<PRE>&gt; search (mk_free 3) (0, 0);;
+val it : Set&lt;int * int&gt; * tree =
+  (seq [],
+   Tree
+     ((0, 0),
+      [Tree
+         ((1, 0),
+          [Tree
+             ((1, 1),
+              [Tree
+                 ((1, 2),
+                  [Tree ((2, 2),[Tree ((2, 1),[Tree ((2, 0),[])])]);
+                   Tree ((0, 2),[Tree ((0, 1),[])])])])])]))</PRE>
+      <P>Note that this spanning tree visits all of the nodes in the graph.</P>
+      <P>The next task is to visualize the maze. This is most easily 
+      accomplished by starting with a dense matrix of walls and removing walls 
+      as the search tree passes through them. The resulting walls are then 
+      easily visualized as lines.</P>
+      <P>The following              <CODE>fill</CODE> function accomplishes the 
+      task of removing walls as the search tree passes through them:           
+      </P>
+<PRE>&gt; let rec fill walls (Tree(p0, p1s)) =
+    Seq.fold (fun walls (Tree(p1, _) as tree) -&gt;
+      let wall (x0, y0) (x1, y1) =
+        match x1-x0, y1-y0 with
+        |  0,-1 -&gt; (x0, y0), (x0+1, y0)
+        |  0, 1 -&gt; (x0, y0+1), (x0+1, y0+1)
+        | -1, 0 -&gt; (x0, y0), (x0, y0+1)
+        |  1, 0 -&gt; (x0+1, y0), (x0+1, y0+1)
+        | _ -&gt; invalidArg "" ""
+      fill (Set.remove (wall p0 p1) walls) tree)
+      walls
+      p1s;;
+val fill :
+  Set&lt;(int * int) * (int * int)&gt; -&gt; tree -&gt; Set&lt;(int * int) * (int * int)&gt;</PRE>
+      <P>The following              <CODE>mk_walls</CODE> function uses the      
+              <CODE>fill</CODE> function to remove walls from a dense matrix of 
+      walls:           </P>
+<PRE>&gt; let mk_walls n =
+    let walls =
+      seq { for i in 0..n do
+              for j in 0..n do
+                if i &lt; n then
+                  yield (i, j), (i+1, j)
+                if j &lt; n then
+                  yield (i, j), (i, j+1) }
+      |&gt; set
+    let _, tree = search (mk_free n) (0, 0)
+    fill walls tree;;</PRE>
+      <P>Before writing the visualization code we must reference WPF, which can 
+      be done on Windows Vista or later from an F# interactive session as 
+      follows:</P>
+<PRE>&gt; #r "PresentationCore.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\Framework\
+v3.0\PresentationCore.dll'</PRE>
+<PRE>&gt; #r "PresentationFramework.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\Framework\
+v3.0\PresentationFramework.dll'</PRE>
+<PRE>&gt; #r "WindowsBase.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\Framework\
+v3.0\WindowsBase.dll'</PRE>
+<PRE>&gt; open System.Windows;;</PRE>
+<PRE>&gt; open System.Windows.Media;;</PRE>
+      <P>The following              <CODE>line_to</CODE> function creates a WPF  
+                  <CODE>PathSegment</CODE> representing a straight line between 
+      two points:           </P>
+<PRE>&gt; let line_to(x, y) =
+    (LineSegment(Point(x, y), true) :&gt; PathSegment);;
+val line_to : float * float -&gt; PathSegment</PRE>
+      <P>Note the use of the              <CODE>:&gt;</CODE> operator to upcast 
+      the              <CODE>LineSegment</CODE> to the              
+      <CODE>PathSegment</CODE> type.           </P>
+      <P>The following              <CODE>geometry_of_walls</CODE> function 
+      creates a              <CODE>PathGeometry</CODE> containing a line (as an 
+      open contour in the geometry) for every wall in the maze:           </P>
+<PRE>&gt; let geometry_of_walls walls =
+    PathGeometry
+      [ for (x0, y0), (x1, y1) in walls -&gt;
+          let f x = float x
+          PathFigure(Point(f x0, f y0), [line_to(f x1, f y1)], false) ];;
+val geometry_of_walls : seq&lt;(int * int) * (int * int)&gt; -&gt; PathGeometry</PRE>
+      <P>Lastly, the following              <CODE>path_of_walls</CODE> function 
+      creates a              <CODE>Path</CODE> from the              
+      <CODE>PathGeometry</CODE> and sets its properties in order to have it 
+      stroked with round line caps:           </P>
+<PRE>&gt; let path_of_walls walls =
+    let path = Shapes.Path()
+    path.Data &lt;- geometry_of_walls walls
+    path.Stroke &lt;- Brushes.Black
+    path.StrokeThickness &lt;- 0.2
+    path.StrokeStartLineCap &lt;- PenLineCap.Round
+    path.StrokeEndLineCap &lt;- PenLineCap.Round
+    path;;
+val path_of_walls : seq&lt;(int * int) * (int * int)&gt; -&gt; Shapes.Path</PRE>
+      <P>We use round line caps to ensure that each line smoothly blends into 
+      the next.</P>
+      <P>The following main program ensures that it is run in single threaded 
+      apartment mode if batch compiled before generating and visualizing a maze 
+      as a              <CODE>Window</CODE> containing a              
+      <CODE>Viewbox</CODE> control containing the              <CODE>Path</CODE> 
+      generated by the              <CODE>path_of_walls</CODE> function:         
+        </P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    let n = 64
+    
+    let viewbox = Controls.Viewbox()
+    viewbox.Child &lt;- path_of_walls(mk_walls n)
+    viewbox.Stretch &lt;- Stretch.Uniform
+    viewbox.Margin &lt;- Thickness 11.0
+    
+    let window = Window()
+    window.Title &lt;- "Maze"
+    window.Background &lt;- Brushes.White
+    window.Content &lt;- viewbox
+    
+    (Application()).Run window
+    |&gt; ignore;;</PRE>
+      <P>When run, the program produces mazes such as the following:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/maze.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has described a simple but effective maze generator that 
+      uses a randomized depth-first search to compute a spanning tree and 
+      visualizes the tree using Windows Presentation Foundation. In particular, 
+      choosing randomly from only a subset of the set of permutations of 
+      possible moves introduces correlations that make the maze more interesting 
+      for a human to try to traverse because the resulting structures are more 
+      coherent.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Generating%20and%20visualizing%202D%20mazes_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

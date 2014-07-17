@@ -1,0 +1,207 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0095)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/parsingwithactivepatterns.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20metaprogramming%20parsing%20with%20active%20patterns_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20metaprogramming%20parsing%20with%20active%20patterns_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20metaprogramming%20parsing%20with%20active%20patterns_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20metaprogramming%20parsing%20with%20active%20patterns_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20metaprogramming%20parsing%20with%20active%20patterns_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Metaprogramming: parsing with active patterns</H1>
+      <P>Metaprogramming is the art of writing programs that manipulate other 
+      programs and includes writing compilers and interpreters as well as more 
+      exotic tools such as theorem provers. This article walks through the 
+      construction of a mini ML interpreter and, in particular, uses a novel 
+      approach to parsing based upon F# active patterns. This allows us to write 
+      a lexer and parser for a toy functional language in under 100 lines of 
+      vanilla F# code.</P>
+      <H2>Overview</H2>
+      <P>Our interpreter will take a string and parse it into a tree called an 
+      Abstract Syntax Tree (AST) that represents the structure of the program. 
+      An evaluator will then traverse this tree converting expressions into 
+      values until the program yields a single value as its result.</P>
+      <P>We begin by defining an <CODE>expr</CODE> type that is used to 
+      represent expressions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;expr&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Var&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;of&nbsp;expr&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;If&nbsp;of&nbsp;expr&nbsp;*&nbsp;expr&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Fun&nbsp;of&nbsp;string&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Let&nbsp;of&nbsp;bool&nbsp;*&nbsp;string&nbsp;*&nbsp;expr&nbsp;*&nbsp;expr;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Var&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply&nbsp;of&nbsp;expr&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;If&nbsp;of&nbsp;expr&nbsp;*&nbsp;expr&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Fun&nbsp;of&nbsp;string&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Let&nbsp;of&nbsp;bool&nbsp;*&nbsp;string&nbsp;*&nbsp;expr&nbsp;*&nbsp;expr</CODE></P>
+      <P>Our language permits <CODE>int</CODE> literals, variables with 
+      <CODE>string</CODE> names, function applications, <CODE>if</CODE> 
+      expressions, lambda functions and both recursive and non-recursive 
+      <CODE>let</CODE> bindings.</P>
+      <H2>Parsing</H2>
+      <P>Compiler compilers such as lex and yacc have been commonplace for 
+      decades. These tools convert descriptions of lexers and parsers written in 
+      domain-specific languages into source code than can be compiled and that 
+      is capable of lexing and parsing input efficiently. However, the use of 
+      external tools is cumbersome and these solutions can make common 
+      requirements, such as comprehensible errors, tricky.</P>
+      <P>Another solution that has grown in popularity in recent years with the 
+      adoption of functional programming is the parser combinator. This 
+      technique composes many small combinators to create progressively more 
+      sophisticated parsers. However, parser combinator libraries like FParsec 
+      are complicated and developing a suite of parser combinators from scratch 
+      is non-trivial.</P>
+      <P>Pattern matching is ubiquitous in modern functional programming 
+      languages and bears a close resemblance to the problem of parsing, which 
+      spots patterns in the input string and converts them into pieces of AST. 
+      ML-style pattern matching is traditionally not customizable and, 
+      consequently, it is not possible to reuse patterns efficiently. However, 
+      F# active patterns provide exactly the kind of reusability needed to write 
+      a parser. This results in clear and succinct parsers but their performance 
+      characteristics are currently not good so it is sometimes necessary to do 
+      a little optimization.</P>
+      <P>Let us begin by defining a <CODE>set</CODE> containing the alphabetical 
+      characters in both lower and upper case:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;alpha&nbsp;=&nbsp;set['a'..'z']&nbsp;+&nbsp;set['A'..'Z'];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;alpha&nbsp;:&nbsp;Set&lt;char&gt;&nbsp;=&nbsp;set&nbsp;['A';&nbsp;'B';&nbsp;'C';&nbsp;'D';&nbsp;'E';&nbsp;'F';&nbsp;'G';&nbsp;'H';&nbsp;'I';&nbsp;...]</CODE></P>
+      <P>and the set of numerical digits:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;num&nbsp;=&nbsp;set['0'..'9'];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;num&nbsp;:&nbsp;Set&lt;char&gt;&nbsp;=&nbsp;set&nbsp;['0';&nbsp;'1';&nbsp;'2';&nbsp;'3';&nbsp;'4';&nbsp;'5';&nbsp;'6';&nbsp;'7';&nbsp;'8';&nbsp;...]</CODE></P>
+      <P>and the set union of these two sets, which is called the alphanumeric 
+      characters:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;alphanum&nbsp;=&nbsp;alpha&nbsp;+&nbsp;num;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;alphanum&nbsp;:&nbsp;Set&lt;char&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;set&nbsp;['0';&nbsp;'1';&nbsp;'2';&nbsp;'3';&nbsp;'4';&nbsp;'5';&nbsp;'6';&nbsp;'7';&nbsp;'8';&nbsp;...]</CODE></P>
+      <P>Active patterns allow us to define a pattern <CODE>Char</CODE> that is 
+      parameterized over an <CODE>alphabet</CODE> and will match when the first 
+      element of a list of characters is from the given alphabet:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Char|_|)&nbsp;alphabet&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;c::cs&nbsp;when&nbsp;Set.contains&nbsp;c&nbsp;alphabet&nbsp;-&gt;&nbsp;Some(c,&nbsp;cs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Char|_|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Set&lt;'a&gt;&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;-&gt;&nbsp;('a&nbsp;*&nbsp;'a&nbsp;list)&nbsp;option&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>Thanks to the reusability offered by active patterns, we can now write 
+      a <CODE>Chars</CODE> pattern that spots zero or more characters from the 
+      given alphabet:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Chars|)&nbsp;alphabet&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Char&nbsp;alphabet&nbsp;(c,&nbsp;Chars&nbsp;alphabet&nbsp;(cs,&nbsp;t))&nbsp;-&gt;&nbsp;c::cs,&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;t&nbsp;-&gt;&nbsp;[],&nbsp;t;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Chars|&nbsp;)&nbsp;:&nbsp;Set&lt;'a&gt;&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;*&nbsp;'a&nbsp;list&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>The use of recursive active patterns is of critical importance because 
+      this allows our patterns to perform arbitrarily-complicated computations 
+      whereas traditional ML patterns are prohibited from doing so (in order to 
+      make matching a constant time operation).</P>
+      <P>For example, the following uses the <CODE>Chars</CODE> pattern to 
+      extract the four alphabetical characters from the front of the given 
+      string, leaving the three remaining numerical digits:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(Chars&nbsp;alpha&nbsp;(xs,&nbsp;ys))&nbsp;=&nbsp;List.ofSeq&nbsp;"test123";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ys&nbsp;:&nbsp;char&nbsp;list&nbsp;=&nbsp;['1';&nbsp;'2';&nbsp;'3']<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs&nbsp;:&nbsp;char&nbsp;list&nbsp;=&nbsp;['t';&nbsp;'e';&nbsp;'s';&nbsp;'t']</CODE></P>
+      <P>This is clearly a powerful foundation for parsing but the key benefit 
+      is that we can compose multiple uses of the <CODE>Chars</CODE> pattern in 
+      a single pattern match.</P>
+      <P>Rather than lexing the string into a separate stream of tokens as a 
+      preprocessing step, active patterns allow us to merge lexing and parsing 
+      seamlessly by defining active patterns for lexing that are used from 
+      within the active patterns for parsing. The following 
+      <CODE>stringOf</CODE> function converts a sequence of characters back into 
+      a string:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;stringOf&nbsp;:&nbsp;seq&lt;char&gt;&nbsp;-&gt;&nbsp;string&nbsp;=&nbsp;Seq.map&nbsp;string&nbsp;&gt;&gt;&nbsp;String.concat&nbsp;"";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;stringOf&nbsp;:&nbsp;(seq&lt;char&gt;&nbsp;-&gt;&nbsp;string)</CODE></P>
+      <P>Our grammer might use lexical tokens for ints, identifiers, keywords 
+      and the end of input. These can be written as an active pattern:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|INT|IDENT|KWD|END|)&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;ws&nbsp;=&nbsp;function&nbsp;'&nbsp;'::t&nbsp;-&gt;&nbsp;ws&nbsp;t&nbsp;|&nbsp;t&nbsp;-&gt;&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ws&nbsp;t&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'-'::Char&nbsp;num&nbsp;(c,&nbsp;Chars&nbsp;num&nbsp;(cs,&nbsp;t))&nbsp;-&gt;&nbsp;INT(-int(stringOf(c::cs)),&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Char&nbsp;num&nbsp;(c,&nbsp;Chars&nbsp;num&nbsp;(cs,&nbsp;t))&nbsp;-&gt;&nbsp;INT(int(stringOf(c::cs)),&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Char&nbsp;alpha&nbsp;(c,&nbsp;Chars&nbsp;alphanum&nbsp;(cs,&nbsp;t))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;stringOf(c::cs)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"if"&nbsp;|&nbsp;"then"&nbsp;|&nbsp;"else"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"fun"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"let"&nbsp;|&nbsp;"rec"&nbsp;|&nbsp;"in"&nbsp;as&nbsp;s&nbsp;-&gt;&nbsp;KWD(s,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;s&nbsp;-&gt;&nbsp;IDENT(s,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'-'::'&gt;'::t&nbsp;-&gt;&nbsp;KWD("-&gt;",&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;('='&nbsp;|&nbsp;'('&nbsp;|&nbsp;')'&nbsp;as&nbsp;c)::t&nbsp;-&gt;&nbsp;KWD(string&nbsp;c,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;t&nbsp;-&gt;&nbsp;END;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|INT|IDENT|KWD|END|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char&nbsp;list&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Choice&lt;(int&nbsp;*&nbsp;char&nbsp;list),(string&nbsp;*&nbsp;char&nbsp;list),(string&nbsp;*&nbsp;char&nbsp;list),unit&gt;</CODE></P>
+      <P>The <CODE>ws</CODE> function removes any leading whitespace before the 
+      lexical token. This is a simple way to ensure that whitespace is always 
+      ignored correctly (as opposed to ignoring it explicitly in many different 
+      places in a parsing active pattern without a lexer). The first two match 
+      cases spot sequences of digits with an optional preceding <CODE>-</CODE> 
+      sign and lex them into the <CODE>INT</CODE> token. The match case finds a 
+      sequence starting with an alphabetical character and ending with zero or 
+      more alphanumeric characters. This is an identifier but we spot known 
+      keywords and convert then into the <CODE>KWD</CODE> token and use the 
+      <CODE>IDENT</CODE> token for everything else. The next two match cases 
+      spot four special keywords in our language. The final match case matches 
+      the end of input.</P>
+      <P>We are now ready to write the parser. This consists of three 
+      mutually-recursive active patterns defined simultaneously using the 
+      <CODE>let&nbsp;rec&nbsp;...&nbsp;and&nbsp;...</CODE> construct:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Atom|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;INT(n,&nbsp;t)&nbsp;-&gt;&nbsp;Some(Int&nbsp;n,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;IDENT(x,&nbsp;t)&nbsp;-&gt;&nbsp;Some(Var&nbsp;x,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;KWD("(",&nbsp;Expr(f,&nbsp;KWD(")",&nbsp;t)))&nbsp;-&gt;&nbsp;Some(f,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;(|PApply|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Atom(f,&nbsp;PApply(fs,&nbsp;t))&nbsp;-&gt;&nbsp;Some(f::fs,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Atom(f,&nbsp;t)&nbsp;-&gt;&nbsp;Some([f],&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;(|Expr|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PApply(fs,&nbsp;t)&nbsp;-&gt;&nbsp;Some(List.reduce&nbsp;(fun&nbsp;f&nbsp;g&nbsp;-&gt;&nbsp;Apply(f,&nbsp;g))&nbsp;fs,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;KWD("if",&nbsp;Expr(p,&nbsp;KWD("then",&nbsp;Expr(f,&nbsp;KWD("else",&nbsp;Expr(g,&nbsp;t))))))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(If(p,&nbsp;f,&nbsp;g),&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;KWD("fun",&nbsp;IDENT(x,&nbsp;KWD("-&gt;",&nbsp;Expr(f,&nbsp;t))))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(Fun(x,&nbsp;f),&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;KWD("let",&nbsp;IDENT(x,&nbsp;KWD("=",&nbsp;Expr(f,&nbsp;KWD("in",&nbsp;Expr(g,&nbsp;t))))))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(Let(false,&nbsp;x,&nbsp;f,&nbsp;g),&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;KWD("let",&nbsp;KWD("rec",&nbsp;IDENT(x,&nbsp;KWD("=",&nbsp;Expr(f,&nbsp;KWD("in",&nbsp;Expr(g,&nbsp;t)))))))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(Let(true,&nbsp;x,&nbsp;f,&nbsp;g),&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Atom|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(expr&nbsp;*&nbsp;char&nbsp;list)&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|PApply|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(expr&nbsp;list&nbsp;*&nbsp;char&nbsp;list)&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Expr|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(expr&nbsp;*&nbsp;char&nbsp;list)&nbsp;option</CODE></P>
+      <P>The <CODE>Atom</CODE> active pattern parses integers, identifiers and 
+      bracketed expressions. The <CODE>PApply</CODE> active pattern parses 
+      sequences of expressions that represent function applications, returning a 
+      list of expressions. The <CODE>Expr</CODE> active pattern parses function 
+      applications and uses the <CODE>reduce</CODE> function to nest the 
+      <CODE>Apply</CODE> type constructor, or an <CODE>if</CODE> expression, a 
+      lambda function or <CODE>let</CODE> binding.</P>
+      <P>Amazingly, this is all of the vanilla F# code required to parse our 
+      little functional programming language. The following <CODE>parse</CODE> 
+      function uses the <CODE>Expr</CODE> active pattern to try to parse an 
+      entire string and emits an error if any characters remain unparsed or if 
+      parsing fails:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parse&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;List.ofSeq&nbsp;t&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Expr(f,&nbsp;[])&nbsp;-&gt;&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Expr(_,&nbsp;t)&nbsp;-&gt;&nbsp;failwithf&nbsp;"Failed&nbsp;to&nbsp;parse&nbsp;remainder&nbsp;'%s'"&nbsp;(stringOf&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;t&nbsp;-&gt;&nbsp;failwithf&nbsp;"Failed&nbsp;to&nbsp;parse&nbsp;'%s'"&nbsp;(stringOf&nbsp;t);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parse&nbsp;:&nbsp;seq&lt;char&gt;&nbsp;-&gt;&nbsp;expr</CODE></P>
+      <P>For example, the <CODE>parse</CODE> function can be used to convert the 
+      following string defining a factorial function in OCaml/F# syntax into an 
+      AST:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;"let&nbsp;rec&nbsp;f&nbsp;=&nbsp;fun&nbsp;n&nbsp;-&gt;&nbsp;if&nbsp;eq&nbsp;n&nbsp;0&nbsp;then&nbsp;1&nbsp;else&nbsp;mul&nbsp;n&nbsp;(f(sub&nbsp;n&nbsp;1))&nbsp;in&nbsp;f";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Let<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(true,"f",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Fun<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("n",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;If<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Apply&nbsp;(Apply&nbsp;(Var&nbsp;"eq",Var&nbsp;"n"),Int&nbsp;0),Int&nbsp;1,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Apply<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Apply&nbsp;(Var&nbsp;"mul",Var&nbsp;"n"),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Apply&nbsp;(Var&nbsp;"f",Apply&nbsp;(Apply&nbsp;(Var&nbsp;"sub",Var&nbsp;"n"),Int&nbsp;1))))),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Var&nbsp;"f")</CODE></P>
+      <H2>Interpreting</H2>
+      <P>The evaluation function that executes a program converts expressions 
+      into values. The expressions in our language can culminate in values of 
+      three different kinds: integers, booleans and closures:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;value&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VInt&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VBool&nbsp;of&nbsp;bool<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VClosure&nbsp;of&nbsp;(value&nbsp;-&gt;&nbsp;value);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;value&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VInt&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VBool&nbsp;of&nbsp;bool<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VClosure&nbsp;of&nbsp;(value&nbsp;-&gt;&nbsp;value)</CODE></P>
+      <P>We have chosen to represent a closure as a function that converts one 
+      value into another, i.e. the application of a function in our language. An 
+      alternative representation is to incorporate the environment captured by 
+      the closure and its parameter name and function body (an expression). 
+      However, the representation we have chosen gives us the freedom to create 
+      closures that do anything and, in particular, can express a variety of 
+      built-in functions such as integer addition without requiring special 
+      constructs for them.</P>
+      <P>We shall represent the mapping from variable names to their values as a 
+      function. The following <CODE>add</CODE> function creates a new function 
+      that includes a new binding:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;add&nbsp;var&nbsp;value&nbsp;values&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x=var&nbsp;then&nbsp;value&nbsp;else&nbsp;values&nbsp;x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The <CODE>eval</CODE> function that evaluates expressions into values 
+      may then be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;eval&nbsp;values&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;n&nbsp;-&gt;&nbsp;VInt&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Var&nbsp;s&nbsp;-&gt;&nbsp;values&nbsp;s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Apply(f,&nbsp;x)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;eval&nbsp;values&nbsp;f,&nbsp;eval&nbsp;values&nbsp;x&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VClosure&nbsp;f,&nbsp;x&nbsp;-&gt;&nbsp;f&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f,&nbsp;x&nbsp;-&gt;&nbsp;failwithf&nbsp;"Run-time&nbsp;type&nbsp;error:&nbsp;Apply(%A,&nbsp;%A)"&nbsp;f&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;If(p,&nbsp;t,&nbsp;f)&nbsp;-&gt;&nbsp;eval&nbsp;values&nbsp;(match&nbsp;eval&nbsp;values&nbsp;p&nbsp;with&nbsp;VBool&nbsp;true&nbsp;-&gt;&nbsp;t&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;f)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Fun(param,&nbsp;body)&nbsp;-&gt;&nbsp;VClosure(fun&nbsp;arg&nbsp;-&gt;&nbsp;eval&nbsp;(add&nbsp;param&nbsp;arg&nbsp;values)&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Let(false,&nbsp;v,&nbsp;body,&nbsp;rest)&nbsp;-&gt;&nbsp;eval&nbsp;(add&nbsp;v&nbsp;(eval&nbsp;values&nbsp;body)&nbsp;values)&nbsp;rest<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Let(true,&nbsp;v,&nbsp;body,&nbsp;rest)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;values'&nbsp;x&nbsp;=&nbsp;if&nbsp;x=v&nbsp;then&nbsp;eval&nbsp;values'&nbsp;body&nbsp;else&nbsp;values&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;eval&nbsp;values'&nbsp;rest;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;eval&nbsp;:&nbsp;(string&nbsp;-&gt;&nbsp;value)&nbsp;-&gt;&nbsp;expr&nbsp;-&gt;&nbsp;value</CODE></P>
+      <P>Integer expressions are converted directly into integer values. 
+      Variables are looked up by name using the <CODE>values</CODE> function in 
+      order to obtain their corresponding value. Function application evaluates 
+      the function and its argument before extracting the closure value from the 
+      former and applying it to the argument value. An <CODE>if</CODE> 
+      expression evaluates the first or second branch depending if the predicate 
+      evaluates to <CODE>true</CODE> or <CODE>false</CODE>, respectively. Lambda 
+      functions are compiled to closures. Let bindings evaluate their 
+      <CODE>body</CODE> and bind the result to the name of the variable before 
+      evaluating the <CODE>rest</CODE> expression.</P>
+      <P>The following <CODE>run</CODE> function parses a string into an 
+      abstract syntax tree and then evaluates it using a context that contains 
+      some useful built-in functions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;run&nbsp;prog&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;values&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;eq&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VInt&nbsp;x,&nbsp;VInt&nbsp;y&nbsp;-&gt;&nbsp;VBool(x=y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VBool&nbsp;x,&nbsp;VBool&nbsp;y&nbsp;-&gt;&nbsp;VBool(x=y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x,&nbsp;y&nbsp;-&gt;&nbsp;failwithf&nbsp;"Run-time&nbsp;type&nbsp;error:&nbsp;%A&nbsp;=&nbsp;%A"&nbsp;x&nbsp;y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;intOp&nbsp;f&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;VInt&nbsp;x,&nbsp;VInt&nbsp;y&nbsp;-&gt;&nbsp;VInt(f&nbsp;x&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x,&nbsp;y&nbsp;-&gt;&nbsp;failwithf&nbsp;"Run-time&nbsp;type&nbsp;error:&nbsp;%A&nbsp;+-*&nbsp;%A"&nbsp;x&nbsp;y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;func2&nbsp;f&nbsp;=&nbsp;VClosure(fun&nbsp;x&nbsp;-&gt;&nbsp;VClosure(fun&nbsp;y&nbsp;-&gt;&nbsp;f(x,&nbsp;y)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;x&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"eq"&nbsp;-&gt;&nbsp;func2&nbsp;eq<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"add"&nbsp;-&gt;&nbsp;func2&nbsp;(intOp&nbsp;(+))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"sub"&nbsp;-&gt;&nbsp;func2&nbsp;(intOp&nbsp;(-))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"mul"&nbsp;-&gt;&nbsp;func2&nbsp;(intOp&nbsp;(*))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;v&nbsp;-&gt;&nbsp;failwithf&nbsp;"Unknown&nbsp;variable&nbsp;'%s'"&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parse&nbsp;prog&nbsp;|&gt;&nbsp;eval&nbsp;values;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;run&nbsp;:&nbsp;seq&lt;char&gt;&nbsp;-&gt;&nbsp;value</CODE></P>
+      <P>For example, we can run the factorial program that computes 10! as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;run&nbsp;"let&nbsp;rec&nbsp;f&nbsp;=&nbsp;fun&nbsp;n&nbsp;-&gt;&nbsp;if&nbsp;eq&nbsp;n&nbsp;0&nbsp;then&nbsp;1&nbsp;else&nbsp;mul&nbsp;n&nbsp;(f(sub&nbsp;n&nbsp;1))&nbsp;in&nbsp;f&nbsp;10";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;value&nbsp;=&nbsp;VInt&nbsp;3628800</CODE></P>
+      <P>The code in the string is actually valid F# code so we can evaluate it 
+      directly and obtain an equivalent result provided the <CODE>eq</CODE>, 
+      <CODE>mul</CODE> and <CODE>sub</CODE> functions have been defined:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;f&nbsp;=&nbsp;fun&nbsp;n&nbsp;-&gt;&nbsp;if&nbsp;eq&nbsp;n&nbsp;0&nbsp;then&nbsp;1&nbsp;else&nbsp;mul&nbsp;n&nbsp;(f(sub&nbsp;n&nbsp;1))&nbsp;in&nbsp;f&nbsp;10;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;3628800</CODE></P>
+      <H2>Summary</H2>
+      <P>This article has introduced active patterns for lexing and parsing and 
+      demonstrated this technique by creating a parser for a toy functional 
+      language. Combined with an <CODE>eval</CODE> function this was used to 
+      create a complete interpreter.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of active 
+      patterns and metaprogramming. In particular, the program developed in this 
+      article will be augmented with type inference.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20metaprogramming%20parsing%20with%20active%20patterns_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

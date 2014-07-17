@@ -1,0 +1,283 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0074)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/gis1.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Parsing and visualizing binary Geographic Information 
+System data</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Parsing and visualizing binary Geographic 
+Information System data</TITLE>     <LINK href="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Parsing and visualizing binary Geographic Information System data</H1>
+      <P>Detailed vector descriptions of worldwide geographical data are freely 
+      available in the Shapefile format. This article describes how polygonal 
+      data can be parsed from the binary Shapefile format and visualized using 
+      Windows Presentation Foundation easily and efficiently using F#. The 
+      result is a simple program that can be used as the basis for a wide 
+      variety of Geographic Information System (GIS) applications from 
+      cartography to climatology.</P>
+      <H2>Introduction</H2>
+      <P>The              <A href="http://www.diva-gis.org/">DIVA-GIS 
+      website</A> provides a wide variety of              <A href="http://www.diva-gis.org/Data">GIS 
+      data for free</A> including country data (administrative boundaries, 
+      roads, railroads, altitude, land cover and population density), global and 
+      continental data, climate data, species, elevation data and LandSat 
+      images. These data have wide ranging applications from cartography to the 
+      visualization of climate models and even worldwide network traffic.        
+         </P>
+      <P>These data are primarily stored in a very old binary format known as 
+      the Shapefile format. The Environmental Systems Research Institute of the 
+      US have made an excellent              <A href="http://www.esri.com/library/whitepapers/pdfs/shapefile.pdf">Technical 
+      Description of the Shapefile format</A> available for free. This document 
+      will be the basis for our Shapefile parser. In essence, the Shapefile 
+      format consists of headers describing the type of the subsequent data 
+      (e.g. polygons or points) followed by sequences of data (e.g. vertices).   
+              </P>
+      <H2>Parsing</H2>
+      <P>In the case of small data sets such as              <A href="http://www.diva-gis.org/data/misc/world_adm0.zip">this 
+      coarse world map</A> it is entirely feasible to load the entire data set 
+      into memory and parse it there. This is easily accomplished on .NET using 
+      the              <CODE>System.IO.File.ReadAllBytes</CODE> function:        
+         </P>
+<PRE>&gt; let bytes =
+    System.IO.File.ReadAllBytes
+      @"C:\Users\Jon\Documents\Work\gd-ais\world_adm0\world_adm0.shp";;
+val bytes : byte [] =
+  [|0uy; 0uy; 39uy; 10uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy;
+    0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 11uy; 186uy; 60uy;
+    232uy; 3uy; 0uy; 0uy; 5uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 128uy; 1uy; 128uy;
+    102uy; 192uy; 0uy; 0uy; 0uy; 0uy; 0uy; 128uy; 86uy; 192uy; 0uy; 0uy; 0uy;
+    0uy; 0uy; 128uy; 102uy; 64uy; 0uy; 0uy; 0uy; 192uy; 223uy; 231uy; 84uy;
+    64uy; 0uy; 0uy; 2uy; 200uy; 0uy; 0uy; 1uy; 112uy; 0uy; 0uy; 0uy; 0uy; 0uy;
+    0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy; 0uy;
+    0uy; 0uy; 0uy; 0uy; ...|]</PRE>
+      <P>An interesting quirk of the Shapefile format is that it contains data 
+      in both big and little endian (most and least significant byte first, 
+      respectively) formats. THe following variant type is used to represent 
+      these two options in an elegant and type-safe manner:</P>
+<PRE>&gt; type endian = Big | Little;;
+type endian =
+  | Big
+  | Little</PRE>
+      <P>The following higher-order              <CODE>at</CODE> function can 
+      read a given number of bytes at a given offset into the data set into a 
+      value (e.g. an              <CODE>int</CODE> or              
+      <CODE>int64</CODE> ) in either big or little endian format:           </P>
+<PRE>&gt; let inline at endian int accu n_bytes offset =
+    let mutable accu = accu
+    match endian with
+    | Big -&gt;
+        for j=0 to n_bytes - 1 do
+          accu &lt;- (accu &lt;&lt;&lt; 8) + int bytes.[offset + j]
+    | Little -&gt;
+        for j=n_bytes - 1 downto 0 do
+          accu &lt;- (accu &lt;&lt;&lt; 8) + int bytes.[offset + j]
+    accu;;
+val inline at :
+  endian -&gt; (byte -&gt;  ^a) -&gt;  ^b -&gt; int -&gt; int -&gt;  ^b
+    when ( ^b or  ^a) : (static member ( + ) :  ^b *  ^a -&gt;  ^b) and
+          ^b : (static member ( &lt;&lt;&lt; ) :  ^b * int32 -&gt;  ^b)</PRE>
+      <P>Note how the              <CODE>inline</CODE> keyword is used to turn 
+      this into a generic definition that allows the type              
+      <CODE>^a</CODE> to be any type that supports addition and shift left by an 
+                   <CODE>int32</CODE> .           </P>
+      <P>This              <CODE>at</CODE> function is used to construct 
+      functions that can read an              <CODE>int</CODE> or              
+      <CODE>float</CODE> from a given location in the input. The following       
+             <CODE>int_at</CODE> function uses the              <CODE>at</CODE> 
+      function to read a 32-bit integer in either big or little endian:          
+       </P>
+<PRE>&gt; let int_at endian offset =
+    at endian int 0 4 offset;;
+val int_at : endian -&gt; int -&gt; int</PRE>
+      <P>The following              <CODE>float_at</CODE> function reads 8 bytes 
+      into an              <CODE>int64</CODE> before converting it bitwise into 
+      a              <CODE>float</CODE> using the .NET              
+      <CODE>System.BitConverter.Int64BitsToDouble</CODE> function:           
+</P>
+<PRE>&gt; let float_at endian offset =
+    at endian int64 0L 8 offset
+    |&gt; System.BitConverter.Int64BitsToDouble;;
+val float_at : endian -&gt; int -&gt; float</PRE>
+      <P>This kind of bitwise conversion is a common requirement when dealing 
+      with binary formats containing floating point numbers.</P>
+      <P>Before loading the vector data from the Shapefile, we reference WPF's 
+      DLLs in order to use its              <CODE>Vector</CODE> and              
+      <CODE>Point</CODE> types:           </P>
+<PRE>&gt; #r "PresentationCore.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\
+Microsoft\Framework\v3.0\PresentationCore.dll'</PRE>
+<PRE>&gt; #r "PresentationFramework.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\
+Microsoft\Framework\v3.0\PresentationFramework.dll'</PRE>
+<PRE>&gt; #r "WindowsBase.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\
+Microsoft\Framework\v3.0\WindowsBase.dll'</PRE>
+<PRE>&gt; open System.Windows;;</PRE>
+      <P>The bound of the entire scene is stored in the header of the Shapefile 
+      format:</P>
+<PRE>&gt; module Bound =
+    let lower = Vector(float_at Little 36, float_at Little 44)
+    let upper = Vector(float_at Little 52, float_at Little 60);;
+module Bound = begin
+  val lower : Vector = -180.000183105469,-90
+  val upper : Vector = 180,83.6230316162109
+end</PRE>
+      <P>Note that the vector coordinates are longitude and latitude so their 
+      bounds of roughly -180..180 and -90..90 are to be expected.</P>
+      <P>The F# code required to parse a polygon at byte              
+      <CODE>i</CODE> in the data is slightly more involved but still relatively 
+      simple:           </P>
+<PRE>&gt; let polygon_at i =
+    let int_at j = int_at Little (i + j)
+    let float_at j = float_at Little (i + j)
+    let numParts = int_at 36
+    let numPoints = int_at 40
+    let parts =
+      seq { for j in 0..numParts-1 do
+              yield int_at (44 + 4 * j)
+            yield numPoints }
+    let point_at j =
+      let i = 44 + 4 * numParts
+      Point(float_at (i + 16 * j), float_at (i + 16 * j + 8))
+    seq { for j0, j1 in Seq.pairwise parts -&gt;
+            seq { for j in j0..j1-1 -&gt;
+                    point_at j } };;
+val polygon_at : int -&gt; seq&lt;seq&lt;Point&gt;&gt;</PRE>
+      <P>In the Shapefile format, polygons are stored as an unordered sequence 
+      of rings where each ring is a ordered sequence of vertices. In today's 
+      terminology, these rings are usually called the contours of the polygon. 
+      These rings are closed and have the same first and last vertices and are 
+      not allowed to intersect according to the Shapefile specification. Thus, 
+      the most obvious representation for a polygon in F# is a sequence of 
+      sequences of              <CODE>Point</CODE> s.           </P>
+      <P>All of the polygons in a polygonal Shapefile data set may be loaded as 
+      follows:</P>
+<PRE>&gt; let polygons =
+    seq { let i = ref 100
+          while !i &lt; int_at Big 24 * 2 do
+            yield polygon_at (!i + 8)
+            let contentLength = int_at Big (!i + 4)
+            i := !i + 2 * (4 + contentLength) };;
+val polygons : seq&lt;seq&lt;seq&lt;Point&gt;&gt;&gt;</PRE>
+      <P>The data may be examined as follows:</P>
+<PRE>&gt; polygons;;
+val it : seq&lt;seq&lt;seq&lt;Point&gt;&gt;&gt; =
+  seq
+    [seq
+       [seq
+          [65.6272964477539,37.3331985473633 {X = 65.62729645;
+                                              Y = 37.33319855;};
+           65.6469268798828,37.4588813781738 {X = 65.64692688;
+                                              Y = 37.45888138;};
+           65.7013702392578,37.5369300842285 {X = 65.70137024;
+                                              Y = 37.53693008;};
+           65.7660827636719,37.5341606140137 {X = 65.76608276;
+                                              Y = 37.53416061;}; ...]];
+     ...</PRE>
+      <P>WPF provides a handy              <CODE>Viewbox</CODE> control that 
+      scales its contents to fit the available space. However, it includes the 
+      origin when scaling so it is essential that we move the points such that 
+      they begin from the origin in order to obtain desirable results. The 
+      following              <CODE>move</CODE> function accomplishes precisely 
+      this using the bounding box of the entire scene:           </P>
+<PRE>&gt; let move (p: Point) =
+    Point(p.X - Bound.lower.X, Bound.upper.Y - p.Y);;
+val move : Point -&gt; Point</PRE>
+      <P>A WPF              <CODE>PathGeometry</CODE> containing the rings of 
+      each polygon is then easily constructed from the              
+      <CODE>polygons</CODE> sequence using sequence expressions:           </P>
+<PRE>&gt; let geometry =
+    Media.PathGeometry
+      [ for polygon in polygons do
+          for ring in polygon do
+            let ring = ring |&gt; Seq.map move
+            yield
+              Media.PathFigure
+                ( Seq.head ring,
+                  [ for p in ring -&gt;
+                      (Media.LineSegment(p, true) :&gt; Media.PathSegment) ],
+                  true ) ];;
+val geometry : Media.PathGeometry =
+  M245.627479553223,46.2898330688477L245.627479553223,46.2898330688477L245.647109985352...</PRE>
+      <P>The              <CODE>PathGeometry</CODE> may then be wrapped in a     
+               <CODE>Shapes.Path</CODE> and given stroke and fill styles:        
+         </P>
+<PRE>&gt; let path =
+    Shapes.Path(Data=geometry,
+                Fill=Media.Brushes.DarkGreen,
+                Stroke=Media.Brushes.Black,
+                StrokeThickness=0.1);;
+val path : Shapes.Path</PRE>
+      <P>A              <CODE>Viewbox</CODE> containing the              
+      <CODE>Shape</CODE> may be created as follows:           </P>
+<PRE>&gt; let root =
+    Controls.Viewbox(Child=path,
+                     Stretch=Media.Stretch.Uniform);;
+val root : Controls.Viewbox</PRE>
+      <P>A window containing the              <CODE>Viewbox</CODE> may be 
+      created as follows:           </P>
+<PRE>&gt; let window =
+    Window(Content=root,
+           Background=Media.Brushes.LightBlue);;
+val window : Window = System.Windows.Window</PRE>
+      <P>When run, this program produces the following output:</P>
+<PRE>&gt; (Application()).Run window
+  |&gt; ignore;;</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/worldmap.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has described how a binary format such as Shapefile can be 
+      parsed using F# code into a data structure and then visualized using WPF. 
+      The result, a map of the world, has obvious practical applications. As an 
+      ordinary WPF control, this map can be integrated with a wide variety of 
+      other visualization techniques, such as overlays and underlays of raster 
+      data representing temperatures or elevations.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of GIS data and 
+      visualization. In the context of handling GIS data sets, the task of 
+      dealing with much larger data sets that do not fit in memory will be 
+      covered. In the context of visualization, adaptive subdivision will be 
+      used to allow arbitrarily-large data sets to be visualized in real-time 
+      via the elegant use of trees from F#.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Parsing%20and%20visualizing%20binary%20Geographic%20Information%20System%20data_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

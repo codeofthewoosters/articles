@@ -1,0 +1,278 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0086)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/StructuralTyping.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20strutural%20typing_files/style.css"><LINK rel=stylesheet 
+type=text/css 
+href="F%23%20Journal%20strutural%20typing_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20strutural%20typing_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20strutural%20typing_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20strutural%20typing_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Structural typing</H1>
+      <H2>Introduction</H2>
+      <P>Static type systems enforce constraints at compile time by using types 
+      as contracts that must be adhered to. Nominal typing compares types 
+      according to the explicit interfaces they implement. If two type 
+      explicitly implement the same interface then they can be used 
+      interchangeably within the context of that interface. Structural typing is 
+      an alternative to nominal typing where the comparison of types is based 
+      upon the structure of the types rather than explicit interfaces.</P>
+      <P>Structural typing is useful primarily because it does not require or 
+      introduce dependencies between types in order to exploit their 
+      commonality. For example, both the <CODE>array</CODE> and 
+      <CODE>string</CODE> types provide a public <CODE>Length</CODE> property 
+      that returns an <CODE>int</CODE> but this commonality was not exposed via 
+      a common interface in .NET so it is not possible to directly exploit this 
+      commonality in order to write a function that handles either arrays or 
+      strings via their <CODE>Length</CODE> properties. With structural typing 
+      it would be possible to write functions that handle any object of any 
+      class that implements a <CODE>Length</CODE> property of the 
+      <CODE>int</CODE> type, i.e. there is no requirement for there to have been 
+      a dependency between the pre-existing <CODE>array</CODE> and 
+      <CODE>string</CODE> types and an explicit interface describing their 
+      commonality. The same capability makes it possible for one library to use 
+      objects of a class defined in another library without requiring a 
+      dependency upon that other library. For example, F# for Visualization 
+      would be able to visualize values of the <CODE>BigNum</CODE> type defined 
+      in the F# PowerPack without having to make F# for Visualization dependent 
+      upon the F# PowerPack.</P>
+      <P>This article examines two different approaches to structural typing. 
+      The crudest approach is to use reflection to invoke a property and resort 
+      to dynamic typing. A more sophisticated approach is to use reflection to 
+      interpret an explicit interface and attempt to construct an object that 
+      adheres to the given interface that wraps an existing object.</P>
+      <H2>Dynamic typing</H2>
+      <P>Consider the following <CODE>BigNum</CODE> class exposes 
+      <CODE>Numerator</CODE> and <CODE>Denominator</CODE> properties:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;BigNum(p:&nbsp;System.Numerics.BigInteger,&nbsp;q:&nbsp;System.Numerics.BigInteger)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Numerator&nbsp;with&nbsp;get()&nbsp;=&nbsp;p<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Denominator&nbsp;with&nbsp;get()&nbsp;=&nbsp;q;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;BigNum&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;p:System.Numerics.BigInteger&nbsp;*&nbsp;q:System.Numerics.BigInteger&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;BigNum<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Denominator&nbsp;:&nbsp;System.Numerics.BigInteger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Numerator&nbsp;:&nbsp;System.Numerics.BigInteger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>An object <CODE>q</CODE> of the <CODE>BigNum</CODE> class may be 
+      constructed as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;q&nbsp;=&nbsp;BigNum(2I,&nbsp;3I);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;q&nbsp;:&nbsp;BigNum<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>F# provides a <CODE>?</CODE> operator designed to aid the dynamic 
+      invocation of methods and properties. We might define this operator as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(?)&nbsp;o&nbsp;p&nbsp;=&nbsp;o,&nbsp;p;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;?&nbsp;)&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;'a&nbsp;*&nbsp;'b</CODE></P>
+      <P>This definition allows us to convert an object and method or property 
+      name into a pair containing the object and the string name of the method 
+      or property:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;q?Numerator;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;BigNum&nbsp;*&nbsp;string&nbsp;=&nbsp;(FSI_0110+BigNum&nbsp;{Denominator&nbsp;=&nbsp;3;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Numerator&nbsp;=&nbsp;2;},&nbsp;"Numerator")&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>The following <CODE>get</CODE> function uses reflection to invoke the 
+      given property on the given object:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;get&lt;'a&gt;&nbsp;:&nbsp;obj&nbsp;*&nbsp;string&nbsp;-&gt;&nbsp;'a&nbsp;option&nbsp;=&nbsp;fun&nbsp;(o,&nbsp;p)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ty&nbsp;=&nbsp;o.GetType()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;property&nbsp;=&nbsp;ty.GetProperty(p,&nbsp;typeof&lt;'a&gt;)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;property&nbsp;=&nbsp;null&nbsp;then&nbsp;None&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;get&nbsp;=&nbsp;property.GetGetMethod()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;get&nbsp;=&nbsp;null&nbsp;then&nbsp;None&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;get.Invoke(o,&nbsp;[||])&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;:?&nbsp;'a&nbsp;as&nbsp;ret&nbsp;-&gt;&nbsp;Some&nbsp;ret<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;get&nbsp;:&nbsp;obj&nbsp;*&nbsp;string&nbsp;-&gt;&nbsp;'a&nbsp;option</CODE></P>
+      <P>Note how the <CODE>GetProperty</CODE> member is passed not only the 
+      string name of the function derived from the argument passed to the 
+      <CODE>get</CODE> function but also the type of the type variable 
+      <CODE>'a</CODE> that is the return type of the <CODE>get</CODE> function. 
+      So the behaviour of the <CODE>get</CODE> function is defined by its return 
+      type. This is a useful capability in the context of reflection.</P>
+      <P>The <CODE>get</CODE> function may be invoked using an explicit return 
+      type as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;get&lt;System.Numerics.BigInteger&gt;&nbsp;q?Numerator;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;System.Numerics.BigInteger&nbsp;option&nbsp;=&nbsp;Some&nbsp;2&nbsp;{IsEven&nbsp;=&nbsp;true;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsOne&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsPowerOfTwo&nbsp;=&nbsp;true;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsZero&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sign&nbsp;=&nbsp;1;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;get&lt;System.Numerics.BigInteger&gt;&nbsp;q?Denominator;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;System.Numerics.BigInteger&nbsp;option&nbsp;=&nbsp;Some&nbsp;3&nbsp;{IsEven&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsOne&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsPowerOfTwo&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsZero&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sign&nbsp;=&nbsp;1;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>This has successfully invoked the <CODE>Numerator</CODE> and 
+      <CODE>Denominator</CODE> properties on our <CODE>q</CODE> object via 
+      reflection.</P>
+      <P>As dynamic invocation has circumvented the static type system, both 
+      invocations are now potential sources of run-time type errors. We can 
+      consolidate these separate sources of error into a single source by 
+      defining the interface we want to adhere to and then writing a function to 
+      wrap an object using our interface to determine the types.</P>
+      <P>Our interface may be defined as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;IBigNum&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;member&nbsp;Denominator&nbsp;:&nbsp;System.Numerics.BigInteger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;member&nbsp;Numerator&nbsp;:&nbsp;System.Numerics.BigInteger;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;IBigNum&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;member&nbsp;Denominator&nbsp;:&nbsp;System.Numerics.BigInteger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;member&nbsp;Numerator&nbsp;:&nbsp;System.Numerics.BigInteger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following <CODE>bigNum</CODE> function attempts to get the 
+      <CODE>Numerator</CODE> and <CODE>Denominator</CODE> properties using our 
+      <CODE>get</CODE> function and, if successful, returns an immediate object 
+      that implements the <CODE>IBigNum</CODE> interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;bigNum&nbsp;o&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;get&nbsp;q?Numerator,&nbsp;get&nbsp;q?Denominator&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;p,&nbsp;Some&nbsp;q&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;new&nbsp;IBigNum&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Numerator&nbsp;with&nbsp;get()&nbsp;=&nbsp;p<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Denominator&nbsp;with&nbsp;get()&nbsp;=&nbsp;q&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;bigNum&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;IBigNum&nbsp;option</CODE></P>
+      <P>For example, we can convert our object <CODE>q</CODE> of the old 
+      <CODE>BigNum</CODE> type into an object than implements our new 
+      <CODE>IBigNum</CODE> interface despite the fact that the 
+      <CODE>BigNum</CODE> class does not implement the <CODE>IBigNum</CODE> 
+      interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;bigNum&nbsp;q;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;IBigNum&nbsp;option&nbsp;=&nbsp;Some&nbsp;FSI_0117+bigNum@80-2</CODE></P>
+      <P>F# interactive has pretty printed its internal name for the type of our 
+      immediate object. To make the result clearer we can explicitly extract the 
+      values returned by the properties exposed via our <CODE>IBigNum</CODE> 
+      interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;match&nbsp;bigNum&nbsp;q&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;q&nbsp;-&gt;&nbsp;Some(q.Numerator,&nbsp;q.Denominator)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(System.Numerics.BigInteger&nbsp;*&nbsp;System.Numerics.BigInteger)&nbsp;option&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;(2&nbsp;{IsEven&nbsp;=&nbsp;true;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsOne&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsPowerOfTwo&nbsp;=&nbsp;true;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsZero&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sign&nbsp;=&nbsp;1;},&nbsp;3&nbsp;{IsEven&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsOne&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsPowerOfTwo&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsZero&nbsp;=&nbsp;false;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sign&nbsp;=&nbsp;1;})</CODE></P>
+      <P>This demonstrates that our code really is invoking the properties on 
+      the underlying class <CODE>BigNum</CODE> correctly.</P>
+      <P>Finally, we can measure the time it takes to obtain the numerator and 
+      denominator from a <CODE>BigNum</CODE> using dynamic invocation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..1000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;bigNum&nbsp;q&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;q&nbsp;-&gt;&nbsp;Some(q.Numerator,&nbsp;q.Denominator)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.016,&nbsp;CPU:&nbsp;00:00:00.015,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0</CODE></P>
+      <P>This shows that both the numerator and denominator are obtained in 
+      around 16ï¿½s.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <H2>Structural typing</H2>
+      <P>Although the above solution using ordinary dynamic typing works it 
+      requires a significant amount of hand-written "boiler-plate" code to wrap 
+      the original object with a new immediate object that implements the 
+      desired interface. Ideally, we would like a function that takes an 
+      interface and an existing object and creates a new wrapper object that 
+      adheres to the given interface. We could then invoke the members on the 
+      new wrapper object.</P>
+      <P>This functionality can be implemented by making more sophisticated use 
+      of reflection and run-time code generation. We begin by opening the 
+      relevant namespaces:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Reflection;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Reflection.Emit;;</CODE></P>
+      <P>The following <CODE>createType</CODE> function creates a new .NET 
+      assembly, new module and new public class type of the given name:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;createType&nbsp;typeName&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;name&nbsp;=&nbsp;System.Reflection.AssemblyName(Name="tmpAssembly")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;run&nbsp;=&nbsp;System.Reflection.Emit.AssemblyBuilderAccess.Run<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;builder&nbsp;=&nbsp;System.Threading.Thread.GetDomain().DefineDynamicAssembly(name,&nbsp;run)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mdl&nbsp;=&nbsp;builder.DefineDynamicModule&nbsp;"tmpModule"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;attrs&nbsp;=&nbsp;TypeAttributes.Public&nbsp;|||&nbsp;TypeAttributes.Class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mdl.DefineType(typeName,&nbsp;attrs);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;createType&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;TypeBuilder</CODE></P>
+      <P>The following <CODE>genConstructor</CODE> function generates a 
+      constructor for the new class as CIL code using 
+      <CODE>System.Reflection.Emit</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;genConstructor&nbsp;tyo&nbsp;(builder:&nbsp;TypeBuilder)&nbsp;(parent:&nbsp;FieldBuilder)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;attr&nbsp;=&nbsp;MethodAttributes.Public<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cc&nbsp;=&nbsp;CallingConventions.Standard<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;builder&nbsp;=&nbsp;builder.DefineConstructor(attr,&nbsp;cc,&nbsp;[|tyo|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;il&nbsp;=&nbsp;builder.GetILGenerator()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Ldarg_0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Ldarg_1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Stfld,&nbsp;parent)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Ret);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;genConstructor&nbsp;:&nbsp;System.Type&nbsp;-&gt;&nbsp;TypeBuilder&nbsp;-&gt;&nbsp;FieldBuilder&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The constructor accepts a single argument, a reference to the value 
+      being wrapped, and stores it in the <CODE>parent</CODE> field inside the 
+      new class. Specifically, <CODE>Ldarg_0</CODE> and <CODE>Ldarg_1</CODE> 
+      load the <CODE>this</CODE> pointer to the wrapper object and the 
+      constructor's argument (the object being wrapped) and <CODE>Stfld</CODE> 
+      stores the object being wrapped in <CODE>this</CODE> object in the 
+      <CODE>parent</CODE> field.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>The following <CODE>wrapGetter</CODE> function defines a public virtual 
+      method to serve as a property:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;wrapGetter&nbsp;(getMethod:&nbsp;MethodInfo)&nbsp;name&nbsp;tyRet&nbsp;(builder:&nbsp;TypeBuilder)&nbsp;(parent:&nbsp;FieldBuilder)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;attrs&nbsp;=&nbsp;PropertyAttributes.None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;property&nbsp;=&nbsp;builder.DefineProperty(name,&nbsp;attrs,&nbsp;tyRet,&nbsp;[||])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;attrs&nbsp;=&nbsp;MethodAttributes.Public&nbsp;|||&nbsp;MethodAttributes.Virtual<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;builder&nbsp;=&nbsp;builder.DefineMethod("get_"&nbsp;+&nbsp;name,&nbsp;attrs,&nbsp;tyRet,&nbsp;[||])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;il&nbsp;=&nbsp;builder.GetILGenerator()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Ldarg_0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Ldfld,&nbsp;parent)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Call,&nbsp;getMethod)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;il.Emit(OpCodes.Ret)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;property.SetGetMethod&nbsp;builder;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;wrapGetter&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MethodInfo&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;System.Type&nbsp;-&gt;&nbsp;TypeBuilder&nbsp;-&gt;&nbsp;FieldBuilder&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Again, the body of the generated function is defined as CIL code. In 
+      this case, <CODE>Ldarg_0</CODE> loads the <CODE>this</CODE> reference to 
+      the wrapper object, <CODE>Ldfld</CODE> loads the wrapper object from the 
+      <CODE>parent</CODE> field of <CODE>this</CODE> object (consuming the 
+      reference to <CODE>this</CODE> object on the stack) and the given 
+      <CODE>getMethod</CODE> is invoked on the wrapped object and its result is 
+      returned.</P>
+      <P>The simplest way to implement structural typing is to use the 
+      <CODE>createType</CODE>, <CODE>genConstructor</CODE> and 
+      <CODE>wrapGetter</CODE> functions to dynamically create an object 
+      implementing properties on a given interface that call the equivalent 
+      properties on the object being wrapped. The following <CODE>dyn</CODE> 
+      function does exactly this:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;dyn&lt;'a&gt;&nbsp;:&nbsp;obj&nbsp;-&gt;&nbsp;'a&nbsp;option&nbsp;=&nbsp;fun&nbsp;o&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tyo&nbsp;=&nbsp;o.GetType()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tyi&nbsp;=&nbsp;typeof&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;builder&nbsp;=&nbsp;createType&nbsp;(tyo.Name&nbsp;+&nbsp;"To"&nbsp;+&nbsp;tyi.Name)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;parent&nbsp;=&nbsp;builder.DefineField("parent",&nbsp;tyo,&nbsp;FieldAttributes.Private)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;genConstructor&nbsp;tyo&nbsp;builder&nbsp;parent<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;builder.AddInterfaceImplementation&nbsp;tyi<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;add&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ty&nbsp;=&nbsp;builder.CreateType()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(ty.GetConstructor([|tyo|]).Invoke([|o|])&nbsp;:?&gt;&nbsp;'a)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(pi:&nbsp;System.Reflection.PropertyInfo)::pis&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;po&nbsp;=&nbsp;tyo.GetProperty(pi.Name,&nbsp;pi.PropertyType)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;po=null&nbsp;then&nbsp;None&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tyRet&nbsp;=&nbsp;po.PropertyType<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrapGetter&nbsp;(po.GetGetMethod())&nbsp;pi.Name&nbsp;tyRet&nbsp;builder&nbsp;parent<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;pis<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tyi.GetProperties()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;List.ofSeq<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;dyn&nbsp;:&nbsp;obj&nbsp;-&gt;&nbsp;'a&nbsp;option</CODE></P>
+      <P>The locals <CODE>tyo</CODE> and <CODE>tyi</CODE> are the types of the 
+      object being wrapped and of the interface being implemented, respectively. 
+      Note how the interface type is determined by the return type of the 
+      <CODE>dyn</CODE> function. A new type is defined to wrap an object of one 
+      type with an object implementing an interface of another type. The 
+      <CODE>parent</CODE> field and constructor are defined as the new class is 
+      made to implement the interface. The properties required by the interface 
+      are obtained and a recursive function is used to iterate over them trying 
+      to wrap each property in turn until the constructor is invoked using 
+      <CODE>Reflection</CODE> to create the wrapper object. If the type of the 
+      given object is found not to contain any of the required properties then 
+      <CODE>None</CODE> is returned.</P>
+      <P>This <CODE>dyn</CODE> function is a much more powerful alternative to 
+      simple dynamic invocation. For example, the <CODE>array</CODE> and 
+      <CODE>string</CODE> types expose <CODE>Length:&nbsp;int</CODE> properties 
+      but this commonality was not exploited by their nominal type definitions 
+      so we can productively exploit it using structural typing. The following 
+      <CODE>ILength</CODE> interface can be used to represent any object with a 
+      <CODE>Length:&nbsp;int</CODE> property (including both arrays and 
+      strings):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;ILength&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;Length&nbsp;:&nbsp;int;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ILength&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;member&nbsp;Length&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The <CODE>dyn</CODE> function allows us to convert an array into an 
+      object of a new class type that implements our <CODE>ILength</CODE> 
+      interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;dyn&lt;ILength&gt;&nbsp;[|1..10|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;ILength&nbsp;option&nbsp;=&nbsp;Some&nbsp;Int32\[\]ToILength&nbsp;{Length&nbsp;=&nbsp;10;}</CODE></P>
+      <P>Note that the value returned by the <CODE>Length</CODE> property on our 
+      interface is the same value, <CODE>10</CODE>, returned by the 
+      <CODE>Length</CODE> property on the array itself.</P>
+      <P>Similarly, we can wrap a <CODE>string</CODE> in order to obtain its 
+      length:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;dyn&lt;ILength&gt;&nbsp;"Hello&nbsp;world!";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;ILength&nbsp;option&nbsp;=&nbsp;Some&nbsp;StringToILength&nbsp;{Length&nbsp;=&nbsp;12;}</CODE></P>
+      <P>Whereas dynamic invocation introduces a potential source of run-time 
+      type errors every time a dynamically-typed call is made, our 
+      <CODE>dyn</CODE> function allows us to focus these sources of error on to 
+      a single point. If the given object is not compatible with the required 
+      interface then the one call to <CODE>dyn</CODE> returns <CODE>None</CODE> 
+      instead of a run-time type error and the caller can handle this gracefully 
+      and efficiently at one location. If the one call to <CODE>dyn</CODE> 
+      returns <CODE>Some</CODE> wrapper object then none of the calls to the 
+      properties on that object will ever fail with a run-time type error due to 
+      the call because the interface has already been checked for 
+      compatibility.</P>
+      <P>This is a substantial improvement to dynamic invocation but the benefit 
+      of <CODE>dyn</CODE> really starts to show when the required interface has 
+      more than one property. Our value <CODE>q</CODE> of the 
+      <CODE>BigNum</CODE> class implements two properties that we have since 
+      grouped into an <CODE>IBigNum</CODE> interface (that the 
+      <CODE>BigNum</CODE> class did not implement). The <CODE>dyn</CODE> 
+      function can be used to wrap <CODE>q</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;dyn&lt;IBigNum&gt;&nbsp;q;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;IBigNum&nbsp;option&nbsp;=&nbsp;Some&nbsp;BigNumToIBigNum&nbsp;{Denominator&nbsp;=&nbsp;3;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Numerator&nbsp;=&nbsp;2;}</CODE></P>
+      <P>Once <CODE>Some</CODE> wrapper object has been obtained both the 
+      <CODE>Numerator</CODE> and <CODE>Denominator</CODE> properties from the 
+      <CODE>IBigNum</CODE> interface may be called without any risk of run-time 
+      type errors due to the calls.</P>
+      <P>However, a quick benchmark shows that this approach is around 150ï¿½ 
+      slower than dynamic invocation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..1000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dyn&lt;IBigNum&gt;&nbsp;q<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:02.372,&nbsp;CPU:&nbsp;00:00:02.652,&nbsp;GC&nbsp;gen0:&nbsp;14,&nbsp;gen1:&nbsp;4,&nbsp;gen2:&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>The poor performance is due to the use of reflection to generate new 
+      types inside the inner loop because this requires the JIT to compile the 
+      new type definitions into native code that can be invoked.</P>
+      <P>Fortunately, this overhead can be amortized by precomputing the class 
+      type of wrapper objects as a function of the type of the object being 
+      wrapped and the type of the interface being implemented.</P>
+      <P>The following <CODE>genConverter</CODE> function accepts the types of 
+      the input object and output interface and generates code using almost the 
+      same approach as the definition of our <CODE>dyn</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;genConverter&nbsp;(tyo:&nbsp;System.Type,&nbsp;tyi:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;builder&nbsp;=&nbsp;createType&nbsp;(tyo.Name&nbsp;+&nbsp;"To"&nbsp;+&nbsp;tyi.Name)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;parent&nbsp;=&nbsp;builder.DefineField("parent",&nbsp;tyo,&nbsp;FieldAttributes.Private)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;genConstructor&nbsp;tyo&nbsp;builder&nbsp;parent<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;builder.AddInterfaceImplementation&nbsp;tyi<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;add&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ty&nbsp;=&nbsp;builder.CreateType()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(fun&nbsp;(o:&nbsp;obj)&nbsp;-&gt;&nbsp;ty.GetConstructor([|tyo|]).Invoke([|o|]))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(pi:&nbsp;System.Reflection.PropertyInfo)::pis&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;po&nbsp;=&nbsp;tyo.GetProperty(pi.Name,&nbsp;pi.PropertyType)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;po=null&nbsp;then&nbsp;None&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tyRet&nbsp;=&nbsp;po.PropertyType<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wrapGetter&nbsp;(po.GetGetMethod())&nbsp;pi.Name&nbsp;tyRet&nbsp;builder&nbsp;parent<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;pis<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tyi.GetProperties()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;List.ofSeq<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;genConverter&nbsp;:&nbsp;System.Type&nbsp;*&nbsp;System.Type&nbsp;-&gt;&nbsp;(obj&nbsp;-&gt;&nbsp;obj)&nbsp;option</CODE></P>
+      <P>The only difference is that this <CODE>genConverter</CODE> function 
+      returns a lambda function that invokes the constructor of the new wrapper 
+      class, passing it the object being wrapped. This allows us to memoize the 
+      <CODE>genConverter</CODE> function in order to amortize the performance 
+      cost of code generation.</P>
+      <P>The following is the standard <CODE>memoize</CODE> combinator that we 
+      use:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Collections.Generic;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;memoize&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;d&nbsp;=&nbsp;Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;k&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;v&nbsp;=&nbsp;Unchecked.defaultof&lt;_&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;d.TryGetValue(k,&nbsp;&amp;v)&nbsp;then&nbsp;v&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;v&nbsp;=&nbsp;f&nbsp;k<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d.[k]&nbsp;&lt;-&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;memoize&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>Now we can write a <CODE>dynConverter</CODE> function that is a 
+      memoized form of the <CODE>genConverter</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;dynConverter&nbsp;:&nbsp;System.Type&nbsp;*&nbsp;System.Type&nbsp;-&gt;&nbsp;(obj&nbsp;-&gt;&nbsp;obj)&nbsp;option&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;memoize&nbsp;genConverter;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;dynConverter&nbsp;:&nbsp;(System.Type&nbsp;*&nbsp;System.Type&nbsp;-&gt;&nbsp;(obj&nbsp;-&gt;&nbsp;obj)&nbsp;option)</CODE></P>
+      <P>If this <CODE>dynConverter</CODE> function is invoked twice with the 
+      same object and interface types then the second call will reuse the 
+      wrapper generated generated for the first call.</P>
+      <P>Thus, our <CODE>dyn</CODE> function may be rewritten more efficiently 
+      as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;dyn&lt;'a&gt;&nbsp;:&nbsp;obj&nbsp;-&gt;&nbsp;'a&nbsp;option&nbsp;=&nbsp;fun&nbsp;o&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;dynConverter&nbsp;(o.GetType(),&nbsp;typeof&lt;'a&gt;)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;f&nbsp;-&gt;&nbsp;Some(f&nbsp;o&nbsp;:?&gt;&nbsp;'a);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;dyn&nbsp;:&nbsp;obj&nbsp;-&gt;&nbsp;'a&nbsp;option</CODE></P>
+      <P>This implementation works exactly as before:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;dyn&lt;ILength&gt;&nbsp;[|1..10|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;ILength&nbsp;option&nbsp;=&nbsp;Some&nbsp;Int32\[\]ToILength&nbsp;{Length&nbsp;=&nbsp;10;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;dyn&lt;ILength&gt;&nbsp;"Hello&nbsp;world!";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;ILength&nbsp;option&nbsp;=&nbsp;Some&nbsp;StringToILength&nbsp;{Length&nbsp;=&nbsp;12;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;dyn&lt;IBigNum&gt;&nbsp;q;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;IBigNum&nbsp;option&nbsp;=&nbsp;Some&nbsp;BigNumToIBigNum&nbsp;{Denominator&nbsp;=&nbsp;3;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Numerator&nbsp;=&nbsp;2;}</CODE></P>
+      <P>However, the new solution now combines the superior performance of the 
+      original dynamic invocation with the type safety of a single consistent 
+      conversion to a statically-typed interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..1000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dyn&lt;IBigNum&gt;&nbsp;q<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.015,&nbsp;CPU:&nbsp;00:00:00.015,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <H2>Summary</H2>
+      <P>This article has introduced the concept of structural typing, where 
+      type equivalence is dictated by the structure of a type, and has shown how 
+      structural typing can be achieved in F# using reflection.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of 
+      reflection.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20strutural%20typing_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

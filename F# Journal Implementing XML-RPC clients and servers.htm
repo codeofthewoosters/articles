@@ -1,0 +1,648 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0076)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/xmlrpc.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Implementing XML-RPC clients and servers</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Implementing XML-RPC clients and servers</TITLE> 
+    <LINK href="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Implementing XML-RPC clients and servers</H1>
+      <P>XML-RPC is a protocol for remote procedure calls that is built upon the 
+      XML format. Method calls are packaged up by the client as an XML request 
+      sent via HTTP to the server whereupon action is taken and a response is 
+      packaged up and returned in the same way. This article demonstrates how 
+      elegantly F# programs can handle XML data using combinators and describes 
+      how a complete client-server pair using XML-RPC can be designed and built 
+      from scratch using only a small amount of library code and the .NET 
+      framework.</P>
+      <H2>Introduction</H2>
+      <H3>XML-RPC</H3>
+      <P>The              <A href="http://www.xml-rpc.com/">XML-RPC</A> protocol 
+      provides remote procedure calling using HTTP as the transport and XML as 
+      the encoding. XML-RPC is designed to be as simple as possible, while 
+      allowing complex data structures to be transmitted, processed and 
+      returned.           </P>
+      <P>This article is going to develop a simple XML-RPC client-server pair 
+      that allow remote procedure calls to be made by the client and handled 
+      across a network by a remote server. For example, the following 
+      demonstrates an XML-RPC method call that might be sent by a client over 
+      HTTP in order to invoke an              <CODE>add</CODE> function with two 
+      integer arguments:           </P>
+<PRE>&lt;methodCall&gt;
+  &lt;methodName&gt;add&lt;/methodName&gt;
+  &lt;params&gt;
+    &lt;param&gt;
+      &lt;value&gt;
+	&lt;i4&gt;3&lt;/i4&gt;
+      &lt;/value&gt;
+    &lt;/param&gt;
+    &lt;param&gt;
+      &lt;value&gt;
+	&lt;i4&gt;4&lt;/i4&gt;
+      &lt;/value&gt;
+    &lt;/param&gt;
+  &lt;/params&gt;
+&lt;/methodCall&gt;</PRE>
+      <P>And the following demonstrates a typical successful method response 
+      that might be returned by the server:</P>
+<PRE>&lt;methodResponse&gt;
+  &lt;params&gt;
+    &lt;param&gt;
+      &lt;value&gt;
+	&lt;i4&gt;7&lt;/i4&gt;
+      &lt;/value&gt;
+    &lt;/param&gt;
+  &lt;/params&gt;
+&lt;/methodResponse&gt;</PRE>
+      <H3>XML in .NET</H3>
+      <P>The .NET framework was specifically designed to form a solid foundation 
+      for the distributed concurrent applications that underpin all modern Web 
+      programming. This includes support for modern protocols and formats and 
+      XML is one such format. However, the design and implementation of the XML 
+      libraries within .NET have evolved tremendously since its inception. 
+      Specifically, prior to version 3.5 the .NET framework provided only a 
+      Java-like XML DOM interface that harbored a variety of problems stemming 
+      from the idiomatic use of mutable object oriented programming and, in 
+      particular, flaws copied from Java's XML DOM.</P>
+      <P>The following demonstrates how the first XML snippet from this article 
+      may be generated programmatically using the original .NET API with only 
+      minimal code structuring:</P>
+<PRE>&gt; open System.Xml;;
+&gt; module OldSchool =
+    let doc = XmlDocument()
+    let methodCall = doc.CreateElement "methodCall"
+    doc.AppendChild methodCall |&gt; ignore
+    let methodName = doc.CreateElement "methodName"
+    methodCall.AppendChild methodName |&gt; ignore
+    doc.CreateTextNode "add" |&gt; methodName.AppendChild |&gt; ignore
+    let ps = doc.CreateElement "params"
+    methodCall.AppendChild ps |&gt; ignore
+    let () =
+      let p = doc.CreateElement "param"
+      ps.AppendChild p |&gt; ignore
+      let value1 = doc.CreateElement "value"
+      p.AppendChild value1 |&gt; ignore
+      let i41 = doc.CreateElement "i4"
+      value1.AppendChild i41 |&gt; ignore
+      doc.CreateTextNode "3" |&gt; i41.AppendChild |&gt; ignore
+    let () =
+      let p = doc.CreateElement "param"
+      ps.AppendChild p |&gt; ignore
+      let value = doc.CreateElement "value"
+      p.AppendChild value |&gt; ignore
+      let i42 = doc.CreateElement "i4"
+      value.AppendChild i42 |&gt; ignore
+      doc.CreateTextNode "4" |&gt; i42.AppendChild |&gt; ignore
+    doc.OuterXml;;
+val example1 : unit -&gt; string
+&gt; example1();;
+val it : string
+= "&lt;methodCall&gt;&lt;methodName&gt;add&lt;/methodName&gt;&lt;params&gt;&lt;param&gt;&lt;value&gt;&lt;i4&gt;3&lt;/i4&gt;&lt;/value&gt;&lt;/param&gt;
+&lt;param&gt;&lt;value&gt;&lt;i4&gt;4&lt;/i4&gt;&lt;/value&gt;&lt;/param&gt;&lt;/params&gt;&lt;/methodCall&gt;"</PRE>
+      <P>Calling the .NET API to generate XML in this way is clearly a mess. XML 
+      is a notoriously verbose format yet this code actually requires 
+      significantly more space than the XML that it generates. This is 
+      completely unacceptable and, fortunately, the functional aspects of the F# 
+      programming language provide everything that is required to get the above 
+      code under control. Specifically, the redundancy can be avoided by 
+      aggressively factoring the code into combinators.</P>
+      <P>The following              <CODE>text</CODE> combinator constructs a 
+      text node in the XML tree, inserting it into the given parent using the 
+      given document:           </P>
+<PRE>&gt; let text string (doc : XmlDocument, parent : #XmlNode) =
+    let node = doc.CreateTextNode string
+    parent.AppendChild node |&gt; ignore;;
+val text : string -&gt; XmlDocument * #XmlNode -&gt; unit</PRE>
+      <P>Note how the              <CODE>XmlDocument</CODE> and              
+      <CODE>XmlNode</CODE> parent are handled as a single tuple because both are 
+      required to insert new nodes (the document for node allocation and the 
+      parent for node injection). This design immediately overcomes the main 
+      problem with the XML DOM.           </P>
+      <P>The following              <CODE>element</CODE> combinator builds an 
+      XML element with the given tag name and sequence of children:           
+      </P>
+<PRE>&gt; let element name children (doc : XmlDocument, parent : #XmlNode) =
+    let node = doc.CreateElement name
+    parent.AppendChild node |&gt; ignore
+    for child in children do
+      child (doc, node);;
+val element :
+  string -&gt; #seq&lt;(XmlDocument * XmlElement -&gt; unit)&gt; -&gt; XmlDocument * #XmlNode
+  -&gt; unit</PRE>
+      <P>Once again, the document and parent are encapsulated in a single tuple 
+      and this combinator uses a similar argument order, with the parameters 
+      first and the document last, in order to be compatible with the previous   
+                 <CODE>text</CODE> combinator.           </P>
+      <P>These simple combinators not only allow the XML fragment to be 
+      constructed declaratively, like quoting XML directly, but they even allow 
+      XML to be factored more aggressive than is otherwise possible.</P>
+      <P>The following implementation is more idiomatic F# and generates exactly 
+      the same result with far more efficient code reuse:</P>
+<PRE>&gt; let example2() =
+    let ps ps =
+      element "params"
+        [ for p in ps -&gt;
+            element "param" [ p ] ]
+    let i4 n =
+      element "value"
+        [ element "i4"
+            [ text (string_of_int n) ] ]
+    let doc = XmlDocument()
+    element "methodCall"
+      [ element "methodName"
+          [ text "add" ]
+        ps
+          [ i4 3
+            i4 4 ] ]
+      (doc, doc)
+    doc.OuterXml;;
+val example2 : unit -&gt; string
+&gt; example2();;
+val it : string
+= "&lt;methodCall&gt;&lt;methodName&gt;add&lt;/methodName&gt;&lt;params&gt;&lt;param&gt;&lt;value&gt;&lt;i4&gt;3&lt;/i4&gt;&lt;/value&gt;&lt;/param&gt;
+&lt;param&gt;&lt;value&gt;&lt;i4&gt;4&lt;/i4&gt;&lt;/value&gt;&lt;/param&gt;&lt;/params&gt;&lt;/methodCall&gt;"
+= "&lt;methodCall&gt;&lt;methodName&gt;add&lt;params&gt;&lt;param&gt;&lt;value&gt;&lt;i4&gt;3&lt;/i4&gt;&lt;/value&gt;&lt;/param&gt;
+&lt;param&gt;&lt;value&gt;&lt;i4&gt;4&lt;/i4&gt;&lt;/value&gt;&lt;/param&gt;&lt;/params&gt;&lt;/methodName&gt;&lt;/methodCall&gt;"</PRE>
+      <P>Note the nested              <CODE>ps</CODE> combinator that wraps a 
+      sequence of parameters in a              <CODE>&lt;params&gt;</CODE> tag 
+      and individual              <CODE>&lt;param&gt;</CODE> tags for each 
+      parameter, and the              <CODE>i4</CODE> combinator that wraps a 
+      4-byte integer in the              <CODE>&lt;i4&gt;</CODE> and             
+       <CODE>&lt;value&gt;</CODE> tags.           </P>
+      <P>Even including the nested              <CODE>ps</CODE> and              
+      <CODE>i4</CODE> combinators, this implementation is substantially more 
+      concise and rivals the brevity and clarity of the XML. Moreover, the 
+      ability to factor out more combinators, as we have done here, allows this 
+      approach to scale better than is otherwise possible.           </P>
+      <P>Finally, LINQ introduced new functionality in .NET 3.5 that uses 
+      similar techniques to allow XML fragments to be composed more easily. This 
+      example may also be implemented as follows using this new technology:</P>
+<PRE>&gt; #I "C:\Program Files\Reference Assemblies\Microsoft\Framework\v3.5";;
+&gt; #r "System.Xml.Linq.dll";;
+&gt; open System.Xml.Linq;;
+&gt; let text (string : string) = box string;;
+val text : string -&gt; obj
+&gt; let element (name : string) (children : #seq&lt;obj&gt;) =
+    XElement(XName.op_Implicit name, box children)
+    |&gt; box;;
+val element : string -&gt; #seq&lt;obj&gt; -&gt; obj
+&gt; let example3() =
+    let ps ps =
+      element "params"
+        [ for p in ps -&gt;
+            element "param" [ p ] ]
+    let i4 string =
+      element "value"
+        [ element "i4"
+            [ text string ] ]
+    let doc =
+      XDocument
+        [|element "methodCall"
+            [ element "methodName"
+                [ text "add"
+                  ps
+                    [ i4 "3"
+                      i4 "4" ] ] ]|]
+    doc.ToString();;
+val element : string -&gt; #seq&lt;obj&gt; -&gt; obj
+&gt; example3();;
+val it : string
+= "&lt;methodCall&gt;\r\n  &lt;methodName&gt;add&lt;params&gt;&lt;param&gt;&lt;value&gt;&lt;i4&gt;3&lt;/i4&gt;&lt;/value&gt;&lt;/param&gt;
+&lt;param&gt;&lt;value&gt;&lt;i4&gt;4&lt;/i4&gt;&lt;/value&gt;&lt;/param&gt;&lt;/params&gt;&lt;/methodName&gt;\r\n&lt;/methodCall&gt;"</PRE>
+      <P>The main advantage of the LINQ approach is that XML fragments are now 
+      first-class values (as they should be!). Consequently, programs will not 
+      break if you accidentally inject an XML fragment from one document into 
+      another document, as was the case with the original XML DOM.</P>
+      <P>However, the LINQ approach succeeds in recovering the brevity of the F# 
+      combinators but also brings a serious disadvantage: the static type system 
+      is circumvented by unnecessarily upcasting to              
+      <CODE>obj</CODE> type (using the              <CODE>box</CODE> function in 
+      F#). This undermines reliability and even requires us to reinvent the      
+              <CODE>text</CODE> and              <CODE>element</CODE> 
+      constructors because undermining reliability is deliberately made 
+      difficult in F#.           </P>
+      <P>Consequently, applications that do not benefit from first-class XML 
+      fragments (e.g. because they only use a single document at a time) are 
+      better off using the original XML DOM with combinators rather than the new 
+      LINQ functionality.</P>
+      <H2>Implementing XML-RPC</H2>
+      <P>Previous F#.NET Journal articles have covered the use of combinators 
+      and, in particular, parser combinators. Unlike many conventional tools 
+      such as lexers based upon regular expressions, parser combinators do not 
+      require a specific form of input such as a stream of characters and, in 
+      fact, exactly the same techniques can be used to parse trees such as XML 
+      documents. This is precisely the foundation of the XML-RPC implementation 
+      described here.</P>
+      <P>Boundaries between programs such remote procedure calls cannot be 
+      statically type checked so there is always the possibility of a run-time 
+      type error. The following exception and helper function are used to handle 
+      this eventuality:</P>
+<PRE>&gt; open System.Xml;;
+&gt; exception RunTimeTypeError of string * string;;
+exception RunTimeTypeError of string * string
+&gt; let rtte name (doc, xml : #XmlNode) =
+    raise (RunTimeTypeError(name, xml.InnerXml));;
+val rtte : string -&gt; 'a * #XmlNode -&gt; 'c</PRE>
+      <P>Successful and unsuccessful calls could either be conveyed using a 
+      variant type or by raising an exception. We choose the exception-based 
+      approach because this saves the caller from having to check and unbox the 
+      return value in the common case of a successful remote procedure call. The 
+      following exception is used to represent a failed call:</P>
+<PRE>&gt; exception Fault of int * string;;
+exception Fault of int * string</PRE>
+      <P>Our functions for converting values to and from XML-RPC messages are 
+      encapsulated in the              <CODE>To</CODE> and              
+      <CODE>From</CODE> modules, respectively. The former looks like this:       
+          </P>
+<PRE>&gt; module To =
+    open Seq</PRE>
+<PRE>    let text string (doc : XmlDocument, parent : #XmlNode) =
+      let node = doc.CreateTextNode string
+      parent.AppendChild node |&gt; ignore</PRE>
+<PRE>    let element name children (doc : XmlDocument, parent : #XmlNode) =
+      let node = doc.CreateElement name
+      parent.AppendChild node |&gt; ignore
+      for child in children do
+        child (doc, node)
+    
+    let value v = element "value" [v]</PRE>
+<PRE>    let name v = element "name" [text v]</PRE>
+<PRE>    let array vs = value (element "array" [element "data" vs])
+    
+    let boolean b = value (element "boolean" [text (if b then "1" else "0")])</PRE>
+<PRE>    let datetime s = value (element "dateTime.iso8601" [text s])</PRE>
+<PRE>    let double x = value (element "double" [text (string_of_float x)])</PRE>
+<PRE>    let int n = value (element "i4" [text (string_of_int n)])</PRE>
+<PRE>    let string s = value (text s)</PRE>
+<PRE>    let methodCall name ps =
+      let doc = XmlDocument()
+      element "methodCall"
+        [element "methodName" [text name];
+         element "params" (map (fun p -&gt; element "param" [p]) ps)]
+        (doc, doc)
+      doc
+    
+    let structure fields =
+      value (element "struct" (map (fun (k, v) -&gt; element "member" [name k; v]) fields))
+    
+    let methodResponseSuccess param =
+      let doc = XmlDocument()
+      element "methodResponse" [element "params" [element "param" [param]]]
+        (doc, doc)
+      doc</PRE>
+<PRE>    let methodResponseFault code error =
+      let doc = XmlDocument()
+      element "methodResponse"
+        [element "fault" [structure ["faultCode", int code;
+                                     "faultString", text error]]]
+        (doc, doc)
+      doc
+module To : begin
+  val text : string -&gt; XmlDocument * #XmlNode -&gt; unit
+  val element :
+    string -&gt; #seq&lt;(XmlDocument * XmlElement -&gt; unit)&gt; -&gt; XmlDocument * #XmlNode
+    -&gt; unit
+  val value :
+    (XmlDocument * XmlElement -&gt; unit) -&gt; (XmlDocument * #XmlNode -&gt; unit)
+  val name : string -&gt; (XmlDocument * #XmlNode -&gt; unit)
+  val array :
+    #seq&lt;(XmlDocument * XmlElement -&gt; unit)&gt; -&gt; (XmlDocument * #XmlNode -&gt; unit)
+  val boolean : bool -&gt; (XmlDocument * #XmlNode -&gt; unit)
+  val datetime : string -&gt; (XmlDocument * #XmlNode -&gt; unit)
+  val double : float -&gt; (XmlDocument * #XmlNode -&gt; unit)
+  val int : int -&gt; (XmlDocument * #XmlNode -&gt; unit)
+  val string : string -&gt; (XmlDocument * #XmlNode -&gt; unit)
+  val methodCall :
+    string -&gt; #seq&lt;(XmlDocument * XmlElement -&gt; unit)&gt; -&gt; XmlDocument
+  val structure :
+    #seq&lt;string * (XmlDocument * XmlElement -&gt; unit)&gt; -&gt;
+    (XmlDocument * #XmlNode -&gt; unit)
+  val methodResponseSuccess : (XmlDocument * XmlElement -&gt; unit) -&gt; XmlDocument
+  val methodResponseFault : int -&gt; string -&gt; XmlDocument
+end</PRE>
+      <P>Note how the inferred types in the signature of this module are almost 
+      as long as the source code of the module itself. Combinator heavy code 
+      such as this really benefits enormously from type inference.</P>
+      <P>The              <CODE>text</CODE> and              
+      <CODE>element</CODE> combinators are used to construct XML just as before. 
+      The              <CODE>value</CODE> and              <CODE>name</CODE> 
+      combinators are auxiliary definitions used to wrap XML in elements that 
+      are common in XML-RPC.           </P>
+      <P>The              <CODE>array</CODE> ,              <CODE>boolean</CODE>
+       ,              <CODE>datetime</CODE> ,              <CODE>double</CODE> , 
+                   <CODE>int</CODE> and              <CODE>structure</CODE> 
+      combinators are all used to compose basic XML-RPC fragments for the 
+      different types handled by this protocol. The              
+      <CODE>methodCall</CODE> ,              <CODE>methodResponseSuccess</CODE> 
+      and              <CODE>methodResponseFailure</CODE> are used to construct 
+      the XML fragments representing remote procedure calls and their responses. 
+                </P>
+      <P>In all cases, the combinators follow the same basic design: parameters 
+      are passed first followed by the tuple that encapsulates the document and 
+      parent node. Such functions may then be composed by partially applying 
+      parameters to form new definitions that wait for an XML fragment to 
+      dissect. This is exactly the same approach used in conventional parser 
+      combinators for sequences.</P>
+      <P>The              <CODE>To.methodCall</CODE> combinator will be used by 
+      the client to build an XML-RPC message representing an entire remote 
+      procedure call. The first              <CODE>string</CODE> argument to 
+      this combinator is the name of the function to be invoked. The second 
+      argument, a list of XML-RPC message fragments, represents the arguments of 
+      the function being invoked. This combinator might be used as follows to 
+      invoke the              <CODE>reverse</CODE> function with the string      
+              <CODE>foo</CODE> :           </P>
+<PRE>&gt; fsi.AddPrinter(fun (xml : XmlDocument) -&gt; xml.InnerXml);;
+&gt; To.methodCall "reverse" [To.string "foo"];;
+val it : XmlDocument
+= &lt;methodCall&gt;&lt;methodName&gt;reverse&lt;/methodName&gt;&lt;params&gt;&lt;param&gt;&lt;value&gt;foo&lt;/value&gt;&lt;/param&gt;&lt;/params&gt;&lt;/methodCall&gt;</PRE>
+      <P>The              <CODE>XMLRPC.From</CODE> module is very similar but 
+      deconstructs XML rather than building it:           </P>
+<PRE>&gt; module From =
+    open Seq
+    
+    let id x = x
+    
+    let text f (doc : XmlDocument, xml : #XmlNode) =
+      f xml.InnerText
+    
+    let element ok f (doc : XmlDocument, xml : #XmlNode) =
+      if List.mem xml.LocalName ok then
+        f [ for child in xml.ChildNodes -&gt;
+              doc, child ]
+      else
+        rtte (hd ok) (doc, xml)
+    
+    let singleton ok f xml =
+      element ok (function [x] -&gt; f x | _ -&gt; rtte (hd ok) xml) xml
+    
+    let pair ok f1 f2 xml =
+      element ok (function [v1; v2] -&gt; f1 v1, f2 v2 | _ -&gt; rtte "pair" xml) xml
+    
+    let value f xml = singleton ["value"] f xml
+    
+    let name f xml = singleton ["name"] (text f) xml
+    
+    let array f = value (singleton ["array"] (element ["data"] (map f)))
+    
+    let boolean xml = value (singleton ["boolean"] (text ((=) "0"))) xml
+    
+    let datetime xml = value (singleton ["dateTime.iso8601"] (text id)) xml
+    
+    let double xml = value (singleton ["double"] (text float)) xml
+    
+    let int xml = value (singleton ["i4"; "int"] (text int)) xml
+    
+    let methodCall (doc : XmlDocument) =
+      pair ["methodCall"]
+        (singleton ["methodName"] (text id))
+        (element ["params"] (map (singleton ["param"] id)))
+        (doc, doc.FirstChild)
+    
+    let string xml =
+      try
+        value (singleton ["string"] (text id)) xml
+      with
+        | RunTimeTypeError _ -&gt;
+            value (text id) xml
+    
+    let structure =
+      singleton ["value"] (element ["struct"] (map (pair ["member"] (name id) id)))
+    
+    let success =
+      singleton ["methodResponse"]
+        (singleton ["params"] (singleton ["param"] id))
+    
+    let assoc elt seq = List.assoc elt (List.of_seq seq)
+    
+    let fault f =
+      let aux m =
+        Fault(int (assoc "faultCode" m), string (assoc "faultString" m)) in
+      singleton ["fault"] (fun xml -&gt; aux (structure xml))
+    
+    let methodResponse (doc : XmlDocument) =
+      let xml = doc, doc.FirstChild
+      try success xml with _ -&gt; raise (fault id xml);;
+module From : begin
+  val id : 'a -&gt; 'a
+  val text : (string -&gt; 'a) -&gt; XmlDocument * #XmlNode -&gt; 'a
+  val element :
+    string list -&gt; ((XmlDocument * XmlNode) list -&gt; 'a) -&gt;
+    XmlDocument * #XmlNode -&gt; 'a
+  val singleton :
+    string list -&gt; (XmlDocument * XmlNode -&gt; 'a) -&gt; XmlDocument * #XmlNode -&gt; 'a
+  val pair :
+    string list -&gt; (XmlDocument * XmlNode -&gt; 'a) -&gt;
+    (XmlDocument * XmlNode -&gt; 'b) -&gt; XmlDocument * #XmlNode -&gt; 'a * 'b
+  val value : (XmlDocument * XmlNode -&gt; 'a) -&gt; XmlDocument * #XmlNode -&gt; 'a
+  val name : (string -&gt; 'a) -&gt; XmlDocument * #XmlNode -&gt; 'a
+  val array :
+    (XmlDocument * XmlNode -&gt; 'a) -&gt; (XmlDocument * #XmlNode -&gt; seq&lt;'a&gt;)
+  val boolean : XmlDocument * #XmlNode -&gt; bool
+  val datetime : XmlDocument * #XmlNode -&gt; string
+  val double : XmlDocument * #XmlNode -&gt; float
+  val int : XmlDocument * #XmlNode -&gt; int
+  val methodCall : XmlDocument -&gt; string * seq&lt;XmlDocument * XmlNode&gt;
+  val string : XmlDocument * #XmlNode -&gt; string
+  val structure :
+    (XmlDocument * XmlNode -&gt; seq&lt;string * (XmlDocument * XmlNode)&gt;)
+  val success : (XmlDocument * XmlNode -&gt; XmlDocument * XmlNode)
+  val assoc : 'a -&gt; #seq&lt;'a * 'c&gt; -&gt; 'c
+  val fault : 'a -&gt; (XmlDocument * #XmlNode -&gt; exn)
+  val methodResponse : XmlDocument -&gt; XmlDocument * XmlNode
+end</PRE>
+      <P>The              <CODE>text</CODE> and              
+      <CODE>element</CODE> combinators play an analogous role to before: this 
+      time they are used to deconstruct XML nodes that are expected to be either 
+      text nodes or elements, respectively.           </P>
+      <P>The              <CODE>From.methodResponse</CODE> function detects 
+      faults being returned and throws and exception, allowing successful remote 
+      procedure calls to be handled with a minimum of fuss.           </P>
+      <P>The client and server can now be built on top of this XML-RPC protocol 
+      implementation.</P>
+      <H2>Implementing the client</H2>
+      <P>The XML-RPC client will use the              
+      <CODE>System.Net.WebRequest</CODE> class provided by the .NET framework to 
+      POST an HTTP request to an XML-RPM server.           </P>
+      <P>The following              <CODE>post</CODE> function uses the POST 
+      method over HTTP to send an XML request to a remote server and acquire the 
+      XML response that it returns:           </P>
+<PRE>&gt; open System;;
+&gt; open System.Net;;
+&gt; open System.Web;;
+&gt; open System.IO;;
+&gt; let post url (doc : XmlDocument) =
+    let req = WebRequest.Create(Uri url)
+    req.Method &lt;- "POST"
+    req.ContentType &lt;- "text/xml"
+    req.Timeout &lt;- 1000
+    let () =
+      use stream = req.GetRequestStream()
+      doc.Save stream
+    use resp = req.GetResponse()
+    use stream = resp.GetResponseStream()
+    let doc = XmlDocument()
+    doc.Load stream
+    doc;;
+val post : string -&gt; XmlDocument -&gt; XmlDocument</PRE>
+      <P>The following              <CODE>call</CODE> function uses our          
+          <CODE>To</CODE> module to construct a remote procedure call, posts the 
+      call to a remote server and treats the result using the given function:    
+             </P>
+<PRE>&gt; let call url k f args =
+    To.methodCall f args
+    |&gt; post url
+    |&gt; From.methodResponse
+    |&gt; k;;
+val call :
+  string -&gt; (XmlDocument * XmlNode -&gt; 'a) -&gt; string -&gt;
+  #seq&lt;(XmlDocument * XmlElement -&gt; unit)&gt; -&gt; 'a</PRE>
+      <P>We shall construct a server capable of handling requests for a simple   
+                 <CODE>add</CODE> function that may be invoked using the 
+      following function:           </P>
+<PRE>&gt; let add n m =
+    call "http://192.168.0.2:8086" From.int "add" [To.int n; To.int m];;
+val add : int -&gt; int -&gt; int</PRE>
+      <P>Note how little overhead is required to invoke this function even 
+      though it will be executed remotely. This is all thanks to functional 
+      programming.</P>
+      <H2>Implementing the server</H2>
+      <P>The XML-RPC server uses the              
+      <CODE>System.Net.HttpListener</CODE> class to wait for and handle incoming 
+      requests.           </P>
+      <P>This is easily done thanks to the powerful .NET libraries providing the 
+      HTTP protocol:</P>
+<PRE>&gt; let listener = new HttpListener();;
+val listener : HttpListener
+&gt; listener.Prefixes.Add "http://*:8086/";;
+val it : unit = ()
+&gt; listener.Start();;
+val it : unit = ()
+&gt; let rec handler() : unit =
+    let context = listener.GetContext()
+    let doc = XmlDocument()
+    let xml =
+      use stream = context.Request.InputStream
+      doc.Load stream
+    let name, args = From.methodCall doc
+    let doc =
+      match name, List.of_seq args with
+      | "add", [n; m] -&gt;
+          let n, m = From.int n, From.int m
+          printf "%d + %d\n" n m
+          To.methodResponseSuccess (To.int (n + m))
+      | _ -&gt; To.methodResponseFault 0 ""
+    let () =
+      use stream = context.Response.OutputStream
+      doc.Save stream
+    handler();;
+val handler : unit -&gt; unit
+&gt; handler();;</PRE>
+      <P>The              <CODE>handler</CODE> function calls              
+      <CODE>listener.GetContext()</CODE> to wait for the next request from a 
+      client, reads the request as XML, dissects the XML request into the name 
+      and arguments of the procedure being invoked, takes the appropriate 
+      action, returns an XML response to the client and (tail) calls itself to 
+      loop indefinitely.           </P>
+      <P>The final line starts the              <CODE>handler</CODE> function 
+      and, therefore, the server.           </P>
+      <H2>Building and running the client and server</H2>
+      <P>Both the client and server can be used interactively. Start the server 
+      in one interactive session first and then use another interactive session 
+      to run the client.</P>
+      <P>Entering the following into the client:</P>
+<PRE>&gt; add 3 4;;</PRE>
+      <P>causes the following to be printed by the server:</P>
+<PRE>&gt; handler();;
+3 + 4</PRE>
+      <P>before the client responds with the answer it was given:</P>
+<PRE>&gt; add 3 4;;
+val it : int = 7</PRE>
+      <H2>Static vs dynamic typing</H2>
+      <P>Many programs perform IO and even use remote procedure calls and all 
+      such programs are effectively dynamically typed at such boundaries. This 
+      requires the injection of run-time type tests that might fail and, in 
+      statically typed languages like F#, incurs overheads as values are 
+      converted into statically typed form.</P>
+      <P>As this example has shown, the dynamically typed values at boundaries 
+      are typically represented as strings but can also be represented as XML 
+      trees and, more specifically, as XML-RPC messages. Each stage of 
+      translation is a potential source of run-time error. Parsing the string 
+      into XML might fail. Parsing the XML into an XML-RPC message might fail. 
+      Finally, the contents of the XML-RPC message itself might not be of the 
+      expected form. However, it is always advisable to translate values into 
+      static types (e.g. from string, to XML, to XML-RPC, to a message 
+      representing an integer and, finally, to the native              
+      <CODE>int</CODE> type) as early as possible because this increases the 
+      area of code for which static typing is leveraged and will catch more bugs 
+      and improve reliability as a consequence.           </P>
+      <P>Tiny programs that are composed almost entirely of such boundary code 
+      really represent the worst case for static typing. However, it is 
+      interesting to note that variant types, pattern matching and parser 
+      combinators allow such code to be written in languages like F# with 
+      brevity approaching that of dynamically-typed languages like Python. 
+      Consider the Python code required to invoke a call on our XML-RPC 
+      server:</P>
+<PRE>$ python
+Python 2.4.5 (#2, Mar 11 2008, 23:38:15)
+[GCC 4.2.3 (Debian 4.2.3-2)] on linux2
+Type "help", "copyright", "credits" or "license" for more information.
+&gt;&gt;&gt; import xmlrpclib
+&gt;&gt;&gt; xmlrpclib.ServerProxy("http://192.168.0.2:8086").add(3, 4)
+7
+&gt;&gt;&gt;</PRE>
+      <P>and the equivalent F# code:</P>
+<PRE>&gt; call "http://192.168.0.2:8086" From.int "add" [To.int 3; To.int 4];;
+val it : int = 7</PRE>
+      <P>The inherent overhead is only the one call to              
+      <CODE>From.int</CODE> and two calls to              <CODE>To.int</CODE> 
+      calls. This is hardly significant in the face of the benefits of 
+      statically typing the remainder of a program that makes such remote 
+      procedure calls. Thus, F# is certainly a viable language for distributed 
+      concurrent programming.           </P>
+      <H2>Summary</H2>
+      <P>This article has developed a simple client-server pair that allow 
+      functions to be invoked on a remote server using the XML-RPC protocol for 
+      remote procedure calls. This has a variety of applications but, most 
+      importantly, such technology forms the foundation of modern web 
+      services.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Implementing%20XML-RPC%20clients%20and%20servers_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

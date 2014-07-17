@@ -1,0 +1,530 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0084)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/term_rewriting.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Language oriented programming: Term Rewriting</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Language oriented programming: Term 
+Rewriting</TITLE>     <LINK href="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Language oriented programming: Term Rewriting</H1>
+      <P>An interesting and powerful alternative to the conventional term-level 
+      interpreter is called term rewriting. Rather than reducing expressions 
+      down to values, term rewriting simply evaluates expressions by performing 
+      substitutions and the result of each substitution is another expression. 
+      This approach is particularly well suited to computer algebra systems such 
+      as Mathematica but is also an underappreciated alternative to 
+      dynamically-typed programming languages that can integrate useful features 
+      like pattern matching and make techniques like partial specialization far 
+      easier. This article describes how a simple term rewriter can be 
+      constructed in the F# programming language.</P>
+      <H2>Introduction</H2>
+      <P>The term-level interpreter described in a previous F#.NET Journal 
+      article was centered around a core              <CODE>eval</CODE> function 
+      that evaluates input expressions into output values with a signature 
+      similar to the following:           </P>
+<PRE>val eval : bindings -&gt; expr -&gt; value</PRE>
+      <P>where              <CODE>bindings</CODE> refers to a mapping from the 
+      name of each bound variable to its              <CODE>value</CODE> .       
+          </P>
+      <P>Term rewriting is closely related and centers around a core             
+       <CODE>rewrite</CODE> combinator that substitutes subexpressions for other 
+      expressions, with a signature similar to the following:           </P>
+<PRE>val rewrite : (expr -&gt; expr) -&gt; expr -&gt; expr</PRE>
+      <P>Note the following important features about this              
+      <CODE>rewrite</CODE> combinator:           </P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>value</CODE> type is now considered to be 
+        a special case of the                  <CODE>expr</CODE> type, e.g. 
+        closures are now represented by expressions such as                  
+        <CODE>Function[{x}, 2 x - 1]</CODE> in Mathematica.               </LI>
+        <LI>Bindings that map symbols representing variables onto corresponding 
+        values are now a special case of rewrite rules converting symbols into 
+        expressions.</LI></UL>
+      <P></P>
+      <P>The ability for rewriting to return (effectively unevaluated) 
+      expressions is precisely what makes term rewriting useful for applications 
+      like computer algebra. However, this idea is also closely related to 
+      functional programming because expressions can act like the body of a 
+      closure, allowing computations to be deferred and parameterized just like 
+      a functional language. The primary disadvantage of term rewriting is that 
+      it prohibits the sophisticated static type systems of languages like 
+      Haskell, OCaml and F#. However, interactive technical computing is an 
+      excellent example of an application domain where small programs are often 
+      very useful and static typing can be correspondingly less valuable.</P>
+      <P>This article describes some basic examples of term rewriting and, in 
+      particular, its application in computer algebra before developing an 
+      implementation of a very simple term-rewrite language.</P>
+      <H2>Basic implementation and examples</H2>
+      <P>The basic fixed-point              <CODE>rewrite</CODE> combinator 
+      keeps rewriting subexpressions from the leaves up until the result stops 
+      changing. Let us first consider this combinator in the context of the 
+      following variant type:           </P>
+<PRE># type expr =
+    | Int of int
+    | Symbol of string
+    | Function of expr * expr list;;</PRE>
+      <P>The              <CODE>rewrite</CODE> combinator may then be written:   
+              </P>
+<PRE># open List;;
+# let rec rewrite rule expr =
+    let expr' = match expr with
+      | Function(h, t) -&gt; rule (Function(rewrite rule h, map (rewrite rule) t))
+      | f -&gt; rule f in
+    if expr=expr' then expr else rewrite rule expr';;
+val rewrite : (expr -&gt; expr) -&gt; expr -&gt; expr = &lt;fun&gt;</PRE>
+      <P>This function rewrites all subexpressions before rewriting the current 
+      expression using the given rule. If rewriting alters the expression then 
+      the result is rewritten again, until the result stops changing (i.e. fixed 
+      point is reached).</P>
+      <P>In the interests of clarity, let us define some operators to help us 
+      build expressions:</P>
+<PRE># let ( +: ) f g = Function(Symbol "Plus", [f; g]);;
+val ( +: ) : expr -&gt; expr -&gt; expr = &lt;fun&gt;
+# let ( *: ) f g = Function(Symbol "Times", [f; g]);;
+val ( *: ) : expr -&gt; expr -&gt; expr = &lt;fun&gt;</PRE>
+      <P>and a pretty printer:</P>
+<PRE># open Format;;
+# let prec = function
+    | Int _ | Symbol _ -&gt; max_int
+    | Function(Symbol "Plus", _) -&gt; 0
+    | Function(Symbol "Times", _) -&gt; 1
+    | Function _ -&gt; 2;;
+val prec : expr -&gt; int = &lt;fun&gt;
+# let rec print_expr ff = function
+    | Int n -&gt; fprintf ff "%d" n
+    | Symbol v -&gt; fprintf ff "%s" v
+    | Function(Symbol "Plus", es) as f -&gt; print_exprs (prec f) " + " ff es
+    | Function(Symbol "Times", es) as f -&gt; print_exprs (prec f) " " ff es
+    | Function(h, t) -&gt;
+        fprintf ff "%a[%a]" (print_exprs max_int "") [h] (print_exprs max_int ", ") t
+  and print_exprs p sep ff = function
+    | [] -&gt; fprintf ff ""
+    | [f] when prec f &lt; p -&gt; fprintf ff "(%a)" print_expr f
+    | [f] -&gt; fprintf ff "%a" print_expr f
+    | f::fs when prec f &lt; p -&gt; fprintf ff "(%a)%s%a" print_expr f sep (print_exprs p sep) fs
+    | f::fs -&gt; fprintf ff "%a%s%a" print_expr f sep (print_exprs p sep) fs;;
+val print_expr : Format.formatter -&gt; expr -&gt; unit = &lt;fun&gt;
+val print_exprs : int -&gt; string -&gt; Format.formatter -&gt; expr list -&gt; unit =
+  &lt;fun&gt;
+# #install_printer print_expr;;</PRE>
+      <P>For example:</P>
+<PRE># let x = Symbol "x" and a = Symbol "a" and b = Symbol "b" and c = Symbol "c";;
+val x : expr = x
+val a : expr = a
+val b : expr = b
+val c : expr = c
+# let poly = a *: x *: x +: b *: x +: c;;
+val poly : expr = a x x + b x + c</PRE>
+      <P>This allows symbolic expressions to be pretty printed taking account of 
+      operator precedence (but not associativity) when bracketing.</P>
+      <H2>Expanding products</H2>
+      <P>As a simple example, consider the following rule that expands out 
+      products of additions:</P>
+<PRE># let expand = function
+    | Function(Symbol "Times", [f; Function(Symbol "Plus", [g; h])])
+    | Function(Symbol "Times", [Function(Symbol "Plus", [g; h]); f]) -&gt;
+        f *: g +: f *: h
+    | f -&gt; f;;
+val expand : expr -&gt; expr = &lt;fun&gt;</PRE>
+      <P>We can use this              <CODE>expand</CODE> function in conjuction 
+      with the              <CODE>rewrite</CODE> combinator to expand out some 
+      non-trivial expressions:           </P>
+<PRE># rewrite expand (poly *: poly);;
+- : expr =
+a x x a x x + a x x b x + a x x c + b x a x x + b x b x + b x c + c a x x + c b x + c c</PRE>
+      <P>Repeated term rewriting has allowed this simple              
+      <CODE>expand</CODE> rule to expand out a non-trivial product of two 
+      quadratics giving the sum of the products of all pairs of terms from each 
+      of the polynomials. This example elucidates the applicability of this 
+      method to computer algebra.           </P>
+      <H2>Improvements</H2>
+      <P>The above implementation of term rewriting uses F#'s built-in 
+      polymorphic equality to rewrite to fixed point. This has several 
+      problems:</P>
+      <P>
+      <UL>
+        <LI>Quadratic complexity in the number of subexpressions because the 
+        last application (that detects an unaltered expression) traverses the 
+        entire expression and this is done at every node of the expression.</LI>
+        <LI>Polymorphic equality detects structural equality and fails to take 
+        into account the commutativity of the                  <CODE>Plus</CODE> 
+        and                  <CODE>Times</CODE> operators.               </LI>
+        <LI>Bad style because subsequent developments of the                  
+        <CODE>expr</CODE> data structure (such as adding a lazily evaluated set 
+        of the symbols used in each expression) might require a custom equality 
+        function, rendering all existing applications of polymorphic equality to 
+        the                  <CODE>expr</CODE> type incorrect without warning.   
+                    </LI></UL>
+      <P></P>
+      <P>We can use the following              <CODE>time</CODE> combinator to 
+      benchmark the previous implementation and see how much we can improve upon 
+      it:           </P>
+<PRE># let time f x =
+    let t = Sys.time() in
+    let f_x = f x in
+    printf "Took %fs\n%!" (Sys.time() -. t);
+    f_x;;
+val time : ('a -&gt; 'b) -&gt; 'a -&gt; 'b = &lt;fun&gt;
+# let e1 = time (rewrite expand) (poly *: poly *: poly *: poly *: poly *: poly *: poly);;
+Took 6.316395s
+...</PRE>
+      <P>The improvements required to the previous design to make it more useful 
+      boil down to being able to efficiently detect when no rewrites have 
+      occured and handling the comparison of expressions more flexibly.</P>
+      <H2>Detecting unaltered expressions</H2>
+      <P>Physical (or              <I>reference</I> ) equality is ideal for the 
+      detection of unaltered results. We simply add the requirement that rewrite 
+      rules must return their input directly as their output whenever they do 
+      nothing. This might sound trivial but, in fact, we have already violated 
+      this within our              <CODE>rewrite</CODE> combinator:           
+      </P>
+<PRE>| Function(h, t) -&gt; rule (Function(rewrite rule h, map (rewrite rule) t))</PRE>
+      <P>This line always constructs new output regardless of whether or not the 
+      rewrites had any effect. Handling this with out new semantics requires 
+      more care.</P>
+      <P>We begin by writing a new variant of the existing higher-order          
+          <CODE>map</CODE> function that is careful to return its input directly 
+      whenever it is unaltered:           </P>
+<PRE># let rec map_id f = function
+    | [] -&gt; []
+    | h::t as list -&gt;
+        let h' = f h and t' = map_id f t in
+        if h==h' &amp;&amp; t==t' then list else h'::t';;
+val map_id : ('a -&gt; 'a) -&gt; 'a list -&gt; 'a list = &lt;fun&gt;</PRE>
+      <P>Note how this function has a slightly different signature to the 
+      conventional              <CODE>map</CODE> function because the argument 
+      and return types must be the same in this case (which is not true of a 
+      normal              <CODE>map</CODE> function).           </P>
+      <P>Unlike the conventional              <CODE>map</CODE> function, this 
+      function can now return physically identical results when the function     
+               <CODE>f</CODE> returns physically identical results:           
+      </P>
+<PRE># let list = [1; 2; 3];;
+val list : int list = [1; 2; 3]
+# list == map (fun x -&gt; x) list;;
+- : bool = false
+# list == map_id (fun x -&gt; x) list;;
+- : bool = true</PRE>
+      <P>Working this              <CODE>map_id</CODE> function into our         
+           <CODE>rewrite</CODE> combinator we get:           </P>
+<PRE># let rec rewrite rule expr =
+    let expr' = match expr with
+      | Function(h, t) as f -&gt;
+          let h' = rewrite rule h and t' = map_id (rewrite rule) t in
+          rule (if h==h' &amp;&amp; t==t' then f else Function(h', t'))
+      | f -&gt; rule f in
+    if expr==expr' then expr else rewrite rule expr';;
+val rewrite : (expr -&gt; expr) -&gt; expr -&gt; expr = &lt;fun&gt;</PRE>
+      <P>This obtains the same result in half the time on our benchmark:</P>
+<PRE># let e2 = time (rewrite expand) (poly *: poly *: poly *: poly *: poly *: poly *: poly);;
+Took 3.132196s
+...
+# e1=e2;;
+- : bool = true</PRE>
+      <P>In general, this implementation is asymptotically faster.</P>
+      <H3>Encapsulating a better internal representation</H3>
+      <P>Although we cannot prevent users from erroneously applying the built-in 
+      polymorphic equality, comparison and hashing functions to our              
+      <CODE>expr</CODE> type we can ensure that the type constructors are only 
+      used to destructure expressions and not to construct them. Restricting the 
+      construction of expressions allows us to ensure that they are constructed 
+      according to our requirements and this, in turn, allows us to improve the 
+      internal representation of expressions and ensure that expressions 
+      violating our constraints cannot be constructed externally.           </P>
+      <P>In this case, the commutativity of addition and multiplication 
+      naturally lead us to a sorted representation for these two operators. 
+      Moreover, we can right-rotate sums and products to ensure that these 
+      operators appear to be left associative. This is best done by altering our 
+      existing construction operators              <CODE>+:</CODE> and           
+         <CODE>*:</CODE> . The constructors can be contained inside an           
+         <CODE>Expr</CODE> module that only exposes the variant type as a 
+      private type:           </P>
+<PRE># module Expr : sig
+    type t = private
+      | Int of int
+      | Symbol of string
+      | Function of t * t list</PRE>
+<PRE>    val compare : t -&gt; t -&gt; int
+    val int : int -&gt; t
+    val symbol : string -&gt; t
+    val sum : t list -&gt; t
+    val product : t list -&gt; t
+    val ( +: ) : t -&gt; t -&gt; t
+    val ( *: ) : t -&gt; t -&gt; t
+    val func : t * t list -&gt; t
+    val print_expr : Format.formatter -&gt; t -&gt; unit
+  end = struct
+    type t =
+      | Int of int
+      | Symbol of string
+      | Function of t * t list
+    
+    let rec compare f g = match f, g with
+      | Int n, Int m -&gt; Pervasives.compare n m
+      | Symbol a, Symbol b -&gt; String.compare a b
+      | Function(h1, t1), Function(h2, t2) -&gt; compares h1 h2 t1 t2
+      | f, g -&gt; Pervasives.compare f g
+    and compares h1 h2 t1 t2 =
+      let c = compare h1 h2 in
+      if c&lt;&gt;0 then c else match t1, t2 with
+        | [], [] -&gt; 0
+        | h1::t1, h2::t2 -&gt; compares h1 h2 t1 t2
+        | [], _::_ -&gt; -1
+        | _::_, [] -&gt; 1</PRE>
+<PRE>    let int n = Int n
+    let symbol s = Symbol s</PRE>
+<PRE>    let rec flatten h' = function
+      | [] -&gt; []
+      | Function(Symbol h, fs)::gs when String.compare h h'=0 -&gt;
+          flatten h (fs @ gs)
+      | h::ts -&gt; h::flatten h' ts</PRE>
+<PRE>    let sum fs =
+      let rec reduce = function
+        | Int 0 :: t -&gt; reduce t
+        | Int n :: Int m :: t -&gt; reduce(Int(n + m) :: t)
+        | f :: fs -&gt; f :: reduce fs
+        | [] -&gt; [] in
+      match reduce(sort compare (flatten "Plus" fs)) with
+      | [] -&gt; int 0
+      | [f] -&gt; f
+      | fs -&gt; Function(Symbol "Plus", fs)</PRE>
+<PRE>    let product fs =
+      let rec reduce = function
+        | Int 0 :: _ -&gt; [int 0]
+        | Int 1 :: t -&gt; reduce t
+        | Int n :: Int m :: t -&gt; reduce(Int(n * m) :: t)
+        | f :: fs -&gt; f :: reduce fs
+        | [] -&gt; [] in
+      match reduce(sort compare (flatten "Times" fs)) with
+      | [] -&gt; int 1
+      | [f] -&gt; f
+      | fs -&gt; Function(Symbol "Times", fs)</PRE>
+<PRE>    let rec ( +: ) f g = sum [f; g]</PRE>
+<PRE>    let rec ( *: ) f g = product [f; g]</PRE>
+<PRE>    let func = function
+      | Symbol "Plus", fs -&gt; sum fs
+      | Symbol "Times", fs -&gt; product fs
+      | h, t -&gt; Function(h, t)</PRE>
+<PRE>    open Format
+  
+    let prec = function
+      | Int _ | Symbol _ -&gt; max_int
+      | Function(Symbol "Plus", _) -&gt; 0
+      | Function(Symbol "Times", _) -&gt; 1
+      | Function _ -&gt; 2
+  
+    let rec print_expr ff = function
+      | Int n -&gt; fprintf ff "%d" n
+      | Symbol v -&gt; fprintf ff "%s" v
+      | Function(Symbol "Plus", es) as f -&gt; print_exprs (prec f) " + " ff es
+      | Function(Symbol "Times", es) as f -&gt; print_exprs (prec f) " " ff es
+      | Function(h, t) -&gt;
+	  fprintf ff "%a[%a]" (print_exprs max_int "") [h] (print_exprs max_int ", ") t
+    and print_exprs p sep ff = function
+      | [] -&gt; fprintf ff ""
+      | [f] when prec f &lt; p -&gt; fprintf ff "(%a)" print_expr f
+      | [f] -&gt; fprintf ff "%a" print_expr f
+      | f::fs when prec f &lt; p -&gt; fprintf ff "(%a)%s%a" print_expr f sep (print_exprs p sep) fs
+      | f::fs -&gt; fprintf ff "%a%s%a" print_expr f sep (print_exprs p sep) fs
+  end;;
+module Expr :
+  sig
+    type t = private Int of int | Symbol of string | Function of t * t list
+    val compare : t -&gt; t -&gt; int
+    val int : int -&gt; t
+    val symbol : string -&gt; t
+    val sum : t list -&gt; t
+    val product : t list -&gt; t
+    val ( +: ) : t -&gt; t -&gt; t
+    val ( *: ) : t -&gt; t -&gt; t
+    val func : t * t list -&gt; t
+    val print_expr : Format.formatter -&gt; t -&gt; unit
+  end</PRE>
+      <P>Note how the              <CODE>Expr.t</CODE> type is not private 
+      within the              <CODE>Expr</CODE> module but the signature of the 
+      module makes this type private outside the module. This restricts external 
+      construction of expressions to only those functions exposed by the 
+      interface of this module. These functions ensure that all terms and 
+      factors in sums and products, respectively, are kept sorted according to 
+      the total order provided by the              <CODE>Expr.compare</CODE> 
+      function.  Note also how the              <CODE>func</CODE> function 
+      automatically checks for the construction of sums and products, handling 
+      the case that appears inside the              <CODE>rewrite</CODE> 
+      function.           </P>
+      <P>We can open this              <CODE>Expr</CODE> module and install its 
+      pretty printer:           </P>
+<PRE># open Expr;;
+# #install_printer print_expr;;</PRE>
+      <P>and use the              <CODE>int</CODE> and              
+      <CODE>symbol</CODE> functions instead of the              <CODE>Int</CODE> 
+      and              <CODE>Symbol</CODE> type constructors:           </P>
+<PRE># int 3;;
+- : Expr.t = 3
+# symbol "x";;
+- : Expr.t = x</PRE>
+      <P>Note that the private type constructors cannot be used to construct 
+      expressions:</P>
+<PRE># Symbol "x";;
+Cannot create values of the private type expr</PRE>
+      <P>but constructed values can still be deconstructed by referring to the 
+      type constructors inside pattern matches:</P>
+<PRE># let rec expand = function
+    | Function(Symbol "Times", fs) as e -&gt;
+        (try expand_aux [] fs with Not_found -&gt; e)
+    | f -&gt; f
+  and expand_aux prods = function
+    | Function(Symbol "Plus", terms) :: prods2 -&gt;
+        let prods = prods @ prods2 in
+        sum (map (fun term -&gt; product (term :: prods)) terms)
+    | f::fs -&gt; expand_aux (f::prods) fs
+    | [] -&gt; raise Not_found;;
+val expand : Expr.t -&gt; Expr.t = &lt;fun&gt;
+val expand_aux : Expr.t list -&gt; Expr.t list -&gt; Expr.t = &lt;fun&gt;
+# expand (symbol "x" *: (int 1 +: symbol "x"));;
+- : Expr.t = x + x x</PRE>
+      <P>This equivalent of our previous              <CODE>expand</CODE> rule 
+      is careful to raise an exception in              <CODE>expand_aux</CODE> 
+      when a product cannot be expanded, in order to return the expression 
+      argument directly as the result rather than reconstructing it. This is 
+      necessary now that we are using physical equality to check for unaltered 
+      expressions.           </P>
+      <P>The              <CODE>sum</CODE> and              <CODE>product</CODE> 
+      functions or the              <CODE>+:</CODE> and              
+      <CODE>*:</CODE> operators can be used to construct sums and products as 
+      well as the              <CODE>func</CODE> function to construct           
+         <CODE>Function</CODE> nodes.           </P>
+      <P>Sums and products are now kept sorted and are automatically reduced by 
+      combining integer terms or factors:</P>
+<PRE># sum [int 3; symbol "x"; int 5; symbol "a"; int 1];;
+- : Expr.t = 9 + a + x</PRE>
+      <P>The              <CODE>rewrite</CODE> combinator must be redefined over 
+      this new type and altered to use the appropriate constructor function      
+              <CODE>func</CODE> rather than using the              
+      <CODE>Function</CODE> type constructor to construct a variant type 
+      directly:           </P>
+<PRE># let rec rewrite rule expr =
+    let expr' = match expr with
+      | Function(h, t) as f -&gt;
+          let h' = rewrite rule h and t' = map_id (rewrite rule) t in
+          rule (if h==h' &amp;&amp; t==t' then f else func(h', t'))
+      | f -&gt; rule f in
+    if expr==expr' then expr else rewrite rule expr';;
+val rewrite : (Expr.t -&gt; Expr.t) -&gt; Expr.t -&gt; Expr.t = &lt;fun&gt;</PRE>
+      <P>Repeating the polynomial benchmark we find that the result is now 
+      obtained even more quickly:</P>
+<PRE># let x = symbol "x" and a = symbol "a" and b = symbol "b" and c = symbol "c";;
+val x : Expr.t = x
+val a : Expr.t = a
+val b : Expr.t = b
+val c : Expr.t = c
+# let poly = a *: x *: x +: b *: x +: c;;
+val poly : Expr.t = c + b x + x a x
+# rewrite (function Symbol "x" -&gt; int 3 | f -&gt; f) poly;;
+- : Expr.t = c + 3 b + 9 a
+# let e3 = time (rewrite expand) (poly *: poly *: poly *: poly *: poly *: poly *: poly);;
+Took 1.024065s
+val e3 : Expr.t =
+  a a a a a a a x x x x x x x x x x x x x x + a a a a a a b x x x x x x x x x x x x x + a a a a a a b x x x
+x x x x x x x x x x + a a a a a a b x x x x x x x x x x x x x + a a a a a a b x x x x x x x x x x x x x + a
+a a a a a b x x x x x x x x x x x x x + a a a a a a b x x x x x x x x x x x x x + a a a a a a b x x x x x x
+...</PRE>
+      <P>Using the              <CODE>rewrite</CODE> combinator to substitute 
+      all of the free variables in this expression for integers correctly 
+      results in the expression being reduced to a single integer, 9             
+      <SUP>7</SUP> = 4,782,969 in this case:           </P>
+<PRE># let subs = function
+    | Symbol "x" -&gt; int 1
+    | Symbol "a" -&gt; int 2
+    | Symbol "b" -&gt; int 3
+    | Symbol "c" -&gt; int 4
+    | f -&gt; f;;
+val subs : Expr.t -&gt; Expr.t = &lt;fun&gt;
+# time (rewrite subs) e3;;
+Took 0.208014s
+- : Expr.t = 4782969</PRE>
+      <P>This illustrates how ordinary expression evaluation is a special case 
+      of term rewriting. The expression need not reduce down to a simple value. 
+      For example, we may wish to leave some variables unbound in order to 
+      obtain a symbolic result:</P>
+<PRE># let subs = function
+    | Symbol "x" -&gt; int 1
+    | Symbol "a" -&gt; int 2
+    | Symbol "b" -&gt; int 3
+    | f -&gt; f;;
+val subs : Expr.t -&gt; Expr.t = &lt;fun&gt;
+# time (rewrite subs) e3;;
+Took 0.276017s
+- : Expr.t =
+78125 + 2 c c c c c c + 2 c c c c c c + 2 c c c c c c + 2 c c c c c c + 2 c c c c c c + 2 c c c c c c + 2 c
+c c c c c + 3 c c c c c c + 3 c c c c c c + 3 c c c c c c + 3 c c c c c c + 3 c c c c c c + 3 c c c c c c +
+3 c c c c c c + 4 c c c c c + 4 c c c c c + 4 c c c c c + 4 c c c c c + 4 c c c c c + 4 c c c c c + 4 c c c
+...
+486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486
+c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c + 486 c +
+486 c + 486 c + 486 c + 486 c + 729 c + 729 c + 729 c + 729 c + 729 c + 729 c + 729 c + c c c c c c c</PRE>
+      <P>Note how the expressions are simpler but there is still room for more 
+      simplification. Specifically, subexpressions of the form              
+      <CODE>n x + m x</CODE> for integers              <CODE>n</CODE> and        
+            <CODE>m</CODE> are not factorized.           </P>
+      <H2>Summary</H2>
+      <P>The term rewriter implemented in this article has already demonstrated 
+      the fundamental properties of this approach to program interpretation. 
+      Rewrite rules can be used to represent conventional reductions from 
+      expressions down to primitive values and the ability to leave expressions 
+      unevaluated facilitates functional features. In the process of developing 
+      this simple implementation we have seen how private type constructors can 
+      be used to contain errors and improve program reliability.</P>
+      <P>Computer algebra systems are, of course, as complicated as you want to 
+      make them. The most sophisticated commercial packages contain standard 
+      libraries with tens of thousands of functions and their internals contain 
+      many more. The previous example has actually highlighted an obvious 
+      feature of this system that can be improved.</P>
+      <P>Future F#.NET Journal articles will persue this line of thinking and 
+      develop the simple term rewriter described here into a more sophisticated 
+      approach to program interpretation including parsing new rewrite languages 
+      that allow the built-in rules to be extended with new rules by the user. 
+      This can benefit from a variety of generally-applicable techniques such as 
+      parsing, hash consing, sophisticated data structures such as tries and 
+      even the implementation of a pattern matcher.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Language%20oriented%20programming%20Term%20Rewriting_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

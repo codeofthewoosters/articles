@@ -1,0 +1,174 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/concentration.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20game%20of%20concentration_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20game%20of%20concentration_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20game%20of%20concentration_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20game%20of%20concentration_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20game%20of%20concentration_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Game of Concentration</H1>
+      <P>Concentration is a popular game where the objective is to remember 
+      previously-seen cards when flipping over pairs in order to find matching 
+      pairs and remove them from the game until none remain. This article 
+      describes the design and implementation of a WPF application that 
+      implements the game of Concentration. In particular, a novel design is 
+      adopted that uses an asynchronous agent to handle user interface timeouts 
+      elegantly and a set of mutually recursive asynchronous workflows that 
+      implement the state machine of the game logic.</P>
+      <H2>Minimal implementation</H2>
+      <P>We begin by opening the <CODE>System.Windows</CODE> namespace once the 
+      WPF DLLs have been referenced:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows</CODE></P>
+      <P>We shall use an <CODE>n</CODE> by <CODE>m</CODE> grid of cards with the 
+      following values:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;m,&nbsp;n&nbsp;=&nbsp;4,&nbsp;6;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;n&nbsp;:&nbsp;int&nbsp;=&nbsp;6<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;m&nbsp;:&nbsp;int&nbsp;=&nbsp;4</CODE></P>
+      <P>An array <CODE>positions</CODE> enumerates all of the positions on the 
+      board:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;positions&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|for&nbsp;i&nbsp;in&nbsp;0..m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;0..n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;i,&nbsp;j|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;positions&nbsp;:&nbsp;(int&nbsp;*&nbsp;int)&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|(0,&nbsp;0);&nbsp;(0,&nbsp;1);&nbsp;(0,&nbsp;2);&nbsp;(0,&nbsp;3);&nbsp;(0,&nbsp;4);&nbsp;(0,&nbsp;5);&nbsp;(1,&nbsp;0);&nbsp;(1,&nbsp;1);&nbsp;(1,&nbsp;2);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(1,&nbsp;3);&nbsp;(1,&nbsp;4);&nbsp;(1,&nbsp;5);&nbsp;(2,&nbsp;0);&nbsp;(2,&nbsp;1);&nbsp;(2,&nbsp;2);&nbsp;(2,&nbsp;3);&nbsp;(2,&nbsp;4);&nbsp;(2,&nbsp;5);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(3,&nbsp;0);&nbsp;(3,&nbsp;1);&nbsp;(3,&nbsp;2);&nbsp;(3,&nbsp;3);&nbsp;(3,&nbsp;4);&nbsp;(3,&nbsp;5)|]</CODE></P>
+      <P>This will be used at several points in the remainer of the program.</P>
+      <P>The following <CODE>shuffle</CODE> reorders the elements of an array at 
+      random by sorting with random keys:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;shuffle&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.map&nbsp;(fun&nbsp;x&nbsp;-&gt;&nbsp;rand.Next(),&nbsp;x)&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.sort<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.map&nbsp;snd;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;shuffle&nbsp;:&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;'a&nbsp;[]&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>The program uses an asynchronous workflow to handle the game logic. 
+      This workflow only handles a single kind of message in this case but we 
+      define it as a union type in the interests of clarity:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;message&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Clicked&nbsp;of&nbsp;int&nbsp;*&nbsp;int;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;message&nbsp;=&nbsp;|&nbsp;Clicked&nbsp;of&nbsp;int&nbsp;*&nbsp;int</CODE></P>
+      <P>The following <CODE>init</CODE> function shuffles the positions of the 
+      board and fills in two at a time with the same card:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;init&nbsp;(card:&nbsp;string&nbsp;[,])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ps&nbsp;=&nbsp;shuffle&nbsp;positions<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;0..m*n/2-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(i0,&nbsp;j0),&nbsp;(i1,&nbsp;j1)&nbsp;=&nbsp;ps.[2*i],&nbsp;ps.[2*i+1]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;shape&nbsp;=&nbsp;string(char(int&nbsp;'ã‚'&nbsp;+&nbsp;2*i))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;card.[i0,&nbsp;j0]&nbsp;&lt;-&nbsp;shape<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;card.[i1,&nbsp;j1]&nbsp;&lt;-&nbsp;shape;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;init&nbsp;:&nbsp;string&nbsp;[,]&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>In the interests of simplicity, we have generated cards containing 
+      single glyphs from the Japanese language. The use of unfamiliar figures 
+      makes the game significantly harder. Vector graphics could be generated at 
+      random, or perhaps some beautiful mathematical visualizations, but 
+      unfamiliar alphabets are just as good.</P>
+      <P>The brain of this program appears in the following definition of the 
+      agent that is responsible for the game logic:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;brain&nbsp;runUI&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;MailboxProcessor&lt;_&gt;(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;flip&nbsp;(i,&nbsp;j)&nbsp;k&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;runUI&nbsp;(fun&nbsp;(card:&nbsp;_&nbsp;[,])&nbsp;(button:&nbsp;Controls.Button&nbsp;[,])&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Content&nbsp;&lt;-&nbsp;card.[i,&nbsp;j])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;k(i,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;idle()&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;(Clicked(i,&nbsp;j))&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;flip&nbsp;(i,&nbsp;j)&nbsp;flipped<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;flipped(i0,&nbsp;j0)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;(Clicked(i,&nbsp;j))&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;flip&nbsp;(i,&nbsp;j)&nbsp;(highlighting&nbsp;(i0,&nbsp;j0))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;highlighting&nbsp;(i0,&nbsp;j0)&nbsp;(i1,&nbsp;j1)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.TryReceive&nbsp;1000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;runUI&nbsp;(fun&nbsp;(card:&nbsp;_&nbsp;[,])&nbsp;(button:&nbsp;Controls.Button&nbsp;[,])&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;[i0,&nbsp;j0;&nbsp;i1,&nbsp;j1]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Content&nbsp;&lt;-&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;card.[i0,&nbsp;j0]&nbsp;=&nbsp;card.[i1,&nbsp;j1]&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;[i0,&nbsp;j0;&nbsp;i1,&nbsp;j1]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].IsEnabled&nbsp;&lt;-&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;positions&nbsp;|&gt;&nbsp;Array.forall&nbsp;(fun&nbsp;(i,&nbsp;j)&nbsp;-&gt;&nbsp;not&nbsp;button.[i,&nbsp;j].IsEnabled)&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;init&nbsp;card<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;positions&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Content&nbsp;&lt;-&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].IsEnabled&nbsp;&lt;-&nbsp;true)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(Clicked(i,&nbsp;j))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;flip&nbsp;(i,&nbsp;j)&nbsp;flipped<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;idle()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idle());;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;agent&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((unit&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;[,]&nbsp;-&gt;&nbsp;Controls.Button&nbsp;[,]&nbsp;-&gt;&nbsp;MailboxProcessor&lt;message&gt;</CODE></P>
+      <P>The purpose of this <CODE>brain</CODE> is to accept messages sent from 
+      the UI thread, process them according to the current state and to send 
+      instructions back to the UI thread. The UI thread posts messages to this 
+      <CODE>agent</CODE> whenever the user interacts with the program via the 
+      GUI. The <CODE>brain</CODE> is always in one of three states: 
+      <CODE>idle</CODE>, <CODE>flipped</CODE> or <CODE>highlighting</CODE>. The 
+      <CODE>idle</CODE> state is used when all cards are face down. The 
+      <CODE>flipped</CODE> state is used when the first of a pair of cards is 
+      face up. The <CODE>highlighting</CODE> state is a transient state used 
+      when two cards are face up.</P>
+      <P>One striking feature of this definition is the unusual structure of the 
+      asynchronous workflows within it. Instead of the usual recursive function 
+      recycling state we have a suite of mutually-recursive functions that tail 
+      call each other. Consequently, the state of the workflow is implicit 
+      rather than explicit. There is no definition of a <CODE>state</CODE> type 
+      and no <CODE>state</CODE> value being carried around. The state is 
+      effectively which of the <CODE>Receive</CODE> or <CODE>TryReceive</CODE> 
+      calls the workflow is waiting at and its environment, most notably the 
+      arguments that were passed in to the function it is in.</P>
+      <P>This unusual design is quite enlightening when considered more 
+      generally. An important part of the state of a program is the current 
+      value of the program counter, the register that points at the next 
+      instruction to be executed. Therefore, the conventional approach of 
+      encoding the states of a state machine in a union type or class hierarchy 
+      is actually a way of emulating a program counter. Furthermore, using that 
+      value to dispatch control flow to the appropriate logic is effective 
+      writing an interpreter for a language using that state to convey the 
+      program counter. The union cases of the state are nothing more than labels 
+      to be used as the targets of branches/jumps. Like all emulators, this is 
+      more complicated and less efficient than simply using the real thing. Our 
+      approach here does exactly this, by branching directly from the end of one 
+      workflow to the beginning of the next using a tail call. This is both 
+      simpler and more efficient than the traditional solution.</P>
+      <P>Another interesting aspect of this definition, and our motivation for 
+      using a <CODE>MailboxProcessor</CODE>, is the use of <CODE>Receive</CODE> 
+      in the <CODE>idle</CODE> and <CODE>flipped</CODE> states but 
+      <CODE>TryReceive</CODE> with a timeout in the <CODE>highlighting</CODE> 
+      state. This is an elegant solution to the problem of handling the case 
+      where two cards are face up and will be put face down again if either the 
+      user clicks on a card or does not interact within a timeout. This is used 
+      to highlight the two cards that have been selected. Agents already exactly 
+      the required functionality. The conventional solution in C# is to register 
+      and initiate a timer to trigger the event but cancel the timer if the user 
+      interacts in the meantime, which is comparatively tricky due to 
+      non-determinism and concurrency.</P>
+      <P>Finally, the <CODE>brain</CODE> instructs the UI thread to update the 
+      interface by passing a closure to the given <CODE>runUI</CODE> function. 
+      As we shall see, <CODE>runUI</CODE> is a simple wrapper around the usual 
+      WPF thread dispatcher.</P>
+      <P>The main program creates and initializes the cards, creates the 
+      <CODE>Button</CODE> controls for the cards and a <CODE>Grid</CODE> control 
+      to put them in, fires up the agent and registers callbacks on the 
+      <CODE>Click</CODE> event of each button that post a <CODE>Clicked</CODE> 
+      message to the agent.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;card&nbsp;=&nbsp;Array2D.init&nbsp;m&nbsp;n&nbsp;(fun&nbsp;_&nbsp;_&nbsp;-&gt;&nbsp;"")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;init&nbsp;card<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;button&nbsp;=&nbsp;Array2D.init&nbsp;m&nbsp;n&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;Controls.Button(Width=24.0,&nbsp;Height=24.0))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..m&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ColumnDefinition()&nbsp;|&gt;&nbsp;grid.ColumnDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;runUI&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Dispatcher.BeginInvoke(System.Func&lt;unit,&nbsp;unit&gt;(fun&nbsp;()&nbsp;-&gt;&nbsp;f&nbsp;card&nbsp;button),&nbsp;[|box()|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;brain&nbsp;=&nbsp;brain&nbsp;runUI<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;brain.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array2D.iteri&nbsp;(fun&nbsp;i&nbsp;j&nbsp;c&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(c,&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(c,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;c&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.Click.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;brain.Post(Clicked(i,&nbsp;j))))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=Controls.Viewbox(Child=grid,&nbsp;Stretch=Media.Stretch.Uniform)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <P>Remarkably, this completes a minimal implementation of the game of 
+      concentration, complete with GUI, in F#! However, there is room for 
+      improvement in our software engineering.</P>
+      <H2>Separating GUI and logic</H2>
+      <P>More complicated applications will benefit from separation of the GUI 
+      code from the logic code. The <CODE>brain</CODE> currently includes GUI 
+      code in its calls to the <CODE>runUI</CODE> function.</P>
+      <P>This is most elegantly accomplished by introducing more message 
+      passing, this time from the agent back to the UI thread. We begin by 
+      defining an <CODE>instruction</CODE> union type than enumerates the kinds 
+      of instructions that the brain can send back to the UI:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;instruction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Flip&nbsp;of&nbsp;int&nbsp;*&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Replace&nbsp;of&nbsp;(int&nbsp;*&nbsp;int)&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)</CODE></P>
+      <P>The <CODE>brain</CODE> may now be rewritten to post instructions for 
+      execution to a given <CODE>execute</CODE> function that is responsible for 
+      having the appropriate code evaluated on the UI thread:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;brain&nbsp;execute&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;MailboxProcessor&lt;_&gt;(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;idle()&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;(Clicked(i,&nbsp;j))&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;execute&nbsp;&lt;|&nbsp;Flip&nbsp;(i,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;flipped&nbsp;(i,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;flipped(i0,&nbsp;j0)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;(Clicked(i,&nbsp;j))&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;execute&nbsp;&lt;|&nbsp;Flip&nbsp;(i,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;highlighting&nbsp;(i0,&nbsp;j0)&nbsp;(i,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;highlighting&nbsp;(i0,&nbsp;j0)&nbsp;(i1,&nbsp;j1)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.TryReceive&nbsp;1000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;execute&nbsp;&lt;|&nbsp;Replace&nbsp;((i0,&nbsp;j0),&nbsp;(i1,&nbsp;j1))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(Clicked(i,&nbsp;j))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;execute&nbsp;&lt;|&nbsp;Flip&nbsp;(i,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;flipped&nbsp;(i,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;idle()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;idle())</CODE></P>
+      <P>The GUI code that was in the <CODE>brain</CODE> may now be moved into 
+      an entirely separate function that processes messages of the type 
+      <CODE>instruction</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;execute&nbsp;(card:&nbsp;_&nbsp;[,])&nbsp;(button:&nbsp;Controls.Button&nbsp;[,])&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Flip(i,&nbsp;j)&nbsp;-&gt;&nbsp;button.[i,&nbsp;j].Content&nbsp;&lt;-&nbsp;card.[i,&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Replace((i0,&nbsp;j0),&nbsp;(i1,&nbsp;j1))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;[i0,&nbsp;j0;&nbsp;i1,&nbsp;j1]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Content&nbsp;&lt;-&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;card.[i0,&nbsp;j0]&nbsp;=&nbsp;card.[i1,&nbsp;j1]&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;[i0,&nbsp;j0;&nbsp;i1,&nbsp;j1]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].IsEnabled&nbsp;&lt;-&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;positions&nbsp;|&gt;&nbsp;Array.forall&nbsp;(fun&nbsp;(i,&nbsp;j)&nbsp;-&gt;&nbsp;not&nbsp;button.[i,&nbsp;j].IsEnabled)&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;init&nbsp;card<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;positions&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Content&nbsp;&lt;-&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].IsEnabled&nbsp;&lt;-&nbsp;true</CODE></P>
+      <P>Finally, the main program is altered to run our new 
+      <CODE>execute</CODE> function on the UI thread:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;card&nbsp;=&nbsp;Array2D.init&nbsp;m&nbsp;n&nbsp;(fun&nbsp;_&nbsp;_&nbsp;-&gt;&nbsp;"")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;init&nbsp;card<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;button&nbsp;=&nbsp;Array2D.init&nbsp;m&nbsp;n&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;Controls.Button(Width=24.0,&nbsp;Height=24.0))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..m&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ColumnDefinition()&nbsp;|&gt;&nbsp;grid.ColumnDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;execute&nbsp;instruction&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f()&nbsp;=&nbsp;execute&nbsp;card&nbsp;button&nbsp;instruction<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Dispatcher.BeginInvoke(System.Func&lt;unit,&nbsp;unit&gt;(f),&nbsp;[|box()|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;brain&nbsp;=&nbsp;brain&nbsp;execute<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;brain.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;positions&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;button.[i,&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(c,&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(c,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;c&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.Click.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;brain.Post(Clicked(i,&nbsp;j)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=Controls.Viewbox(Child=grid,&nbsp;Stretch=Media.Stretch.Uniform)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <P>This is now much closer to a production-quality solution and, at 88 
+      lines of code, is only slightly longer than the original.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of the 
+      Concentration game. The design leveraged the <CODE>MailboxProcessor</CODE> 
+      for agent-style concurrent programming to eliminate the complexity of 
+      concurrent programming. The state machine in the agent was also 
+      implemented in a novel way, using a suite of mutually recursive 
+      asynchronous workflows that tail call each other. Thanks to these 
+      approaches, the entire GUI applications weighs in at just 80 lines of F# 
+      code. Finally, the code was restructured to separate the game logic from 
+      the GUI code.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of game 
+      programming and concurrency.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20game%20of%20concentration_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

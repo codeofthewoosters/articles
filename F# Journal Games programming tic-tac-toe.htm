@@ -1,0 +1,364 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/tictactoe.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Games programming: tic-tac-toe</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Games programming: tic-tac-toe</TITLE>     <LINK 
+href="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/style.css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Games programming: tic-tac-toe</H1>
+      <P>The game tic-tac-toe, known as Noughts and Crosses in the UK, is one of 
+      the simplest popular board games. This article describes an F# program 
+      that uses artificial intelligence to provide an infallible computer 
+      player, Windows Presentation Foundation to provide a graphical user 
+      interface for the desktop and threading to maintain a fluid user 
+      experience as the computer thinks about its next move.</P>
+      <P>We begin by referencing the DLLs required to use WPF and              
+      <CODE>System.Func</CODE> :           </P>
+<PRE>&gt; #r "PresentationCore.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\PresentationCore.dll'</PRE>
+<PRE>&gt; #r "PresentationFramework.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\PresentationFramework.dll'</PRE>
+<PRE>&gt; #r "WindowsBase.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.0\WindowsBase.dll'</PRE>
+<PRE>&gt; #r "System.Core.dll";;
+--&gt; Referenced 'c:\Program Files\Reference Assemblies\Microsoft\
+Framework\v3.5\System.Core.dll'</PRE>
+      <P>The program will make heavy use of the following namespaces:</P>
+<PRE>&gt; open System.Windows;;
+&gt; open System.Windows.Threading;;
+&gt; open System.Threading;;</PRE>
+      <P>We begin with a simple union type containing the two different players 
+      in the game:</P>
+<PRE>&gt; type player = O | X;;
+type player =
+  | O
+  | X</PRE>
+      <P>We could have used a type to represent the state of a board position 
+      that included an              <CODE>Empty</CODE> union case but, instead, 
+      we shall represent the state of a board position using the              
+      <CODE>player option</CODE> type.           </P>
+      <P>The game AI requires the ability to determine the state of a board as 
+      either in-play, a draw (the board is full but nobody has won) and wins for 
+      O or X. In order to provide feedback, we shall keep the positions of the 
+      winning line in this union type:</P>
+<PRE>&gt; type state =
+    | Playing
+    | Draw
+    | OWins of (int * int) list
+    | XWins of (int * int) list;;
+type state =
+  | Playing
+  | Draw
+  | OWins of (int * int) list
+  | XWins of (int * int) list</PRE>
+      <P>Next, we require a function that, given a board, returns the state of 
+      the board as a value of this              <CODE>state</CODE> type:         
+        </P>
+<PRE>&gt; let checkBoard (board: player option [] []) =
+    let rec loop = function
+      | [] when Seq.forall (Seq.forall Option.isSome) board -&gt; Draw
+      | [] -&gt; Playing
+      | ps::pss -&gt;
+          match [for i, j in ps -&gt; board.[i].[j]] with
+          | [Some X; Some X; Some X] -&gt; XWins ps
+          | [Some O; Some O; Some O] -&gt; OWins ps
+          | _ -&gt; loop pss
+    loop
+      [ for i in 0..2 do
+          yield [i, 0; i, 1; i, 2]
+          yield [0, i; 1, i; 2, i]
+        yield [0, 0; 1, 1; 2, 2]
+        yield [0, 2; 1, 1; 2, 0] ];;
+val checkBoard : player option [] [] -&gt; state</PRE>
+      <P>This              <CODE>checkBoard</CODE> function is remarkably 
+      concise thanks to the use of sequence expressions to build a list of lines 
+      of board positions that win a game and a nested recursive              
+      <CODE>loop</CODE> function that uses pattern matching to test each line to 
+      see if either O or X has won.           </P>
+      <P>Note that the board is represented as an array of arrays, primarily 
+      because arrays implement the              <CODE>IEnumerable</CODE> 
+      interface (allowing us to use the              <CODE>Seq</CODE> module) 
+      whereas 2D arrays do not.           </P>
+      <P>The AI is essentially encapsulated in the following pair of 
+      mutually-recursive functions,              <CODE>minimax</CODE> and        
+            <CODE>best</CODE> , that score potential moves and accumulate the 
+      best move for the computer to make:           </P>
+<PRE>&gt; let rec minimax ((_, f as a), b) (board: _ [] []) =
+    match checkBoard board with
+    | OWins _ -&gt; 1
+    | Draw -&gt; 0
+    | XWins _ -&gt; -1
+    | Playing -&gt; best (a, b) board |&gt; f
+  and best ((player, _ as a), b) (board: _ [] []) =
+    [ for i in 0..2 do
+        for j in 0..2 do
+          if Option.isNone board.[i].[j] then
+            let board = Array.map Array.copy board
+            board.[i].[j] &lt;- Some player
+            yield minimax (b, a) board, (i, j) ];;
+val minimax :
+  (player * ((int * (int * int)) list -&gt; int)) *
+  (player * ((int * (int * int)) list -&gt; int)) -&gt; player option [] [] -&gt; int
+val best :
+  (player * ((int * (int * int)) list -&gt; int)) *
+  (player * ((int * (int * int)) list -&gt; int)) -&gt;
+    player option [] [] -&gt; (int * (int * int)) list</PRE>
+      <P>Note that the inferred types are substantial but type inference means 
+      that they do not clutter the source code.</P>
+      <P>The              <CODE>minimax</CODE> function checks the board state 
+      and gives base case scores for wins and draws or uses the              
+      <CODE>best</CODE> function to calculate the scores of possible moves if 
+      the game is still in play.           </P>
+      <P>The              <CODE>best</CODE> function uses a sequence expression 
+      to create a list of possible moves and their scores.           </P>
+      <P>The              <CODE>minimax</CODE> and              
+      <CODE>best</CODE> functions pass pairs of the player and a function        
+            <CODE>f</CODE> that is used to find the best move of a list of 
+      scored moves. In particular, the pairs              <CODE>a</CODE> and     
+               <CODE>b</CODE> are reversed in order to move one player after the 
+      other and chose good moves for whichever player is making the move (rather 
+      than having both players playing for O to win!). Note the use of named 
+      subpatterns:              <CODE>(_, f as a)</CODE> to bind the name        
+            <CODE>a</CODE> to the pair.           </P>
+      <P>The WPF              <CODE>Application</CODE> is required not only by 
+      the main GUI code in this program but also by the AI code in order for the 
+      computer to make a move (on the UI thread) when it has found its preferred 
+      move. There are several ways to share the required functionality but the 
+      most elegant is to have a single lazily evaluated global              
+      <CODE>Application</CODE> :           </P>
+<PRE>&gt; let application = lazy(Application());;
+val application : Lazy&lt;System.Windows.Application&gt; =
+  System.Windows.Application</PRE>
+      <P>This is lazily evaluated because it must be constructed on a thread 
+      running in Single Threaded Apartment (STA) mode. So the lazy thunk will 
+      have its evaluation forced first by the main function and then whenever it 
+      is needed to obtain a              <CODE>Dispatcher</CODE> in order to 
+      inject code into the message queue to be run on the UI thread.           
+      </P>
+      <P>Note that              <CODE>Lazy</CODE> automatically handles thread 
+      safety for use, ensuring that the              <CODE>Application</CODE> 
+      class will only ever be constructed once. Moreover, the implementation of 
+      the              <CODE>Lazy</CODE> type in the F# standard library uses 
+      non-blocking algorithms to ensure that subsequent reads are very fast.     
+            </P>
+      <P>The following              <CODE>runUI</CODE> function wraps the        
+            <CODE>Dispatcher</CODE> in order to make it as easy as possible to 
+      run arbitrary F# functions on the UI thread:           </P>
+<PRE>&gt; let runUI (f: _ -&gt; _) =
+    let f = System.Func&lt;_, _&gt;(f)
+    let priority = DispatcherPriority.Normal
+    application.Force().Dispatcher.BeginInvoke(priority, f, null)
+    |&gt; ignore;;
+val runUI : ('a -&gt; 'b) -&gt; unit</PRE>
+      <P>Note the elegant use of first-class functions here.</P>
+      <P>The logic has been written in idiomatic OCaml style with union types 
+      and pattern matching. However, the GUI part of the program is best written 
+      in object oriented style, by deriving a new              
+      <CODE>Board</CODE> class from the WPF              
+      <CODE>Controls.Grid</CODE> class and filling the grid with buttons that 
+      respond to user input:           </P>
+<PRE>&gt; type Board() as grid =
+    inherit Controls.Grid(Margin=Thickness 11.0)</PRE>
+      <P>The              <CODE>Board</CODE> contains a              
+      <CODE>player option array array</CODE> called              
+      <CODE>board</CODE> to store which player (if any) has played at each board 
+      position:           </P>
+<PRE>    let board : player option [] [] =
+      Array.init 3 (fun _ -&gt; Array.create 3 None)</PRE>
+      <P>And a              <CODE>Controls.Button [,]</CODE> called              
+      <CODE>button</CODE> that stores the UI buttons representing each board 
+      position:           </P>
+<PRE>    let button =
+      Array2D.init 3 3 (fun _ _ -&gt; Controls.Button())</PRE>
+      <P>More sophisticated programs might separate out              
+      <CODE>board</CODE> and              <CODE>buttons</CODE> as model and view 
+      in a design pattern but this program is sufficiently simple that it is not 
+      worth doing.           </P>
+      <P>Next, we shall use a              <CODE>glow</CODE> function to 
+      highlight a winning line (if any) and put up a dialog notifying the user 
+      of the state of play at the end of the game:           </P>
+<PRE>    let glow (str: string) ps =
+      let background = button.[0, 0].Background
+      for i, j in ps do
+        button.[i, j].Background &lt;- Media.Brushes.Salmon
+      let ok = MessageBoxButton.OK
+      let image = MessageBoxImage.Information
+      MessageBox.Show(str, "Tic Tac Toe", ok, image) |&gt; ignore
+      for i, j in ps do
+        button.[i, j].Background &lt;- background
+      grid.Clear()</PRE>
+      <P>Both the functions dealing with human and computer moves will require 
+      the ability to handle completed games in the same way (using the           
+         <CODE>glow</CODE> function) so this commonality is factored into a      
+              <CODE>check</CODE> function:           </P>
+<PRE>    let check k =
+      match checkBoard board with
+      | Draw -&gt; glow "Draw!" []
+      | OWins ps -&gt; glow "I win!" ps
+      | XWins ps -&gt; glow "You win!" ps
+      | Playing -&gt; k()</PRE>
+      <P>Note that the              <CODE>check</CODE> function has been written 
+      using a continuation              <CODE>k</CODE> so that the caller can 
+      specify the behaviour invoked when the board is found to be still in play. 
+                </P>
+      <P>The              <CODE>Board</CODE> class contains a mutable            
+        <CODE>turn</CODE> describing which player is expected to play next:      
+           </P>
+<PRE>    let mutable turn = X</PRE>
+      <P>Mutable values can be a nightmare in the context of multithreaded 
+      programs such as this one but, in this case, the              
+      <CODE>turn</CODE> variable will only ever be mutated by code running on 
+      the UI thread.           </P>
+      <P>The following              <CODE>computerMove</CODE> function uses the  
+                  <CODE>best</CODE> function to find the optimal move for the 
+      computer to play and then queues work on the message loop of the UI thread 
+      to play the computer's move, change              <CODE>turn</CODE> to the 
+      human player and check the board:           </P>
+<PRE>    let computerMove () =
+      let _, (i, j) =
+        best ((O, fst &lt;&lt; Seq.max), (X, fst &lt;&lt; Seq.min)) board |&gt; Seq.max
+      runUI(fun _ -&gt;
+        grid.[i, j] &lt;- Some O
+        turn &lt;- X
+        check (fun () -&gt; ()))</PRE>
+      <P>Similarly, the              <CODE>humanMove</CODE> function checks that 
+      the desired move is available, plays the move, changes              
+      <CODE>turn</CODE> to the computer player, checks the board and, if the 
+      game is still in play, starts searching for a computer move in the thread 
+      pool (while the UI thread is free to continue animating and responding to 
+      user input):           </P>
+<PRE>    let humanMove (i, j) =
+      match grid.[i,j] with
+      | Some(O | X) -&gt; ()
+      | None -&gt;
+          grid.[i,j] &lt;- Some X
+          turn &lt;- O
+          check (fun () -&gt;
+            ThreadPool.QueueUserWorkItem(fun _ -&gt; computerMove())
+            |&gt; ignore)</PRE>
+      <P>The construction of the              <CODE>Board</CODE> class occurs in 
+      a              <CODE>do</CODE> block and simply initializes the GUI 
+      elements including registering a callback for the              
+      <CODE>Click</CODE> event of each button that makes a move for the human if 
+      it is the human's turn:           </P>
+<PRE>    do
+      for i in 0..2 do
+        let column = Controls.ColumnDefinition()
+        column.Width &lt;- GridLength 30.0
+        grid.ColumnDefinitions.Add column
+        let row = Controls.RowDefinition()
+        row.Height &lt;- GridLength 30.0
+        grid.RowDefinitions.Add row
+        for j in 0..2 do
+          let button = button.[i, j]
+          Controls.Grid.SetRow(button, i)
+          Controls.Grid.SetColumn(button, j)
+          grid.Children.Add button |&gt; ignore
+          button.Click.Add(fun _ -&gt; if turn=X then humanMove (i, j))</PRE>
+      <P>Finally, the              <CODE>Board</CODE> class provides some 
+      helpful member functions. Indexing is used with a getter and setter to 
+      allow board positions to be read and set:           </P>
+<PRE>    member grid.Item
+      with get (i, j) = board.[i].[j]
+      and set (i, j) x =
+        board.[i].[j] &lt;- x
+        button.[i, j].Content &lt;-
+          match x with
+          | None -&gt; ""
+          | Some O -&gt; "O"
+          | Some X -&gt; "X"</PRE>
+      <P>Note that setting a board position not only sets an element of          
+          <CODE>board</CODE> but also sets the              <CODE>Content</CODE> 
+      of the appropriate              <CODE>Button</CODE> to a string.           
+      </P>
+      <P>A              <CODE>Clear</CODE> member is provided to clear the board 
+      and reset              <CODE>turn</CODE> to the human player:           
+      </P>
+<PRE>    member grid.Clear() =
+      for i in 0..2 do
+        for j in 0..2 do
+          grid.[i,j] &lt;- None
+      turn &lt;- X;;
+type Board =
+  class
+    inherit System.Windows.Controls.Grid
+    new : unit -&gt; Board
+    member Clear : unit -&gt; unit
+    member Item : i:int * j:int -&gt; player option with get
+    member Item : i:int * j:int -&gt; player option with set
+  end</PRE>
+      <P>The main program simply places the              <CODE>Board</CODE> in a 
+                   <CODE>Viewbox</CODE> in a              <CODE>Window</CODE> 
+      and runs the              <CODE>Application</CODE> :           </P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    let box = Controls.Viewbox(Child=Board())
+    Window(Title="Tic Tac Toe", Content=box)
+    |&gt; application.Force().Run
+    |&gt; ignore;;</PRE>
+      <H2>Results</H2>
+      <P>When run, the above program produces a GUI application that allows the 
+      user to move by clicking on board positions and makes computer moves 
+      automatically without blocking the UI thread, giving a fluid user 
+      experience:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/tictactoe.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has described a simple program to play the game 
+      tic-tac-toe including a computer player. The graphical user interface used 
+      Windows Presentation and, in particular, made use of its vector graphics 
+      capabilities. The time required to compute a move for the computer was 
+      significant enough that it was worth doing the computation in the thread 
+      pool to free the UI thread up and give the user a more fluid 
+      experience.</P>
+      <P>Future F#.NET Journal articles will revisit some of the topics covered 
+      in this article including artificial intelligence, asynchronous GUI 
+      programming and the creation of progressively more sophisticated computer 
+      games.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Games%20programming%20tic-tac-toe_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

@@ -1,0 +1,180 @@
+﻿<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0087)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/mpioverinfiniband.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=utf-8" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20MPI%20over%20infiniband_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20MPI%20over%20infiniband_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20MPI%20over%20infiniband_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20MPI%20over%20infiniband_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20MPI%20over%20infiniband_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Using MPI over Infiniband from F#</H1>
+      <P>Infiniband is a high-throughput low-latency communication fabric 
+      commonly used in supercomputers. This article describes how a standalone 
+      F# application can use the Intel MPI 4 library via PInvoke to send and 
+      receive messages over an Infiniband connection between two separate 
+      machines with latencies as low as 7µs.</P>
+      <H2>Introduction</H2>
+      <P>Mellanox Technologies sell Infiniband hardware. Whereas Ethernet 
+      typically achieves up to 10Gb/s throughtput with typical latencies around 
+      120µs for a single hop, Infiniband offers 40Gb/s throughput and 
+      microsecond latency. However, the microsecond latency figure is derived 
+      from benchmark code that uses the device driver directly and never reads 
+      the data, assuming that the data can be read instantaneously at the remote 
+      end. We shall endeavour to make more pragmatic measurements by timing how 
+      long it takes to send messages back and forth.</P>
+      <P>The Message Passing Interface (MPI) is the defacto-standard solution 
+      for parallel programming on supercomputers. MPI defines a C API that 
+      libraries like the Intel MPI library implement. With just six basic 
+      functions required for use, this interface is remarkably easy to use. 
+      However, there are many requirements placed on how this interface is used 
+      and some of these requirements conflict with idiomatic programming 
+      practice in F# and on .NET so we shall address these issues as well</P>
+      <H2>Low-level interface to Intel MPI</H2>
+      <P>As MPI defines only a C API and not an ABI it is not possible to write 
+      generic MPI bindings that would work with any MPI library. For example, 
+      the existing MPI.NET bindings are specifically for Microsoft's own MSMPI 
+      library and do not work with Intel MPI. Therefore, we begin by 
+      implementing a low-level interface to Intel MPI using PInvoke and the 
+      helper functions from the F# PowerPack.</P>
+      <P>Our low-level interface is encapsulated in the <CODE>Internal</CODE> 
+      module:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Internal&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Runtime.InteropServices<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MPI_Comm&nbsp;=&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MPI_Datatype&nbsp;=&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;MPI_COMM_WORLD&nbsp;:&nbsp;MPI_Comm&nbsp;=&nbsp;0x44000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MPI_Status&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;count&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;cancelled&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_SOURCE&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_TAG&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_ERROR&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(_)&nbsp;=&nbsp;{count=0;&nbsp;cancelled=0;&nbsp;MPI_SOURCE=0;&nbsp;MPI_TAG=0;&nbsp;MPI_ERROR=0}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;MPI_ANY_SOURCE&nbsp;=&nbsp;-2<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;MPI_BYTE&nbsp;=&nbsp;0x4c00010d<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;MPI_ANY_TAG&nbsp;=&nbsp;-1<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;DllImport(@"C:\Program&nbsp;Files&nbsp;(x86)\Intel\MPI\4.0.1.007\ia32\bin\impi.dll",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EntryPoint="MPI_Init")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;int&nbsp;initialize(int&nbsp;argc,&nbsp;int&nbsp;argv)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;DllImport(@"C:\Program&nbsp;Files&nbsp;(x86)\Intel\MPI\4.0.1.007\ia32\bin\impi.dll",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EntryPoint="MPI_Comm_rank")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;int&nbsp;rank(MPI_Comm&nbsp;c,&nbsp;int&nbsp;*rank)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;DllImport(@"C:\Program&nbsp;Files&nbsp;(x86)\Intel\MPI\4.0.1.007\ia32\bin\impi.dll",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EntryPoint="MPI_Comm_size")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;int&nbsp;size(MPI_Comm&nbsp;c,&nbsp;int&nbsp;*rank)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;DllImport(@"C:\Program&nbsp;Files&nbsp;(x86)\Intel\MPI\4.0.1.007\ia32\bin\impi.dll",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EntryPoint="MPI_Send")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;int&nbsp;send(byte&nbsp;*buf,&nbsp;int&nbsp;count,&nbsp;MPI_Datatype&nbsp;datatype,&nbsp;int&nbsp;dest,&nbsp;int&nbsp;tag,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MPI_Comm&nbsp;comm)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;DllImport(@"C:\Program&nbsp;Files&nbsp;(x86)\Intel\MPI\4.0.1.007\ia32\bin\impi.dll",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EntryPoint="MPI_Recv")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;int&nbsp;recv(byte&nbsp;*buf,&nbsp;int&nbsp;count,&nbsp;MPI_Datatype&nbsp;datatype,&nbsp;int&nbsp;source,&nbsp;int&nbsp;tag,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MPI_Comm&nbsp;comm,&nbsp;MPI_Status&nbsp;*status)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;DllImport(@"C:\Program&nbsp;Files&nbsp;(x86)\Intel\MPI\4.0.1.007\ia32\bin\impi.dll",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EntryPoint="MPI_Finalize")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;int&nbsp;finalize();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Internal&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MPI_Comm&nbsp;=&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MPI_Datatype&nbsp;=&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_COMM_WORLD&nbsp;:&nbsp;MPI_Comm&nbsp;=&nbsp;1140850688<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;MPI_Status&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;obj&nbsp;-&gt;&nbsp;MPI_Status<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;count:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;cancelled:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_SOURCE:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_TAG:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_ERROR:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_ANY_SOURCE&nbsp;:&nbsp;int&nbsp;=&nbsp;-2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_BYTE&nbsp;:&nbsp;int&nbsp;=&nbsp;1275068685<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;MPI_ANY_TAG&nbsp;:&nbsp;int&nbsp;=&nbsp;-1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;initialize&nbsp;:&nbsp;int&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;rank&nbsp;:&nbsp;MPI_Comm&nbsp;*&nbsp;nativeptr&lt;int&gt;&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;size&nbsp;:&nbsp;MPI_Comm&nbsp;*&nbsp;nativeptr&lt;int&gt;&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;send&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nativeptr&lt;byte&gt;&nbsp;*&nbsp;int&nbsp;*&nbsp;MPI_Datatype&nbsp;*&nbsp;int&nbsp;*&nbsp;int&nbsp;*&nbsp;MPI_Comm&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;recv&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nativeptr&lt;byte&gt;&nbsp;*&nbsp;int&nbsp;*&nbsp;MPI_Datatype&nbsp;*&nbsp;int&nbsp;*&nbsp;int&nbsp;*&nbsp;MPI_Comm&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nativeptr&lt;MPI_Status&gt;&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;finalize&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The <CODE>MPI_Comm</CODE>, <CODE>MPI_Datatype</CODE> and 
+      <CODE>MPI_Status</CODE> types mimic the types of the same names from the 
+      <CODE>mpi.h</CODE> header from the Intel MPI 4 library. The 
+      <CODE>MPI_Init</CODE>, <CODE>MPI_Comm_rank</CODE>, 
+      <CODE>MPI_Comm_size</CODE>, <CODE>MPI_Send</CODE>, <CODE>MPI_Recv</CODE> 
+      and <CODE>MPI_Finalize</CODE> functions from the C API are then bound to 
+      the <CODE>initialize</CODE>, <CODE>rank</CODE>, <CODE>size</CODE>, 
+      <CODE>send</CODE>, <CODE>receive</CODE> and <CODE>finalize</CODE> F# 
+      functions, respectively.</P>
+      <H2>Type-safe interface</H2>
+      <P>The low-level interface described above is a bit raw so it is 
+      productive to wrap that interface in a more usable high-level interface 
+      that deals with ordinary .NET arrays rather than native pointers.</P>
+      <P>The MPI functions return an <CODE>int</CODE> denoting an error code (or 
+      <CODE>0</CODE> in the absence of an error, at least in the case of the 
+      Intel MPI 4 library). Other return values must be allocated by the caller 
+      and are then mutated in-place by the MPI call. Therefore, we shall begin 
+      by defining an exception that will be raised in the event that any MPI 
+      call returns an error and a <CODE>check</CODE> function that will check 
+      the <CODE>int</CODE> return value and raise the exception is 
+necessary:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;exception&nbsp;MPIError&nbsp;of&nbsp;int;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;exception&nbsp;MPIError&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;check&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;n&nbsp;-&gt;&nbsp;raise(MPIError&nbsp;n);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;check&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>We may now wrap the <CODE>initialize</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;initialize&nbsp;=&nbsp;Internal.initialize(0,&nbsp;0)&nbsp;|&gt;&nbsp;check;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;initialize&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>The <CODE>MPI_Init</CODE> function accepts the conventional 
+      <CODE>argc</CODE> and <CODE>argv</CODE> arguments in order to convey the 
+      command-line arguments to the program and give MPI an opportunity to parse 
+      them. In this case, we pass <CODE>0</CODE> as both values to signify that 
+      there are no arguments.</P>
+      <P>The <CODE>rank</CODE> and <CODE>size</CODE> functions that give the 
+      identity of the current node within the group and the total number of 
+      nodes in the group may be written in terms of a single <CODE>get</CODE> 
+      function as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;get&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;[|Unchecked.defaultof&lt;_&gt;|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ptr&nbsp;=&nbsp;(NativeInterop.PinnedArray.of_array&nbsp;x).Ptr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f(Internal.MPI_COMM_WORLD,&nbsp;ptr)&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x.[0];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;get&nbsp;:&nbsp;(Internal.MPI_Comm&nbsp;*&nbsp;nativeptr&lt;'a&gt;&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;unmanaged<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rank()&nbsp;=&nbsp;get&nbsp;Internal.rank;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;rank&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;size()&nbsp;=&nbsp;get&nbsp;Internal.size;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;size&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>This hides the mutation required by the MPI interface behind the 
+      conventional interface of a function that returns an <CODE>int</CODE>.</P>
+      <P>Next up is the <CODE>send</CODE> function that wraps the 
+      <CODE>MPI_Send</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;send&nbsp;buf&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;nativeArray&nbsp;=&nbsp;NativeInterop.PinnedArray.of_array&nbsp;buf<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;typ,&nbsp;comm&nbsp;=&nbsp;Internal.MPI_BYTE,&nbsp;Internal.MPI_COMM_WORLD<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dst&nbsp;=&nbsp;if&nbsp;rank()&nbsp;=&nbsp;0&nbsp;then&nbsp;1&nbsp;else&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Internal.send(nativeArray.Ptr,&nbsp;buf.Length,&nbsp;typ,&nbsp;dst,&nbsp;0,&nbsp;comm)&nbsp;|&gt;&nbsp;check;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;send&nbsp;:&nbsp;byte&nbsp;[]&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Note that we have restricted functionality by providing an interface 
+      capable of passing only byte arrays. However, this is a minor constraint 
+      in practice because MPI requires any non-trivial data structures to be 
+      serialized and the natural format is a byte array.</P>
+      <P>The <CODE>receive</CODE> function that wraps the blocking 
+      <CODE>MPI_Recv</CODE> function may be given a higher-level interface as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;maxSize&nbsp;=&nbsp;1&nbsp;&lt;&lt;&lt;&nbsp;20;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;maxSize&nbsp;:&nbsp;int&nbsp;=&nbsp;1048576<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;receive&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;buf&nbsp;=&nbsp;Array.create&nbsp;maxSize&nbsp;0uy<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;nativeBuf&nbsp;=&nbsp;(NativeInterop.PinnedArray.of_array&nbsp;buf).Ptr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;status&nbsp;=&nbsp;[|Internal.MPI_Status()|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;nativeStatus&nbsp;=&nbsp;(NativeInterop.PinnedArray.of_array&nbsp;status).Ptr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;()&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;typ,&nbsp;src&nbsp;=&nbsp;Internal.MPI_BYTE,&nbsp;Internal.MPI_ANY_SOURCE<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;src,&nbsp;tag,&nbsp;comm&nbsp;=&nbsp;Internal.MPI_ANY_TAG,&nbsp;Internal.MPI_COMM_WORLD<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Internal.recv(nativeBuf,&nbsp;buf.Length,&nbsp;typ,&nbsp;src,&nbsp;tag,&nbsp;comm,&nbsp;nativeStatus)&nbsp;|&gt;&nbsp;check<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.sub&nbsp;buf&nbsp;0&nbsp;status.[0].count;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;receive&nbsp;:&nbsp;(unit&nbsp;-&gt;&nbsp;byte&nbsp;[])</CODE></P>
+      <P>In this case, the MPI interface requires us to provide a buffer large 
+      enough to hold the incoming message and we choose to use a static 1MB 
+      buffer in order to simplify the interface. In the event that individual 
+      messages may be larger than 1MB, this interface could be wrapped in 
+      another that fragments large messages into many sends and receives.</P>
+      <P>The <CODE>receive</CODE> function pre-allocated static <CODE>buf</CODE> 
+      and <CODE>status</CODE> arrays. The <CODE>buf</CODE> array is the main 
+      buffer used to store the message. The <CODE>status</CODE> array is used to 
+      store a struct of the type <CODE>MPI_Status</CODE> such that a pointer to 
+      it can be obtained, allowing the MPI call to overwrite its contents. The 
+      length of the message received is then extracted from the 
+      <CODE>count</CODE> field of the <CODE>status</CODE> struct and the 
+      <CODE>Array.sub</CODE> function is used to copy out that many bytes from 
+      the beginning of the static <CODE>buf</CODE> array to produce the 
+      result.</P>
+      <P>The <CODE>finalize</CODE> function may be wrapped as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;finalize()&nbsp;=&nbsp;Internal.finalize()&nbsp;|&gt;&nbsp;check;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;finalize&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <H2>Example</H2>
+      <P>The following example ping-pong program uses this basic interface to 
+      Intel MPI 4 from F# to send messages back and forth between a pair of 
+      nodes and measures the latency as the inverse of the throughput because 
+      the message only makes round trips:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rank,&nbsp;size&nbsp;=&nbsp;rank(),&nbsp;size()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sprintf&nbsp;"This&nbsp;node&nbsp;has&nbsp;rank&nbsp;of&nbsp;%d/%d"&nbsp;rank&nbsp;size&nbsp;|&gt;&nbsp;printfn&nbsp;"%s"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;rank=0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;size&nbsp;in&nbsp;Seq.init&nbsp;21&nbsp;((&lt;&lt;&lt;)&nbsp;1)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;times&nbsp;=&nbsp;ResizeArray[timer.Elapsed.TotalSeconds]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;timer.Elapsed.TotalSeconds&nbsp;&lt;&nbsp;1.0&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;msg1&nbsp;=&nbsp;Array.init&nbsp;size&nbsp;byte<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send&nbsp;msg1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;msg2&nbsp;=&nbsp;receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;msg1&nbsp;&lt;&gt;&nbsp;msg2&nbsp;then&nbsp;printfn&nbsp;"%A&nbsp;&lt;&gt;&nbsp;%A"&nbsp;msg1&nbsp;msg2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;times.Add&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;times&nbsp;=&nbsp;times.ToArray()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;t&nbsp;=&nbsp;times.[times.Length&nbsp;-&nbsp;1]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;times&nbsp;=&nbsp;[|for&nbsp;t0,&nbsp;t1&nbsp;in&nbsp;Seq.pairwise&nbsp;times&nbsp;-&gt;&nbsp;t1&nbsp;-&nbsp;t0|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.sortInPlace&nbsp;times<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;times.Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;latency&nbsp;=&nbsp;times.[times.Length&nbsp;/&nbsp;2]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sprintf&nbsp;"%d&nbsp;%d-byte&nbsp;pings&nbsp;in&nbsp;%0.3gs:&nbsp;%0.3gMB/s&nbsp;%0.4gms&nbsp;(median)"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;size&nbsp;t&nbsp;(float&nbsp;n&nbsp;*&nbsp;float&nbsp;size&nbsp;/&nbsp;t&nbsp;/&nbsp;1e6)&nbsp;(latency&nbsp;*&nbsp;0.5e3)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;printfn&nbsp;"%s"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send&nbsp;[|255uy|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;msg&nbsp;=&nbsp;receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;msg.[0]&nbsp;&lt;&gt;&nbsp;255uy&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Finalizing&nbsp;MPI&nbsp;on&nbsp;node&nbsp;%d..."&nbsp;rank<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finalize()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Test&nbsp;complete&nbsp;on&nbsp;%s."&nbsp;(System.Net.Dns.GetHostName());;</CODE></P>
+      <P>MPI programs must be run using the <CODE>mpiexec</CODE> tool. 
+      Fortunately, Intel MPI 4 provides a nice GUI wrapper for the 
+      <CODE>mpiexec</CODE> command-line tool and the GUI even displays the 
+      command line that could have been used to achieve the same effect:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20MPI%20over%20infiniband_files/mpiexec.png"></P>
+      <P>Once Intel MPI has been installed on both machines, the Advanced 
+      Options button can be used to set the hosts and environment variables:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20MPI%20over%20infiniband_files/mpiexecoptions.png"></P>
+      <P>The hosts must, of course, be set to the IP addresses of the two 
+      machines running SMPD that are waiting for connections and the environment 
+      variable <CODE>I_MPI_FABRICS</CODE> can be set to <CODE>shm:dapl</CODE> as 
+      shown in order to request transfer via shared memory for intra-machine 
+      communication and via Infiniband for inter-machine communication.</P>
+      <P>When run, this program produces the following output:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20MPI%20over%20infiniband_files/mpiexecoutput.png"></P>
+      <P>As these results show, this simple interface to the Intel MPI library 
+      allows high-level F# code dynamically allocating and manipulating byte 
+      arrays to send messages between machines with median latencies as low as 
+      7µs. This is substantially faster than TCP or even UDP over Ethernet and 
+      has obvious practical applications. However, the throughput measurements 
+      are not quite as impressive with the inverse of the median latency 
+      multiplied by the message size giving throughputs up to around 200MB/s or 
+      1.6Gb/s. These results were only using one of the four available 10Gb/s 
+      Infiniband ports but the actual throughput of 1.6Gb/s is substantially 
+      lower than the theoretical maximum of 10Gb/s.</P>
+      <H2>Summary</H2>
+      <P>This article has described the use of MPI over Infiniband from F# using 
+      Intel's MPI library. The results allow messages to be transferred between 
+      machines with 7µs latencies.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of PInvoke and 
+      parallelism.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20MPI%20over%20infiniband_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

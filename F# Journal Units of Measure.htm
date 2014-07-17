@@ -1,0 +1,317 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0086)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/units_of_measure.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Units of Measure</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Units%20of%20Measure_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Units%20of%20Measure_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Units%20of%20Measure_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Units of Measure</TITLE>     <LINK href="F%23%20Journal%20Units%20of%20Measure_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Units%20of%20Measure_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Units%20of%20Measure_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Units%20of%20Measure_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Units%20of%20Measure_files/left.gif">       
+        </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Units of Measure</H1>
+      <P>The F# programming language is the first mainstream language in the 
+      world to offer statically type checked units of measure. This advanced 
+      feature is easy to use and checks the dimensional consistency of programs 
+      that manipulate physical quantities. This article introduces units of 
+      measure in the F# programming language with the basic constructs, the 
+      built-in measures provided with F#, several worked examples of units of 
+      measure in action and, finally, a discussion of the caveats of this 
+      exciting new language feature.</P>
+      <H2>Introduction</H2>
+      <P><A href="http://research.microsoft.com/en-us/um/people/akenn/">Andrew 
+      Kennedy</A> wrote his PhD thesis at the University of Cambridge on         
+           <A href="http://research.microsoft.com/en-us/um/people/akenn/units/ProgrammingLanguagesAndDimensions.pdf"><I>Programming 
+      Languages and Dimensions</I>             </A> in 1995 describing an 
+      extension to the ML type system that was designed to provide polymorphic 
+      dimension types. This work is the foundation of the              <I>units 
+      of measure</I> language feature found in the latest release of F#, the 
+      September 2008 Community Technology Preview (CTP).           </P>
+      <P>The units of measure language feature has several facets:</P>
+      <P>
+      <UL>
+        <LI>Values of the                  <CODE>float</CODE> ,                  
+        <CODE>float32</CODE> and                  <CODE>decimal</CODE> numeric 
+        types may have their types augmented with units.               </LI>
+        <LI>Units can be inferred by the compiler.</LI>
+        <LI>Units are phantom types that only exist at compile-time and are 
+        erased before run-time.</LI>
+        <LI>Units support some simple arithmetic rules.</LI>
+        <LI>Units of measure can be used to enforce dimensional consistency when 
+        writing programs that act upon physical values such as lengths and 
+        masses.</LI></UL>
+      <P></P>
+      <P>Constant literals may have their units written after them in angle 
+      brackets and the unit              <CODE>_</CODE> is used to denote any 
+      unit (akin to the pattern). For example, the following are three different 
+      ways to write the constant              <CODE>float</CODE> literal         
+           <CODE>9.8</CODE> without units:           </P>
+<PRE>&gt; 9.8;;
+val it : float = 9.8</PRE>
+<PRE>&gt; 9.8&lt;1&gt;;;
+val it : float = 9.8</PRE>
+<PRE>&gt; 9.8&lt;_&gt;;;
+val it : float = 9.8</PRE>
+      <H2>User-defined units</H2>
+      <P>Units may be defined by the user simply by adding the              
+      <CODE>MeasureAttribute</CODE> to the definition of a type. For example, 
+      the following defines unit types              <CODE>m</CODE> and           
+         <CODE>s</CODE> that might be used to represent lengths in meters and 
+      time in seconds:           </P>
+<PRE>&gt; [&lt;Measure&gt;]
+  type meters;;
+[&lt;Measure&gt;]
+type meters
+  
+&gt; [&lt;Measure&gt;]
+  type seconds;;
+[&lt;Measure&gt;]
+type seconds</PRE>
+      <P>This may be used to give our constant literal              
+      <CODE>9.8</CODE> the units of acceleration ms             <SUP>-2</SUP> :  
+               </P>
+<PRE>&gt; 9.8&lt;meters/seconds^2&gt;;;
+val it : float&lt;meters/seconds ^ 2&gt; = 9.8</PRE>
+      <P>Note that we the operators              <CODE>/</CODE> and              
+      <CODE>^</CODE> for divison and power of units and multiplication is 
+      written simply as              <CODE>meters seconds</CODE> .           
+</P>
+      <H2>Supporting units of measure</H2>
+      <P>Existing code does not handle units of measure by default. For example, 
+      the following function              <CODE>sqr</CODE> that squares its 
+      argument cannot handle units:           </P>
+<PRE>&gt; let sqr (x: float) = x*x;;
+val square : float -&gt; float</PRE>
+<PRE>&gt; sqr 9.8&lt;meters/seconds^2&gt;;;
+error FS0001: This expression has type
+        float&lt;meters/seconds ^ 2&gt;
+but is here used with type
+        float.</PRE>
+      <P>F# considers the ordinary              <CODE>float</CODE> type to be 
+      incompatible with the new              <CODE>float</CODE>  type augmented 
+      with a unit of measure. In fact, the ordinary              
+      <CODE>float</CODE> type is equivalent to the type              
+      <CODE>float&lt;1&gt;</CODE> .           </P>
+      <P>The              <CODE>sqr</CODE> function in our existing code base 
+      must be updated in order to handle units of measure. This is done by 
+      adding the catchall unit              <CODE>_</CODE> :           </P>
+<PRE>&gt; let sqr (x: float&lt;_&gt;) = x*x;;
+val sqr : float&lt;'u&gt; -&gt; float&lt;'u ^ 2&gt;</PRE>
+      <P>Note how the use of multiplication resulted in the inference of a 
+      return type              <CODE>float&lt;'u ^ 2&gt;</CODE> where            
+        <CODE>'u</CODE> is a type variable. In other words, this function 
+      returns a value with type that has units of the argument squared.          
+       </P>
+      <P>This allows us to square a value of any type              
+      <CODE>float&lt;_&gt;</CODE> . For example:           </P>
+<PRE>&gt; sqr 1.0;;
+val it : float = 1.0</PRE>
+<PRE>&gt; sqr 5.0&lt;SI.kg&gt;;;
+val it : float&lt;SI.kg ^ 2&gt; = 25.0</PRE>
+<PRE>&gt; sqr 9.8&lt;meters/seconds^2&gt;;;
+val it : float&lt;meters ^ 2/seconds ^ 4&gt; = 96.04</PRE>
+      <P>Note again that the return type was inferred to be              
+      <CODE>meters ^ 2/seconds ^ 4</CODE> , a unit calculated from the unit of 
+      the function argument.           </P>
+      <H2>Converting to and from types with units</H2>
+      <P>The final piece of core functionality required to use units of measure 
+      is the ability to convert between non-unit and unit types. This is most 
+      easily done by multiplying by the constant literal one with a suitable 
+      unit.</P>
+      <P>For example, we might convert to and from the SI unit of length, 
+      meters, using the following functions:</P>
+<PRE>&gt; let toMeters (x: float) = 1.0&lt;meters&gt; * x;;
+val toMeters : float -&gt; float&lt;meters&gt;
+  
+&gt; let fromMeters (x: float&lt;meters&gt;) = 1.0&lt;meters^-1&gt; * x;;
+val fromMeters : float&lt;meters&gt; -&gt; float</PRE>
+      <P>We can also generically remove units of measure by applying the         
+           <CODE>float</CODE> function to convert to the              
+      <CODE>float&lt;1&gt;</CODE> type:           </P>
+<PRE>&gt; let removeUnits (x: float&lt;_&gt;) =
+    float x;;
+val removeUnit : float&lt;'u&gt; -&gt; float</PRE>
+      <P>For example, removing the units of measure from our literal:</P>
+<PRE>&gt; removeUnits 9.8&lt;meters/seconds^2&gt;;;
+val it : float = 9.8</PRE>
+      <H2>SI units and physical constants from the Powerpack</H2>
+      <P>The F# powerpack that is provided with F# includes SI units of measure 
+      as well as some physical constants defined using units of measure. The 
+      powerpack may be loaded into an interactive session with:</P>
+<PRE>&gt; #r "FSharp.Powerpack.dll";;
+--&gt; Referenced 'C:\Program Files\FSharp-1.9.6.2\bin\FSharp.Powerpack.dll'</PRE>
+      <P>or referenced from a compiled Visual Studio solution:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Units%20of%20Measure_files/powerpack.gif"> 
+                  </P>
+      <P></P>
+      <P>The SI units are defined in the              
+      <CODE>Microsoft.FSharp.Math.SI</CODE> module:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Units%20of%20Measure_files/si.gif"> 
+                  </P>
+      <P></P>
+      <P>and the constants are in the              
+      <CODE>Microsoft.FSharp.Math.PhysicalConstants</CODE> module. For example 
+      the gravitational constant              <I>G</I> is now available as:      
+           </P>
+<PRE>&gt; Microsoft.FSharp.Math.PhysicalConstants.G;;
+val it : float&lt;SI.m ^ 3/(SI.kg SI.s ^ 2)&gt; = 6.6742867e-11</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Units%20of%20Measure_files/physicalconstants.gif"> 
+                  </P>
+      <P></P>
+      <P>For the remainder of this article, we shall assume that the following 
+      module has been opened:</P>
+<PRE>&gt; open Microsoft.FSharp.Math;;</PRE>
+      <P>The source code from the F# standard library is enlightening as an 
+      example of units of measure in action:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Units%20of%20Measure_files/si_listing.gif"> 
+                  </P>
+      <P></P>
+      <H2>Example: Acceleration due to gravity</H2>
+      <P>We can derive the acceleration due to gravity near the Earth's surface 
+      from first principles, using F#'s units of measure to ensure the 
+      dimensional consistency of our calculation.</P>
+      <P>A module representing constants pertaining to the planet Earth, notably 
+      its mass and radius, may be written:</P>
+<PRE>&gt; module Earth =
+    /// Mass of the Earth
+    let mass = 5.9742e24&lt;SI.kg&gt;
+  
+    /// Radius of the Earth
+    let radius = 6378100.0&lt;SI.m&gt;;;
+module Earth = begin
+  val mass : float&lt;SI.kg&gt;
+  val radius : float&lt;SI.m&gt;
+end</PRE>
+      <P>Note that we are using the SI units defined in the F# Powerpack for 
+      these definitions.</P>
+      <P>The gravitational force between two bodies of masses              <I>m  
+                   <SUB>1</SUB>             </I> and              <I>m           
+          <SUB>2</SUB>             </I> separated by a distance              
+      <I>r</I> is given by the expression              <I>F = G m               
+      <SUB>1</SUB> m               <SUB>2</SUB> / r               <SUP>2</SUP>   
+                </I> . Thus the acceleration of the second body is              
+      <I>G m               <SUB>1</SUB> / r               <SUP>2</SUP>           
+        </I> and the acceleration near the surface of the Earth is:           
+      </P>
+<PRE>&gt; let g =
+    Earth.mass / sqr Earth.radius * PhysicalConstants.G;;
+val g : float&lt;SI.m/SI.s ^ 2&gt; = 9.801712674</PRE>
+      <P>This is, of course, very similar to the value 9.8ms             
+      <SUP>-2</SUP> memorized by many school children.           </P>
+      <P>The height of a falling object near the surface of the Earth is given 
+      by              <I>h               <SUB>0</SUB> + u               
+      <SUB>0</SUB> t - g               <SUB>0</SUB> t               <SUP>2</SUP> 
+                  </I> .           </P>
+      <P>Implementing this as a              <CODE>height</CODE> function 
+      directly gives a result that does not handle units of measure:           
+      </P>
+<PRE>&gt; let height g h0 u0 t =
+    h0 + u0 * t + 0.5 * g * t * t;;
+val height : float -&gt; float -&gt; float -&gt; float -&gt; float</PRE>
+      <P>The reason is subtle: we used a literal constant              
+      <CODE>0.5</CODE> that, by default, does not handle units of measure. So we 
+      must annotate the constant with units:           </P>
+<PRE>&gt; let height g h0 u0 t =
+    h0 + u0 * t + 0.5&lt;_&gt; * g * t * t;;
+val height :
+  float&lt;'u&gt; -&gt; float&lt;'u 'v ^ 2&gt; -&gt; float&lt;'u 'v&gt; -&gt; float&lt;'v&gt; -&gt; float&lt;'u 'v ^ 2&gt;</PRE>
+      <P>This gives us an implementation that does handle units of measure. 
+      However, we may wish to convey more constraints such as the use of SI 
+      units. This can be done by adding units of measure in type annotations 
+      until a precise (i.e. without any type variables like              
+      <CODE>'u</CODE> ) function signature is obtained:           </P>
+<PRE>&gt; let height g (h0: float&lt;SI.m&gt;) u0 (t: float&lt;SI.s&gt;) =
+    h0 + u0 * t + 0.5&lt;_&gt; * g * t * t;;
+val height :
+  float&lt;SI.m/SI.s ^ 2&gt; -&gt; float&lt;SI.m&gt; -&gt; float&lt;SI.m/SI.s&gt; -&gt; float&lt;SI.s&gt; -&gt;
+  float&lt;SI.m&gt;</PRE>
+      <P>The next challenge is to use this function. For example, we can compute 
+      the height of an object dropped from 500m at 1s intervals:</P>
+<PRE>&gt; [ for t in 0 .. 10 -&gt;
+      height (-g) 500.0&lt;SI.m&gt; 1.0&lt;SI.m / SI.s&gt; (1.0&lt;SI.s&gt; * float t) ];;
+val it : float&lt;SI.m&gt; list
+= [500.0; 496.0991437; 482.3965747; 458.892293; 425.5862986; 382.4785916;
+   329.5691719; 266.8580395; 194.3451944; 112.0306367; 19.9143663]</PRE>
+      <P>Note that the value resulting from the evaluation of this expression is 
+      of the              <CODE>float&lt;SI.m&gt; list</CODE> type, indicating 
+      not only that the result is a list of floating point numbers but that each 
+      number represents a distance in meters.           </P>
+      <H2>Caveats</H2>
+      <P>This wonderful programming language feature does have some caveats that 
+      its users should be aware of.</P>
+      <P>Firstly, it is not possible for the power operator to be type checked 
+      in this scheme because              <I>a               <SUP>b</SUP>        
+           </I> with              <I>a</I> of type              <I>'u</I> would 
+      have a result of type              <I>'u b</I> , e.g.              
+      <CODE>x&lt;a&gt;^2 = y&lt;a^2&gt; and x&lt;a&gt;^3 = y&lt;a^3&gt;</CODE> . 
+      That requires dependent types (types that depend upon values) which F# 
+      does not provide:           </P>
+<PRE>&gt; 2.0&lt;_&gt; ** 3.0&lt;_&gt;;;
+error FS0001: The type 'float&lt;'u&gt;' does not support any operators named 'Pow'.</PRE>
+      <P>Hence in the above example we wrote an explicit              
+      <CODE>sqr</CODE> function that uses multiplication instead of power. 
+      Consequently, the              <CODE>sqr</CODE> function be typed in F#'s 
+      type system.           </P>
+      <P>Of course, it is not possible to write a              <CODE>pow</CODE> 
+      function that works on numbers of any units and an attempt to do so 
+      results in the more              <CODE>float</CODE> type being inferred 
+      without units:           </P>
+<PRE>&gt; let rec pow (x: float&lt;_&gt;) = function
+    | 0 -&gt; 1.0&lt;_&gt;
+    | 1 -&gt; x
+    | n -&gt; pow x (n/2) * pow x (n-n/2);;
+val pow : float -&gt; int -&gt; float</PRE>
+      <P>Type variables cannot be written in the units of measure of a literal 
+      constant:</P>
+<PRE>&gt; (1.0&lt;'u&gt;, 2.0&lt;'u^2&gt;);;
+error FS0191: Unexpected type parameter in unit-of-measure literal.</PRE>
+      <P>This must be written by placing unknown units on the literal and adding 
+      a type annotation to give the actual units:</P>
+<PRE>&gt; ((1.0&lt;_&gt; : float&lt;'u&gt;), (2.0&lt;_&gt; : float&lt;'u^2&gt;));;
+val it : float&lt;'u&gt; * float&lt;'u ^ 2&gt; = (1.0, 2.0)</PRE>
+      <H2>Summary</H2>
+      <P>This article has described the basic characteristics and uses of F#'s 
+      new units of measure feature. This feature allows static types to be 
+      annotated with units in order to use static type checking to ensure that 
+      values.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Units%20of%20Measure_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

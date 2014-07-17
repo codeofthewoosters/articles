@@ -1,0 +1,42 @@
+table#page {
+	border: 2px solid rgb(255, 187, 119); width: 960px; background-color: rgb(255, 247, 240);
+}
+table#page td {
+	border: 2px solid rgb(255, 187, 119); width: 900px; vertical-align: top;
+}
+table#items {
+	border: 0px solid rgb(0, 0, 0); width: 900px;
+}
+table#items td {
+	border: 0px solid rgb(0, 0, 0); vertical-align: middle;
+}
+table#items td.title {
+	width: 930px; text-align: center; font-size: 1.2em; font-weight: bold; vertical-align: middle; background-color: rgb(255, 187, 119);
+}
+table#items td.overview {
+	width: 100%; background-color: rgb(255, 247, 240);
+}
+table#item {
+	width: 930px;
+}
+table#item td {
+	width: 0px;
+}
+table#item td.view {
+	width: 128px; vertical-align: middle;
+}
+table#item td.details {
+	width: 100%; font-size: 0.9em;
+}
+.price {
+	font-family: Tahoma, Verdana, Arial, Helvetica, sans-serif;
+}
+p.more {
+	font-size: 0.9em; white-space: nowrap;
+}
+p.testimonial {
+	text-align: right; font-family: italic; font-size: 0.9em;
+}
+table#footer {
+	width: 960px; text-align: right; font-size: 7pt; background-color: rgb(255, 187, 119);
+}

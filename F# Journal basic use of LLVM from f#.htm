@@ -1,0 +1,222 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/BasicLLVM.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20basic%20use%20of%20LLVM%20from%20f%23_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20basic%20use%20of%20LLVM%20from%20f%23_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20basic%20use%20of%20LLVM%20from%20f%23_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20basic%20use%20of%20LLVM%20from%20f%23_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20basic%20use%20of%20LLVM%20from%20f%23_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Basic use of LLVM from F#</H1>
+      <P>The low-level virtual machine (LLVM) is a freely-available high quality 
+      code generation library with support for many different architectures and 
+      platforms including x86, x64 and ARM. Programs are conveyed to LLVM in its 
+      intermediate representation (IR) which is an infinite register virtual 
+      machine. LLVM supports both static and JIT compilation of IR to native 
+      code. This article describes a compiler written in F# that can compile 
+      programs written in a small language to LLVM IR (using PInvoke) in order 
+      to evaluate them interactively.</P>
+      <H2>Installing LLVM for F#</H2>
+      <P>Before we can write our compiler we must install LLVM's dependencies (a 
+      specific version of the Python programming language and the MinGW system), 
+      LLVM itself and the F# bindings to LLVM. This may be done as follows:</P>
+      <P>* Download and install Python 2.7.</P>
+      <P>* Download and install MinGW.</P>
+      <P>* Download the LLVM 3.1 sources to C:\MinGW\msys\1.0\home\Jon\</P>
+      <P>* Run the MinGW shell and type at the <CODE>$</CODE> prompt:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;export&nbsp;PATH=$PATH:/c/Python27<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;gunzip&nbsp;&lt;llvm-3.1.tar.gz&nbsp;|&nbsp;tar&nbsp;xv<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;cd&nbsp;llvm-3.1.tar.gz<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;./configure&nbsp;--enable-shared&nbsp;--enable-jit&nbsp;--enable-bindings=none<BR>&nbsp;&nbsp;&nbsp;&nbsp;$&nbsp;make</CODE></P>
+      <P>* Add the C:\MinGW\msys\1.0\home\Jon\llvm-3.1.src\Release\bin directory 
+      to the Windows PATH via the Start menu (Computer (right click) -&gt; 
+      Advanced system settings -&gt; Environment variables).</P>
+      <P>Then restart Visual Studio, create a new solution for this compiler and 
+      add Keith Sheppard's llvm-fs project to it.</P>
+      <H2>A simple compiler</H2>
+      <P>We begin by referencing the DLL created by Keith Sheppard's llvm-fs 
+      project:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"bin\Release\LLVMFSharp.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Users\Jon\Documents\Visual&nbsp;Studio&nbsp;2010\Projects\LLVM\BasicExample\BasicExample\bin\Release\LLVMFSharp.dll'</CODE></P>
+      <P>This project provides us with almost everything needed to invoke LLVM 
+      via PInvoke.</P>
+      <P>We open the following namespaces to simplify the remaining code:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;LLVM.Generated.Core;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;LLVM.Core;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;LLVM.Generated.ExecutionEngine;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;LLVM.ExecutionEngine;;</CODE></P>
+      <P>Unusually, LLVM uses a typed intermediate representation (IR). This 
+      allows LLVM to perform unusually-sophisticated optimizations based upon 
+      detailed type information. However, LLVM uses a crude approach to error 
+      handling where any type error simply results in <CODE>abort()</CODE> being 
+      called. Consequently, it is valuable to wrap LLVM's type system in a type 
+      system of our own design.</P>
+      <P>Thus, we define an exception that will be raised in the event of a type 
+      error in the given program:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;exception&nbsp;TypeError;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;exception&nbsp;TypeError</CODE></P>
+      <P>LLVM uses the <CODE>i1</CODE> or 1-bit integer type to represent 
+      booleans (e.g. as the result of comparison instructions) and we shall use 
+      the <CODE>i32</CODE> type to represent integers:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;int1Type&nbsp;=&nbsp;int1Type();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;int1Type&nbsp;:&nbsp;TypeRef<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;int32Type&nbsp;=&nbsp;int32Type();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;int32Type&nbsp;:&nbsp;TypeRef</CODE></P>
+      <P>Our type system may then be written as a union type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Type&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TBool<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TFunction&nbsp;of&nbsp;Type&nbsp;list&nbsp;*&nbsp;Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;ty.LLVM&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ty&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TBool&nbsp;-&gt;&nbsp;int1Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TInt&nbsp;-&gt;&nbsp;int32Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TFunction(argTys,&nbsp;retTy)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;functionType&nbsp;retTy.LLVM&nbsp;[|for&nbsp;ty&nbsp;in&nbsp;argTys&nbsp;-&gt;&nbsp;ty.LLVM|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Type&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TBool<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TFunction&nbsp;of&nbsp;Type&nbsp;list&nbsp;*&nbsp;Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;LLVM&nbsp;:&nbsp;TypeRef<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>This type system permits booleans, integers and functions. In this 
+      case, we have chosen to allow functions to accept multiple arguments but 
+      return a single result.</P>
+      <P>Note that the union cases use the prefix <CODE>T</CODE> to disambiguate 
+      our types from our expressions. For example, <CODE>TInt</CODE> represents 
+      the <CODE>int</CODE> type whereas <CODE>EInt</CODE> will be used to 
+      represent an integer literal expression. For the interested reader, this 
+      style is common in MLs including Standard ML but less common in OCaml 
+      where a language feature called polymorphic variants can be used to have 
+      union types inferred and, therefore, allow overlaps between them.</P>
+      <P>Our compiler will make heavy use of compound values containing both an 
+      LLVM value and a value representing one of our types in order to convey a 
+      value and its type. Thus, we wrap these two into a single record type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;ValueAndType&nbsp;=&nbsp;{&nbsp;Value:&nbsp;ValueRef;&nbsp;Type:&nbsp;Type&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ValueAndType&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{Value:&nbsp;ValueRef;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type:&nbsp;Type;}</CODE></P>
+      <P>IR generation is implemented as a code generator that includes an LLVM 
+      instruction builder, LLVM basic instruction block and LLVM function. The 
+      following <CODE>State</CODE> record type encapsulates these three things 
+      as well as a <CODE>Find</CODE> function to lookup the value of a variable 
+      with the given name:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;State&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Find:&nbsp;string&nbsp;-&gt;&nbsp;ValueAndType<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Builder:&nbsp;BuilderRef<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Blk:&nbsp;BasicBlockRef<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Function:&nbsp;ValueRef<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;state.AppendBasicBlock()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;appendBasicBlock&nbsp;state.Function&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;state.MoveTo&nbsp;blk&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;positionBuilderAtEnd&nbsp;state.Builder&nbsp;blk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;state&nbsp;with&nbsp;Blk&nbsp;=&nbsp;blk&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;State&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{Find:&nbsp;string&nbsp;-&gt;&nbsp;ValueAndType;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Builder:&nbsp;BuilderRef;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Blk:&nbsp;BasicBlockRef;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Function:&nbsp;ValueRef;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;AppendBasicBlock&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;BasicBlockRef<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;MoveTo&nbsp;:&nbsp;blk:BasicBlockRef&nbsp;-&gt;&nbsp;State<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Note the augmentations: an <CODE>AppendBasicBlock</CODE> member that 
+      appends a new instruction block to the current function and a 
+      <CODE>MoveTo</CODE> member that creates a new <CODE>State</CODE> that will 
+      insert LLVM IR instructions at the end of the given instruction block.</P>
+      <P>The following <CODE>check</CODE> function will be used to check the 
+      validity of types in the given program according to our own type system 
+      and, therefore, will greatly reduce the chances of a type error getting 
+      through to LLVM and causing an <CODE>abort()</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;check&nbsp;ty1&nbsp;ty2&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ty1&nbsp;&lt;&gt;&nbsp;ty2&nbsp;then&nbsp;raise&nbsp;TypeError;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;check&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;unit&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The following <CODE>Op</CODE> module contains logic to translate four 
+      of our core operations to LLVM IR:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Op&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;add&nbsp;state&nbsp;f&nbsp;g&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check&nbsp;f.Type&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check&nbsp;g.Type&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;value&nbsp;=&nbsp;buildAdd&nbsp;state.Builder&nbsp;f.Value&nbsp;g.Value&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Value&nbsp;=&nbsp;value;&nbsp;Type&nbsp;=&nbsp;TInt&nbsp;},&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;leq&nbsp;state&nbsp;f&nbsp;g&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check&nbsp;f.Type&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check&nbsp;g.Type&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;value&nbsp;=&nbsp;buildICmp&nbsp;state.Builder&nbsp;IntPredicate.IntSLE&nbsp;f.Value&nbsp;g.Value&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Value&nbsp;=&nbsp;value;&nbsp;Type&nbsp;=&nbsp;TBool&nbsp;},&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;call(f,&nbsp;xs,&nbsp;state)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;f.Type&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TFunction(argTys,&nbsp;retTy)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;argTy,&nbsp;x&nbsp;in&nbsp;Seq.zip&nbsp;argTys&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;check&nbsp;argTy&nbsp;x.Type<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;value&nbsp;=&nbsp;buildCall&nbsp;state.Builder&nbsp;f.Value&nbsp;[|for&nbsp;x&nbsp;in&nbsp;xs&nbsp;-&gt;&nbsp;x.Value|]&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Value&nbsp;=&nbsp;value;&nbsp;Type&nbsp;=&nbsp;retTy&nbsp;},&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;raise&nbsp;TypeError<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ret&nbsp;(f,&nbsp;state)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;f&nbsp;with&nbsp;Value&nbsp;=&nbsp;buildRet&nbsp;state.Builder&nbsp;f.Value&nbsp;},&nbsp;state;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Op&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;State&nbsp;-&gt;&nbsp;ValueAndType&nbsp;-&gt;&nbsp;ValueAndType&nbsp;-&gt;&nbsp;ValueAndType&nbsp;*&nbsp;State<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;leq&nbsp;:&nbsp;State&nbsp;-&gt;&nbsp;ValueAndType&nbsp;-&gt;&nbsp;ValueAndType&nbsp;-&gt;&nbsp;ValueAndType&nbsp;*&nbsp;State<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;call&nbsp;:&nbsp;ValueAndType&nbsp;*&nbsp;seq&lt;ValueAndType&gt;&nbsp;*&nbsp;State&nbsp;-&gt;&nbsp;ValueAndType&nbsp;*&nbsp;State<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ret&nbsp;:&nbsp;ValueAndType&nbsp;*&nbsp;State&nbsp;-&gt;&nbsp;ValueAndType&nbsp;*&nbsp;State<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The <CODE>add</CODE> function takes an LLVM IR code generator 
+      <CODE>State</CODE> and two values of our <CODE>ValueAndType</CODE> type 
+      representing the compiled forms of two subexpressions, checks types for 
+      correctness (both arguments must be integers) and emits the LLVM IR 
+      <CODE>add</CODE> instruction to add the two arguments together, returning 
+      the resulting <CODE>ValueAndType</CODE>. Similarly, <CODE>leq</CODE> emits 
+      the less-than-or-equal-to comparison instruction for signed integers. The 
+      <CODE>call</CODE> function emits a function call, checking the parameter 
+      types for the function against the types of the given arguments and 
+      returning a <CODE>ValueAndType</CODE> with the return type of the 
+      function. The <CODE>ret</CODE> function emits the return instruction, used 
+      to return from a function call.</P>
+      <P>Now we turn to expressions in our source language. We shall provide two 
+      binary operators:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;BinOp&nbsp;=&nbsp;Add&nbsp;|&nbsp;Leq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;BinOp&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leq</CODE></P>
+      <P>The type of an expression may then be defined as:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EInt&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EVar&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EBinOp&nbsp;of&nbsp;BinOp&nbsp;*&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EIf&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EApply&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EReturn&nbsp;of&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(+)&nbsp;(f,&nbsp;g)&nbsp;=&nbsp;EBinOp(Add,&nbsp;f,&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&lt;=.)&nbsp;(f,&nbsp;g)&nbsp;=&nbsp;EBinOp(Leq,&nbsp;f,&nbsp;g);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EInt&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EVar&nbsp;of&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EBinOp&nbsp;of&nbsp;BinOp&nbsp;*&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EIf&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr&nbsp;*&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EApply&nbsp;of&nbsp;Expr&nbsp;*&nbsp;Expr&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EReturn&nbsp;of&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;+&nbsp;)&nbsp;:&nbsp;f:Expr&nbsp;*&nbsp;g:Expr&nbsp;-&gt;&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;&lt;=.&nbsp;)&nbsp;:&nbsp;f:Expr&nbsp;*&nbsp;g:Expr&nbsp;-&gt;&nbsp;Expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>An <CODE>EInt</CODE> is an integer literal. An <CODE>EVar</CODE> is a 
+      variable. An <CODE>EBinOp</CODE> is a binary operator applied to two 
+      subexpressions. An <CODE>EIf</CODE> is an <CODE>if</CODE> expression 
+      containing three subexpressions: the predicate and the pass and fail 
+      branches. An <CODE>EApply</CODE> is a function application. An 
+      <CODE>EReturn</CODE> is a fake expression used to simplify the handling of 
+      function returns.</P>
+      <P>The core of our compiler is a <CODE>compileExpr</CODE> function that 
+      converts a value of our <CODE>Expr</CODE> type into LLVM IR. This is 
+      defined in a block of four mutually-recursive functions, the first of whch 
+      is the <CODE>cont</CODE> function that compiles an expression followed by 
+      a branch to another instruction block <CODE>kBlk</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;cont&nbsp;state&nbsp;f&nbsp;kBlk&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f,&nbsp;state&nbsp;=&nbsp;compileExpr&nbsp;state&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_&nbsp;=&nbsp;buildBr&nbsp;state.Builder&nbsp;kBlk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f,&nbsp;state</CODE></P>
+      <P>The <CODE>compileExpr</CODE> function takes a <CODE>state</CODE> of an 
+      IR emitter and an <CODE>expr</CODE> to compile:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;compileExpr&nbsp;(state:&nbsp;State)&nbsp;expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;expr&nbsp;with</CODE></P>
+      <P>An <CODE>if</CODE> expression in tail position is rewritten as an 
+      <CODE>if</CODE> expression containing two subexpressions that are both in 
+      tail position:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EReturn(EIf(p,&nbsp;t,&nbsp;f))&nbsp;-&gt;&nbsp;compileExpr&nbsp;state&nbsp;(EIf(p,&nbsp;EReturn&nbsp;t,&nbsp;EReturn&nbsp;f))</CODE></P>
+      <P>An <CODE>EInt</CODE> expression is compiled to a constant LLVM integer 
+      and type <CODE>TInt</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EInt&nbsp;n&nbsp;-&gt;&nbsp;{&nbsp;Value&nbsp;=&nbsp;constInt&nbsp;TInt.LLVM&nbsp;(uint64&nbsp;n)&nbsp;false;&nbsp;Type&nbsp;=&nbsp;TInt&nbsp;},&nbsp;state</CODE></P>
+      <P>An <CODE>EVar</CODE> expression is compiled by looking up the value and 
+      type of the variable in the <CODE>state</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EVar&nbsp;s&nbsp;-&gt;&nbsp;state.Find&nbsp;s,&nbsp;state</CODE></P>
+      <P>Binary operators are compiled by compiling the two subexpressions and 
+      combining the results using the <CODE>add</CODE> and <CODE>leq</CODE> 
+      functions from the <CODE>Op</CODE> module:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EBinOp(op,&nbsp;f,&nbsp;g)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f,&nbsp;g,&nbsp;state&nbsp;=&nbsp;compileExpr2&nbsp;state&nbsp;f&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;op,&nbsp;f.Type,&nbsp;g.Type&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add,&nbsp;TInt,&nbsp;TInt&nbsp;-&gt;&nbsp;Op.add&nbsp;state&nbsp;f&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leq,&nbsp;TInt,&nbsp;TInt&nbsp;-&gt;&nbsp;Op.leq&nbsp;state&nbsp;f&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;failwith&nbsp;"Type&nbsp;error"</CODE></P>
+      <P>Note that subexpressions with unexpected types cause an exception to be 
+      raised.</P>
+      <P>An <CODE>if</CODE> expression is compiled by creating three new 
+      instruction blocks. The <CODE>tBlk</CODE> contains the instructions to be 
+      executed if the predicate evaluated to <CODE>true</CODE> followed by a 
+      branch to the <CODE>kBlk</CODE>. The <CODE>fBlk</CODE> is the equivalent 
+      for the <CODE>false</CODE> branch. The <CODE>kBlk</CODE> recombines the 
+      results from the <CODE>tBlk</CODE> and <CODE>fBlk</CODE> instruction 
+      blocks using a "phi" node:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EIf(p,&nbsp;t,&nbsp;f)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tBlk&nbsp;=&nbsp;state.AppendBasicBlock()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fBlk&nbsp;=&nbsp;state.AppendBasicBlock()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;kBlk&nbsp;=&nbsp;state.AppendBasicBlock()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p,&nbsp;state&nbsp;=&nbsp;compileExpr&nbsp;state&nbsp;p<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;p.Type&nbsp;&lt;&gt;&nbsp;TBool&nbsp;then&nbsp;failwith&nbsp;"Type&nbsp;error"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_&nbsp;=&nbsp;buildCondBr&nbsp;state.Builder&nbsp;p.Value&nbsp;tBlk&nbsp;fBlk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;t,&nbsp;state&nbsp;=&nbsp;cont&nbsp;(state.MoveTo&nbsp;tBlk)&nbsp;t&nbsp;kBlk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f,&nbsp;state&nbsp;=&nbsp;cont&nbsp;(state.MoveTo&nbsp;fBlk)&nbsp;f&nbsp;kBlk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;t.Type&nbsp;&lt;&gt;&nbsp;f.Type&nbsp;then&nbsp;failwith&nbsp;"Type&nbsp;error"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;state&nbsp;=&nbsp;state.MoveTo&nbsp;kBlk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;phi&nbsp;=&nbsp;buildPhi&nbsp;state.Builder&nbsp;(typeOf&nbsp;t.Value)&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;addIncoming&nbsp;phi&nbsp;[|t.Value,&nbsp;tBlk;&nbsp;f.Value,&nbsp;fBlk|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;t&nbsp;with&nbsp;Value&nbsp;=&nbsp;phi&nbsp;},&nbsp;state</CODE></P>
+      <P>The <CODE>EApply</CODE> expression compiles the function expression and 
+      the argument expressions and uses the <CODE>call</CODE> function from the 
+      <CODE>Op</CODE> module to emit an LLVM function call:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EApply(f,&nbsp;xs)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f,&nbsp;state&nbsp;=&nbsp;compileExpr&nbsp;state&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs,&nbsp;state&nbsp;=&nbsp;compileExprs&nbsp;state&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Op.call(f,&nbsp;xs,&nbsp;state)</CODE></P>
+      <P>Finally, the <CODE>EReturn</CODE> expression is compiled into the LLVM 
+      return instruction using the <CODE>ret</CODE> function in our 
+      <CODE>Op</CODE> module:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EReturn&nbsp;f&nbsp;-&gt;&nbsp;Op.ret(compileExpr&nbsp;state&nbsp;f)</CODE></P>
+      <P>The <CODE>compileExpr2</CODE> function compiles two expressions one 
+      after the other:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;compileExpr2&nbsp;state&nbsp;f&nbsp;g&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f,&nbsp;state&nbsp;=&nbsp;compileExpr&nbsp;state&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;g,&nbsp;state&nbsp;=&nbsp;compileExpr&nbsp;state&nbsp;g<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f,&nbsp;g,&nbsp;state</CODE></P>
+      <P>The <CODE>compileExprs</CODE> function compiles a list of 
+      expressions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;compileExprs&nbsp;state&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;[],&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;f::fs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f,&nbsp;state&nbsp;=&nbsp;compileExpr&nbsp;state&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fs,&nbsp;state&nbsp;=&nbsp;compileExprs&nbsp;state&nbsp;fs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f::fs,&nbsp;state&nbsp;&nbsp;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;cont&nbsp;:&nbsp;State&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;BasicBlockRef&nbsp;-&gt;&nbsp;ValueAndType&nbsp;*&nbsp;State<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileExpr&nbsp;:&nbsp;State&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;ValueAndType&nbsp;*&nbsp;State<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileExpr2&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;State&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;ValueAndType&nbsp;*&nbsp;ValueAndType&nbsp;*&nbsp;State<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileExprs&nbsp;:&nbsp;State&nbsp;-&gt;&nbsp;Expr&nbsp;list&nbsp;-&gt;&nbsp;ValueAndType&nbsp;list&nbsp;*&nbsp;State</CODE></P>
+      <P>The following <CODE>compileFn</CODE> function compiles a function in 
+      the given LLVM module <CODE>m</CODE> with the function name 
+      <CODE>name</CODE>, arguments <CODE>args</CODE> and <CODE>body</CODE> 
+      expression with the return type <CODE>retTy</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;compileFn&nbsp;m&nbsp;name&nbsp;(args:&nbsp;(string&nbsp;*&nbsp;Type)&nbsp;list)&nbsp;body&nbsp;(retTy:&nbsp;Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;funcType&nbsp;=&nbsp;functionType&nbsp;retTy.LLVM&nbsp;[|for&nbsp;_,&nbsp;ty&nbsp;in&nbsp;args&nbsp;-&gt;&nbsp;ty.LLVM|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fn&nbsp;=&nbsp;addFunction&nbsp;m&nbsp;name&nbsp;funcType<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;bldr&nbsp;=&nbsp;new&nbsp;Builder&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;find&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List.mapi&nbsp;(fun&nbsp;i&nbsp;x&nbsp;-&gt;&nbsp;i,&nbsp;x)&nbsp;args<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.pick&nbsp;(fun&nbsp;(i,&nbsp;(k,&nbsp;ty))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;k=x&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some{&nbsp;Value&nbsp;=&nbsp;getParam&nbsp;fn&nbsp;(uint32&nbsp;i);&nbsp;Type&nbsp;=&nbsp;ty&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;find&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x=name&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Value&nbsp;=&nbsp;fn;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Type&nbsp;=&nbsp;TFunction(List.map&nbsp;snd&nbsp;args,&nbsp;retTy)&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;find&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Find&nbsp;=&nbsp;find<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Builder&nbsp;=&nbsp;bldr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Blk&nbsp;=&nbsp;appendBasicBlock&nbsp;fn&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Function&nbsp;=&nbsp;fn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;positionBuilderAtEnd&nbsp;bldr&nbsp;state.Blk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ret,&nbsp;state&nbsp;=&nbsp;compileExpr&nbsp;state&nbsp;(EReturn&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;retTy&nbsp;&lt;&gt;&nbsp;ret.Type&nbsp;then&nbsp;failwith&nbsp;"Type&nbsp;error"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fn;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compileFn&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ModuleRef&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;(string&nbsp;*&nbsp;Type)&nbsp;list&nbsp;-&gt;&nbsp;Expr&nbsp;-&gt;&nbsp;Type&nbsp;-&gt;&nbsp;ValueRef</CODE></P>
+      <P>Note that we initialize the <CODE>find</CODE> function to search for 
+      the function name (to allow recursive calls) and the function's 
+      parameters.</P>
+      <P>LLVM requires us to initialize the native target. The LLVM bindings by 
+      Keith Sheppard contain the code required to do this when LLVM is built to 
+      target the native target but if we compile LLVM using 32-bit MinGW on a 
+      64-bit Windows machines then we must intialize the x86 target by hand, 
+      which can be done as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Runtime.InteropServices;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;LLVM.FFIUtil;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;DllImport(llvmAssemblyName,&nbsp;EntryPoint="LLVMInitializeX86TargetInfo")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;void&nbsp;initializeX86TargetInfo();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;initializeX86TargetInfo&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;DllImport(llvmAssemblyName,&nbsp;EntryPoint="LLVMInitializeX86Target")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;void&nbsp;initializeX86Target();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;initializeX86Target&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;DllImport(llvmAssemblyName,&nbsp;EntryPoint="LLVMInitializeX86TargetMC")&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;extern&nbsp;void&nbsp;initializeX86TargetMC();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;initializeX86TargetMC&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;initializeTarget()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;initializeX86TargetInfo()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;initializeX86Target()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;initializeX86TargetMC();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;Microsoft.FSharp.NativeInterop;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;initializeTarget&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Finally, the main program creates a module, initializes the x86 target, 
+      creates a series of programs and uses LLVM to JIT compile and run each one 
+      in turn:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;myModule&nbsp;=&nbsp;moduleCreateWithName&nbsp;"myModule"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mkInt&nbsp;n&nbsp;=&nbsp;createGenericValueOfInt&nbsp;TInt.LLVM&nbsp;(uint64&nbsp;n)&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;initializeX86Target&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LLVM.Generated.ExecutionEngine.linkInJIT()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ee&nbsp;=&nbsp;createExecutionEngineForModule&nbsp;myModule<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;add&nbsp;=&nbsp;compileFn&nbsp;myModule&nbsp;"add"&nbsp;["m",&nbsp;TInt;&nbsp;"n",&nbsp;TInt]&nbsp;(EVar&nbsp;"m"&nbsp;+&nbsp;EVar&nbsp;"n")&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;result&nbsp;=&nbsp;runFunction&nbsp;ee&nbsp;add&nbsp;[|mkInt&nbsp;3;&nbsp;mkInt&nbsp;8|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"3&nbsp;+&nbsp;8&nbsp;=&nbsp;%d"&nbsp;(genericValueToInt&nbsp;result&nbsp;false)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sign&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileFn&nbsp;myModule&nbsp;"sign"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;["n",&nbsp;TInt]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(EIf(EVar&nbsp;"n"&nbsp;&lt;=.&nbsp;EInt&nbsp;0,&nbsp;EInt&nbsp;-1,&nbsp;EInt&nbsp;1))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;result&nbsp;=&nbsp;runFunction&nbsp;ee&nbsp;sign&nbsp;[|mkInt&nbsp;3|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"sign&nbsp;3&nbsp;=&nbsp;%d"&nbsp;(genericValueToInt&nbsp;result&nbsp;false)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fib&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;compileFn&nbsp;myModule&nbsp;"fib"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;["n",&nbsp;TInt]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(EIf(EVar&nbsp;"n"&nbsp;&lt;=.&nbsp;EInt&nbsp;1,&nbsp;EVar&nbsp;"n",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EApply(EVar&nbsp;"fib",&nbsp;[EVar&nbsp;"n"&nbsp;+&nbsp;EInt&nbsp;-1])&nbsp;+<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;EApply(EVar&nbsp;"fib",&nbsp;[EVar&nbsp;"n"&nbsp;+&nbsp;EInt&nbsp;-2])))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TInt<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;30<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;result&nbsp;=&nbsp;runFunction&nbsp;ee&nbsp;fib&nbsp;[|mkInt&nbsp;n|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"fib&nbsp;%d&nbsp;=&nbsp;%d"&nbsp;n&nbsp;(genericValueToInt&nbsp;result&nbsp;false);;</CODE></P>
+      <P>The output shows that LLVM is produces the desired results, not just 
+      for simple arithmetic expressions but even for recursive functions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;3&nbsp;+&nbsp;8&nbsp;=&nbsp;11<BR>&nbsp;&nbsp;&nbsp;&nbsp;sign&nbsp;3&nbsp;=&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;fib&nbsp;30&nbsp;=&nbsp;832040</CODE></P>
+      <H2>Summary</H2>
+      <P>This article has used existing freely-available LLVM bindings for F# to 
+      write a tiny JIT compiler that can compile programs written in a small 
+      language.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of 
+      metaprogramming and JIT compilation using LLVM.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20basic%20use%20of%20LLVM%20from%20f%23_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

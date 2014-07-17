@@ -1,0 +1,408 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0076)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/vs2010.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: F# development with Visual Studio 2010 and .NET 4</TITLE>  
+ 
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: F# development with Visual Studio 2010 and .NET 
+4</TITLE>     <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>F# development with Visual Studio 2010 and .NET 4</H1>
+      <P>Microsoft recently released Visual Studio 2010 Release Candidate (RC). 
+      The next release will be the official RTM so this is the perfect 
+      opportunity to see what improvements have been made to both Visual Studio, 
+      The .NET Framework and F# itself. Topics covered include recent changes to 
+      the F# language, F# integration in Visual Studio 2010, new functionality 
+      bundled in .NET 4 (including numerics and parallelism) and improvements in 
+      the CLR itself.</P>
+      <H2>Introduction</H2>
+      <P>The release of Visual Studio 2010, scheduled for 22nd March 2010, will 
+      be a monumental occasion for the F# programming language as it  will be 
+      the first official release of the language after almost a decade of 
+      incubation in research. Although many preliminary releases of F# have been 
+      made, most notably the recent beta releases, Visual Studio 2010 represents 
+      the culmination of years of effort that brings together not only the 
+      latest features of the F# language but also many improvements in Visual 
+      Studio, The .NET Framework and even the CLR itself.</P>
+      <P>This article provides an overview of how the new version of Visual 
+      Studio can be used to develop programs written in the F# language before 
+      diving into some of the many changes that will be included in the final 
+      release and which can be seen in the recent RC release.</P>
+      <H2>Visual Studio 2010</H2>
+      <P>The new version of Visual Studio includes many fundamental changes over 
+      the previous Visual Studio 2008. The most obvious difference is the 
+      improved visual fidelity that is a result of Visual Studio being rewritten 
+      to use Windows Presentation Foundation rather than Windows Forms.</P>
+      <P>The introduction page of Visual Studio 2010 looks like this:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/intro.gif"> 
+                  </P>
+      <P></P>
+      <P>The F# interactive session is now embedded at the bottom of the window 
+      by default when F# development is set as the default environment during 
+      installation.</P>
+      <P>The              <A href="http://msdn.microsoft.com/en-us/library/dd553242(VS.100).aspx">What's 
+      new in F#</A> link takes you directly to a wealth of introductory 
+      information about the latest version of the F# language on MSDN. Top-level 
+      topics covered include lambda expressions, data types, immutable data, 
+      pattern matching, asynchronous and parallel programming, interactivity, 
+      laziness, object orientation, imperative programming, mathematics, 
+      advanced features of the type system and useful libraries.           </P>
+      <P>The two links at the bottom of the "What's new in F#" page provide a 
+      complete              <A href="http://msdn.microsoft.com/en-us/library/dd233181(VS.100).aspx">F# 
+      language reference</A> that includes valuable information such as the list 
+      of symbols that can be used as operators and a              <A href="http://msdn.microsoft.com/en-us/library/dd233153(VS.100).aspx">Getting 
+      started with F#</A> page that walks through the basics of using F# from 
+      within Visual Studio 2010.           </P>
+      <P>The final release version of F# differs from other .NET languages in 
+      terms of development in three main ways:</P>
+      <P>
+      <UL>
+        <LI>F# code is often run interactively and, consequently, the Visual 
+        Studio mode for F# augments the traditional "project" with the new 
+        concept of a "script".</LI>
+        <LI>No visual designer support.</LI>
+        <LI>The order of source files in an F# project is significant.</LI></UL>
+      <P></P>
+      <H2>Language updates</H2>
+      <P>The F# programming language itself has seen some important updates 
+      recently, both stylistic and semantic.</P>
+      <P>Perhaps the most obvious change is the introduction of equality types. 
+      This is an extension to the type system that tracks which types implement 
+      the              <CODE>Equals</CODE> method inherited from the             
+       <CODE>Object</CODE> class and the              
+      <CODE>System.IComparable</CODE> interface. This results in constraints of 
+      the form              <CODE>with 'a : equality</CODE> to denote that a 
+      definition is generic over a type variable              <CODE>'a</CODE> 
+      with the constraint that the type              <CODE>'a</CODE> must 
+      implement the              <CODE>Equals</CODE> method.           </P>
+      <P>For example, the empty set now includes such a constraint because the   
+                 <CODE>Set</CODE> data structure requires an element type with 
+      an total order defined by a comparison function:           </P>
+<PRE>&gt; Set.empty;;
+val it : Set&lt;'a&gt; when 'a : comparison = set []</PRE>
+      <P>The Standard ML programming language used equality types in a similar 
+      way but F#'s predecessor OCaml never acquired the feature and, 
+      consequently, inappropriate internal use of polymorphic functions such as 
+      equality, comparison and hashing are a significant source of errors in 
+      OCaml programming. Moreover, the errors manifest randomly at run-time and 
+      are very difficult to trace. Equality types are a welcome addition to F# 
+      as they catch such errors statically and provide an excellent description 
+      of the error.</P>
+      <P>For example, the              <CODE>Lazy</CODE> and              
+      <CODE>Seq</CODE> types do not implement comparison and, consequently, 
+      cannot be placed in a              <CODE>Set</CODE> but any attempt to do 
+      so is now caught statically:           </P>
+<PRE>&gt; set [lazy 3];;
+error FS0001: The type 'Lazy&lt;'a&gt;' does not support the 'comparison' constraint.
+For example, it does not support the 'System.IComparable' interface</PRE>
+<PRE>&gt; set [seq {yield 3}];;
+error FS0001: The type 'seq&lt;'a&gt;' does not support the 'comparison' constraint.
+For example, it does not support the 'System.IComparable' interface</PRE>
+      <P>Types that implement the functions for equality, comparison and hashing 
+      must have the attributes              <CODE>CustomEquality</CODE> and      
+              <CODE>CustomComparison</CODE> applied to them. For example, the    
+                <CODE>Lazy</CODE> type can be wrapped in a struct that provides 
+      these functions as follows:           </P>
+<PRE>&gt; [&lt;Struct&gt;]
+  [&lt;CustomEquality&gt;]
+  [&lt;CustomComparison&gt;]
+  type ComparableLazy&lt;'a when 'a : comparison&gt; =
+    val thunk : Lazy&lt;'a&gt;
+    new thunk = {thunk=thunk}</PRE>
+<PRE>    override x.Equals y =
+      let y : ComparableLazy&lt;_&gt; = unbox y
+      x.thunk.Value = y.thunk.Value</PRE>
+<PRE>    override x.GetHashCode() =
+      x.thunk.Value.GetHashCode()</PRE>
+<PRE>    interface System.IComparable with
+      member x.CompareTo y =
+        let y : ComparableLazy&lt;_&gt; = unbox y
+        compare x.thunk.Value y.thunk.Value;;
+type ComparableLazy&lt;'a when 'a : comparison&gt; =
+  struct
+    interface System.IComparable
+    new : thunk:Lazy&lt;'a&gt; -&gt; ComparableLazy&lt;'a&gt;
+    val thunk: Lazy&lt;'a&gt;
+    override Equals : y:obj -&gt; bool
+    override GetHashCode : unit -&gt; int
+  end</PRE>
+<PRE>&gt; set [ComparableLazy(lazy 3); ComparableLazy(lazy 4)];;
+val it : Set&lt;ComparableLazy&lt;int&gt;&gt; =
+  set
+    [FSI_0028+ComparableLazy`1[System.Int32] {thunk = 3;};
+     FSI_0028+ComparableLazy`1[System.Int32] {thunk = 4;}]</PRE>
+<PRE>&gt; ComparableLazy(lazy 3) = ComparableLazy(lazy 4);;
+val it : bool = false</PRE>
+<PRE>&gt; ComparableLazy(lazy 3) = ComparableLazy(lazy 3);;
+val it : bool = true</PRE>
+      <P>Note that the ability to wrap a value in a struct rather than an object 
+      is an unusual and valuable capability of .NET. This allows actions (such 
+      as equality, comparison and hashing) to be altered on a per-type basis 
+      without the run-time performance penalty of boxing.</P>
+      <P>Variant types are now called              <A href="http://msdn.microsoft.com/en-us/library/dd233226(VS.100).aspx">discriminated 
+      unions</A> and type constructors are now called union cases. The union 
+      cases in a discriminated unions are now written on separate lines with the 
+      pipe character before every type constructor including the first:          
+       </P>
+<PRE>type state =
+  | On
+  | Off</PRE>
+      <P>Using this style, augmentations can now be written without the          
+          <CODE>with</CODE> keyword. For example, this old-style type 
+      definition:           </P>
+<PRE>type state = On | Off with
+  member s.isOn = s=On</PRE>
+      <P>is now written:</P>
+<PRE>type state =
+  | On
+  | Off
+  member s.IsOn = s=On</PRE>
+      <H2>Libraries</H2>
+      <P>F# has been distributing auxiliary and unstable code, including 
+      definitions for OCaml compatibility, as a separate library called the 
+      "Power Pack". As of Visual Studio 2010, the F# Power Pack is now a 
+      completely separate library              <A href="http://fsharppowerpack.codeplex.com/">available 
+      from CodePlex</A> under Microsoft's Shared Source license. The Power Pack 
+      was split off from the core of F# because it requires further testing, 
+      debugging and bug fixing. Consequently, the Power Pack will see more 
+      frequent updates than F# itself.           </P>
+      <P>The old F#              <CODE>bigint</CODE> and              
+      <CODE>complex</CODE> types that implemented arbitrary-precision integer 
+      and floating-point complex arithmetic, respectively, are now in .NET 4 as 
+      the              <CODE>System.Numerics.BigInteger</CODE> and              
+      <CODE>System.Numerics.Complex</CODE> types. This means they are accessible 
+      "out of the box":           </P>
+<PRE>&gt; 3I;;
+val it : System.Numerics.BigInteger = 3 {IsEven = false;
+                                         IsOne = false;
+                                         IsPowerOfTwo = false;
+                                         IsZero = false;
+                                         Sign = 1;}</PRE>
+<PRE>&gt; System.Numerics.Complex(3.0, 4.0);;
+val it : System.Numerics.Complex = (3, 4) {Imaginary = 4.0;
+                                           Magnitude = 5.0;
+                                           Phase = 0.927295218;
+                                           Real = 3.0;}</PRE>
+      <P>However, the F# PowerPack does augment them with useful functionality 
+      such as the more concise top-level              <CODE>complex</CODE> 
+      function and              <CODE>r</CODE> and              <CODE>i</CODE> 
+      properties to access the real and imaginary components of a complex 
+      number, respectively:           </P>
+<PRE>&gt; #r "FSharp.PowerPack.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\FSharpPowerPack-1.9.9.9\bin\FSharp.PowerPack.dll'</PRE>
+<PRE>&gt; complex 3.0 4.0;;
+val it : complex = 3r+4i {Conjugate = 3r-4i;
+                          ImaginaryPart = 4.0;
+                          Magnitude = 5.0;
+                          Phase = 0.927295218;
+                          RealPart = 3.0;
+                          i = 4.0;
+                          r = 3.0;}</PRE>
+      <P>The old F#              <CODE>bignum</CODE> type that implemented 
+      arbitrary-precision rational arithmetic is now called              
+      <CODE>BigRational</CODE> , is provided by the F# PowerPack and implemented 
+      in terms of the .NET 4 type              <CODE>BigInteger</CODE> :         
+        </P>
+<PRE>&gt; 3N;;</PRE>
+<PRE>  3N;;
+  ^^</PRE>
+<PRE>stdin(1,1): error FS0784: This numeric literal requires that a module 'NumericLiteralN'
+defining functions FromZero, FromOne, FromInt32, FromInt64 and FromString be in scope
+&gt; #r "FSharp.PowerPack.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\FSharpPowerPack-1.9.9.9\bin\FSharp.PowerPack.dll'</PRE>
+<PRE>&gt; 3N;;
+val it : BigRational = 3N</PRE>
+      <P>F# uses type forwarding to map F#'s              
+      <CODE>Microsoft.FSharp.Control.Lazy</CODE> type onto the new              
+      <CODE>System.Lazy</CODE> type when it is available (i.e. on .NET 4 or 
+      later) but it will remain available when targeting older versions of .NET. 
+                </P>
+      <P>Although the new equality types will catch errors at compile time this 
+      is only possible when the necessary information is available, i.e. when 
+      the type definitions included it. Consequently, errors are only caught on 
+      F# types and not on built-in .NET types unless they have been explicitly 
+      wrapped or extended.</P>
+      <P>For example, the              <CODE>HashMultiMap</CODE> collection (a 
+      relative of OCaml's              <CODE>Hashtbl</CODE> module) now requires 
+      that the user explicitly describe the type of hash and equality to be 
+      used. For example,              <CODE>HashIdentity.Structural</CODE> 
+      causes F#'s conventional structural hashing and equality to be used:       
+          </P>
+<PRE>&gt; HashMultiMap([for i in 1..10 -&gt; i, i*i], HashIdentity.Structural);;
+val it : HashMultiMap&lt;int,int&gt; =
+  seq
+    [[1, 1] {Key = 1;
+             Value = 1;}; [2, 4] {Key = 2;
+                                  Value = 4;}; [3, 9] {Key = 3;
+                                                       Value = 9;};
+     [4, 16] {Key = 4;
+              Value = 16;}; ...]</PRE>
+      <P>This will catch type errors at compile time because it is written in F# 
+      with the appropriate attributes defined. However, the similarly-named      
+              <CODE>HashSet</CODE> collection is provided by .NET and not F# 
+      and, therefore, is oblivious to equality types. Consequently, a            
+        <CODE>HashSet</CODE> is most easily constructed with the "wrong" 
+      non-structural comparison:           </P>
+<PRE>&gt; System.Collections.Generic.HashSet[1; 2; 3];;
+val it : System.Collections.Generic.HashSet&lt;int&gt; = seq [1; 2; 3]</PRE>
+      <P>The most common manifestation of this error is that different arrays 
+      are treated as different even if their contents are the same:</P>
+<PRE>&gt; System.Collections.Generic.HashSet[[|1|];[|2|];[|3|];[|2|]];;
+val it : System.Collections.Generic.HashSet&lt;int []&gt; =
+  seq [[|1|]; [|2|]; [|3|]; [|2|]]</PRE>
+      <P>Note that the array              <CODE>[|2|]</CODE> appears twice.      
+           </P>
+      <P>The solution is to load the PowerPack and use its              
+      <CODE>HashSet</CODE> that now requires a              
+      <CODE>HashIdentity</CODE> to be specified:           </P>
+<PRE>&gt; #r "FSharp.PowerPack.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\FSharpPowerPack-1.9.9.9\bin\FSharp.PowerPack.dll'</PRE>
+<PRE>&gt; HashSet[1;2;3];;</PRE>
+<PRE>  HashSet[1;2;3];;
+  ^^^^^^^^^^^^^^</PRE>
+<PRE>error FS0101: This construct is deprecated. This member has been redesigned.
+Use 'new HashSet&lt;_&gt;(elements, HashIdentity.Structural) to create a HashSet
+using F# generic hashing and equality
+&gt; HashSet([1;2;3], HashIdentity.Structural);;
+Real: 00:00:00.011, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val it : HashSet&lt;int&gt; = seq [1; 2; 3]</PRE>
+      <P>Thus, it seems advisable to always use the F# Power Pack.</P>
+      <H3>Parallelism</H3>
+      <P>The Parallel Extensions that were released in CTP form and discussed in 
+      articles such as              <I>Surviving in the multicore era with 
+      Parallel FX</I> (30th April 2008) are now a core part of .NET 4 and can be 
+      used "out of the box" in any F# program.           </P>
+      <P><CODE>System.Threading.Parallel.For</CODE> is now              
+      <CODE>System.Threading.Tasks.Parallel.For</CODE> and returns a result and 
+      has been optimized. The old version of              
+      <CODE>Parallel.For</CODE> simply had one thread per core compete to 
+      atomically increment a counter, claiming a few iterations at a time. This 
+      was extremely inefficient not only because of the unnecessary contention 
+      for the counter but primarily because a thread executing one iteration was 
+      highly unlikely to iterate the next iteration and, therefore, coherence 
+      between iterations was non-existent and any algorithms that benefit from 
+      locality between iterations (e.g. to keep data in cache) suffered from 
+      severely degraded performance. The new implementation of              
+      <CODE>Parallel.For</CODE> uses a hierarchical approach where the 
+      iterations are started out of order in order to improve coherence between 
+      thread and iteration.           </P>
+      <P>For example, using              <CODE>Parallel.For</CODE> to print a 
+      sequence of integers now produces wildly different results. In previous 
+      versions, the results were of the form:           </P>
+<PRE>&gt; #r "System.Threading.dll";;</PRE>
+<PRE>--&gt; Referenced 'C:\Program Files\Microsoft Parallel Extensions Jun08 CTP\System.Threading.dll'</PRE>
+<PRE>&gt; let init n =
+    let a = Array.create n 0
+    Parallel.For(0, n, fun i -&gt;
+      Thread.Sleep 1
+      a.[i] &lt;- Thread.CurrentThread.ManagedThreadId)
+    a;;
+val init : int -&gt; int []</PRE>
+<PRE>&gt; init 100
+  |&gt; Array.map string
+  |&gt; String.concat ",";;
+val it : string =
+  "36,21,32,27,17,14,4,20,37,22,38,5,35,19,24,34,35,35,24,24,19,19,38,38,22,22,5,5,20,20,
+37,37,17,17,4,4,14,14,21,21,27,27,32,32,36,36,34,34,35,35,35,35,38,38,38,38,5,5,5,5,19,
+19,19,19,37,37,37,37,24,24,24,24,22,22,22,22,20,20,20,20,4,4,4,4,17,17,17,17,14,14,14,
+14,21,21,21,21,27,27,27,27"</PRE>
+      <P>With the new parallel algorithms, the output is much more regular:</P>
+<PRE>&gt; let init n =
+    let a = Array.create n -1
+    Tasks.Parallel.For(0, n, fun i -&gt;
+      Thread.Sleep 1
+      a.[i] &lt;- Thread.CurrentThread.ManagedThreadId)
+    |&gt; ignore
+    a;;
+val init : int -&gt; int []</PRE>
+<PRE>&gt; init 100
+  |&gt; Array.map string
+  |&gt; String.concat ",";;
+val it : string =
+  "1,1,1,1,1,1,1,56,56,56,56,56,41,41,41,41,41,41,41,1,1,1,1,1,44,44,44,44,44,44,44,41,41,
+41,41,41,43,43,43,43,43,43,43,44,44,44,44,44,46,46,46,46,46,46,46,46,46,46,46,46,54,54,
+54,54,54,54,54,54,54,54,54,54,53,53,53,53,53,53,53,53,53,53,53,53,55,55,55,55,55,55,55,
+55,55,55,55,55,56,56,56,56"</PRE>
+      <P>A function that uses a              <CODE>Parallel.For</CODE> loop to 
+      initialize the elements of a byte array may be written for .NET 3.5 with 
+      Parallel Extensions using Visual Studio 2008 as:           </P>
+<PRE>do
+    let a = Array.create (1 &lt;&lt;&lt; 25) 0uy
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    System.Threading.Parallel.For(0, a.Length, fun i -&gt;
+        a.[i] &lt;- a.[i] + 1uy)
+    printf "\nTook %gs\n" t.Elapsed.TotalSeconds</PRE>
+      <P>The equivalent program written for .NET 4 using Visual Studio 2010 
+      is:</P>
+<PRE>[&lt;System.STAThread&gt;]
+do
+    let a = Array.create (1 &lt;&lt;&lt; 25) 0uy
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    System.Threading.Tasks.Parallel.For(0, a.Length, fun i -&gt;
+        a.[i] &lt;- a.[i] + 1uy)
+    |&gt; ignore
+    printf "\nTook %gs\n" t.Elapsed.TotalSeconds</PRE>
+      <P>This microbenchmark shows over 14× performance improvement moving from 
+      .NET 3.5 with Parallel Extensions to .NET 4 thanks to the improved 
+      locality offered by the new algorithm. However, we should stress that this 
+      performance improvement was not due to improvements in cache efficiency 
+      due to locality but, rather, because the improved locality greatly reduces 
+      the amount of false sharing in this case.</P>
+      <H2>New garbage collector</H2>
+      <P>The new release of Visual Studio 2010 and .NET 4 includes a new version 
+      of the CLR that provides some important benefits. The most notable 
+      improvement in the context of F# is a new garbage collector that can be 
+      substantially faster on functional code (where short-lived objects are 
+      allocated far more than in imperative code). For example, building a 
+      linked list with the expression              <CODE>[1..1000000]</CODE> is 
+      5.6× faster with .NET 4 than it was with VS2008.           </P>
+      <H2>Summary</H2>
+      <P>This article has taken a look at the Visual Studio 2010 RC release and 
+      examined some of the many changes that affect F# programming on the .NET 
+      platform.</P>
+      <P>Future articles will revisit the subject of Visual Studio, not only to 
+      cover the many new features in .NET 4 in detail but also to examine how 
+      custom Visual Studio extensions can be written in 
+F#.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20F%23%20development%20with%20Visual%20Studio%202010%20and%20_NET%204_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

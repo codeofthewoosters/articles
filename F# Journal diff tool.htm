@@ -1,0 +1,193 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0074)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/diff.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20diff%20tool_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20diff%20tool_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20diff%20tool_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20diff%20tool_files/title.gif"> 
+    </TD>
+    <TD><IMG src="F%23%20Journal%20diff%20tool_files/left.gif"> 
+</TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Diff</H1>
+      <P>The unix program <CODE>diff</CODE> identifies differences between text 
+      files, line by line. This tool is most useful for comparing two versions 
+      of a program. This article develops a simple implementation of the diff 
+      tool based upon the longest common subsequence (LCS) algorithm with a 
+      graphical user interface written using Windows Presentation Foundation to 
+      visualize the difference between two text files.</P>
+      <H2>Introduction</H2>
+      <P>The <CODE>diff</CODE> utility was developed in the early 1970s on the 
+      Unix operating system which was emerging from AT&amp;T Bell Labs in Murray 
+      Hill, New Jersey. The final version, first shipped with the 5th Edition of 
+      Unix in 1974, was entirely written by Douglas McIlroy. This research was 
+      published in a 1976 paper co-written with James W. Hunt who developed an 
+      initial prototype of diff.[2] The algorithm this paper described became 
+      known as the Hunt-McIlroy algorithm.</P>
+      <P>In the context of Unix, the use of the <CODE>ed</CODE> line editor 
+      provided <CODE>diff</CODE> with the natural ability to create 
+      machine-usable "edit scripts". These edit scripts, when saved to a file, 
+      can, along with the original file, be reconstituted by ed into the 
+      modified file in its entirety. This greatly reduced the secondary storage 
+      necessary to maintain multiple versions of a file. McIlroy considered 
+      writing a post-processor for <CODE>diff</CODE> where a variety of output 
+      formats could be designed and implemented, but he found it more frugal and 
+      simpler to have diff be responsible for generating the syntax and 
+      reverse-order input accepted by the ed command. In 1985, Larry Wall 
+      composed a separate utility called <CODE>patch</CODE> that generalized and 
+      extended the ability to modify files with diff output. Modes in Emacs also 
+      allow for converting the format of patches and even editing patches 
+      interactively.</P>
+      <P>In diff's early years, common uses included comparing changes in the 
+      source of software code and markup for technical documents, verifying 
+      program debugging output, comparing filesystem listings and analyzing 
+      computer assembly code. The output targeted for ed was motivated to 
+      provide compression for a sequence of modifications made to a file. The 
+      Source Code Control System (SCCS) and its ability to archive revisions 
+      emerged in the late 1970s as a consequence of storing edit scripts from 
+      diff.</P>
+      <P>This article describes the design and implementation of a program that 
+      computes the difference between two text files line-by-line using a simple 
+      algorithm built upon the LCS algorithm and visualizes the results using a 
+      Windows Presentation Foundation <CODE>RichTextBox</CODE> control.</P>
+      <H2>Longest Common Subsequence</H2>
+      <P>The LCS algorithm computes the longest subsequence that is distributed 
+      across two input sequences. For example, the LCS of the two sequences 
+      <CODE>HUMAN</CODE> and <CODE>CHIMPANZEE</CODE> is <CODE>HMAN</CODE> and 
+      may be illustrated as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;H&nbsp;U&nbsp;M&nbsp;&nbsp;&nbsp;A&nbsp;N<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;|&nbsp;|<BR>&nbsp;&nbsp;&nbsp;&nbsp;C&nbsp;H&nbsp;I&nbsp;M&nbsp;P&nbsp;A&nbsp;N&nbsp;Z&nbsp;E&nbsp;E</CODE></P>
+      <P>In the context of the <CODE>diff</CODE> tool, the LCS tells us that the 
+      sequence <CODE>HUMAN</CODE> may be altered by inserting <CODE>C</CODE>, 
+      copying <CODE>H</CODE>, changing <CODE>U</CODE> to <CODE>I</CODE>, copying 
+      <CODE>M</CODE> and so on.</P>
+      <P>Computation of the LCS is split into two parts. Firstly, a table 
+      quantifying the discrepancies between the input sequences is accumulated. 
+      Secondly, the table is read from the end back to the start in order to 
+      obtain a longest common subsequence. The table is generated by a simple 
+      recurrence relation that is easily written in F#:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;lcs&nbsp;(xs:&nbsp;string)&nbsp;(ys:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;lcs&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0,&nbsp;_&nbsp;|&nbsp;_,&nbsp;0&nbsp;-&gt;&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j&nbsp;when&nbsp;xs.[i-1]&nbsp;=&nbsp;ys.[j-1]&nbsp;-&gt;&nbsp;1&nbsp;+&nbsp;lcs(i-1,&nbsp;j-1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j&nbsp;-&gt;&nbsp;max&nbsp;(lcs(i-1,&nbsp;j))&nbsp;(lcs(i,&nbsp;j-1))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lcs(xs.Length,&nbsp;ys.Length);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;lcs&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>This is a classic problem from dynamic programming because the 
+      <CODE>lcs</CODE> function divides the input problem into smaller problems 
+      but, unlike classic divide and conquer, the subproblems overlap. The 
+      solution is to record previous results for future reuse. A particularly 
+      elegant way to accomplish this in F# is to use a <CODE>memoize</CODE> 
+      combinator that remembers and reuses results from previous applications of 
+      the given function<CODE>f</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;memoize&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m&nbsp;=&nbsp;System.Collections.Generic.Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f_x&nbsp;=&nbsp;ref&nbsp;Unchecked.defaultof&lt;_&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;m.TryGetValue(x,&nbsp;f_x)&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;!f_x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m.[x]&nbsp;&lt;-&nbsp;f&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m.[x]<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;memoize&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The <CODE>memoize</CODE> combinator could not be easier to use:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;lcs&nbsp;(xs:&nbsp;string)&nbsp;(ys:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;lcs&nbsp;=&nbsp;memoize(function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0,&nbsp;_&nbsp;|&nbsp;_,&nbsp;0&nbsp;-&gt;&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j&nbsp;when&nbsp;xs.[i-1]&nbsp;=&nbsp;ys.[j-1]&nbsp;-&gt;&nbsp;1&nbsp;+&nbsp;lcs(i-1,&nbsp;j-1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j&nbsp;-&gt;&nbsp;max&nbsp;(lcs(i-1,&nbsp;j))&nbsp;(lcs(i,&nbsp;j-1)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lcs(xs.Length,&nbsp;ys.Length);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;lcs&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The complete <CODE>lcs</CODE> function over arrays may then be written 
+      as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;lcs&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;(ys:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;lcs&nbsp;=&nbsp;memoize(function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0,&nbsp;_&nbsp;|&nbsp;_,&nbsp;0&nbsp;-&gt;&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j&nbsp;when&nbsp;xs.[i-1]&nbsp;=&nbsp;ys.[j-1]&nbsp;-&gt;&nbsp;1&nbsp;+&nbsp;lcs(i-1,&nbsp;j-1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j&nbsp;-&gt;&nbsp;max&nbsp;(lcs(i-1,&nbsp;j))&nbsp;(lcs(i,&nbsp;j-1)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;walk&nbsp;zs&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0,&nbsp;_&nbsp;|&nbsp;_,&nbsp;0&nbsp;-&gt;&nbsp;zs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j&nbsp;when&nbsp;lcs(i-1,&nbsp;j)&nbsp;=&nbsp;lcs(i,&nbsp;j)&nbsp;-&gt;&nbsp;walk&nbsp;zs&nbsp;(i-1,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j&nbsp;-&gt;&nbsp;walk&nbsp;(if&nbsp;lcs(i,&nbsp;j-1)&nbsp;&lt;&nbsp;lcs(i,&nbsp;j)&nbsp;then&nbsp;xs.[i-1]::zs&nbsp;else&nbsp;zs)&nbsp;(i,&nbsp;j-1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;walk&nbsp;[]&nbsp;(xs.Length,&nbsp;ys.Length);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;lcs&nbsp;:&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The next section of the program uses this <CODE>lcs</CODE> function to 
+      compute the difference between two sequences in terms of insertions, 
+      deletions and copies.</P>
+      <H2>Diff</H2>
+      <P>The three different operations used to compose the new sequence from 
+      the old are:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;change&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Copy<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Insert<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Delete;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;change&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Copy<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Insert<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Delete</CODE></P>
+      <P>A <CODE>diff</CODE> function that computes the changes that must be 
+      made to the old sequences <CODE>xs</CODE> in order to obtain the new 
+      sequence <CODE>ys</CODE> is most easily written by deconstructing lists 
+      using pattern matching:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;diff&nbsp;(xs:&nbsp;string)&nbsp;(ys:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;zs&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::xs,&nbsp;y::ys,&nbsp;d::ds&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;x=d,&nbsp;y=d&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;true&nbsp;-&gt;&nbsp;loop&nbsp;((Copy,&nbsp;d)::zs)&nbsp;(xs,&nbsp;ys,&nbsp;ds)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;false&nbsp;-&gt;&nbsp;loop&nbsp;((Insert,&nbsp;y)::zs)&nbsp;(x::xs,&nbsp;ys,&nbsp;d::ds)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;false,&nbsp;true&nbsp;-&gt;&nbsp;loop&nbsp;((Delete,&nbsp;x)::zs)&nbsp;(xs,&nbsp;y::ys,&nbsp;d::ds)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;false,&nbsp;false&nbsp;-&gt;&nbsp;loop&nbsp;((Insert,&nbsp;y)::(Delete,&nbsp;x)::zs)&nbsp;(xs,&nbsp;ys,&nbsp;d::ds)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::xs,&nbsp;ys,&nbsp;[]&nbsp;-&gt;&nbsp;loop&nbsp;((Delete,&nbsp;x)::zs)&nbsp;(xs,&nbsp;ys,&nbsp;[])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[],&nbsp;y::ys,&nbsp;[]&nbsp;-&gt;&nbsp;loop&nbsp;((Insert,&nbsp;y)::zs)&nbsp;([],&nbsp;ys,&nbsp;[])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;List.rev&nbsp;zs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs,&nbsp;ys&nbsp;=&nbsp;xs.Split[|'\n'|],&nbsp;ys.Split[|'\n'|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;[]&nbsp;(List.ofArray&nbsp;xs,&nbsp;List.ofArray&nbsp;ys,&nbsp;lcs&nbsp;xs&nbsp;ys);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;diff&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;(change&nbsp;*&nbsp;string)&nbsp;list</CODE></P>
+      <P>The nested <CODE>loop</CODE> function deconstructs three lists 
+      simultaneously: the old sequence <CODE>xs</CODE>, the new sequence 
+      <CODE>ys</CODE> and the longest common subsequence <CODE>ds</CODE>. The 
+      first match case with a nested <CODE>match</CODE> expression handles the 
+      general case of searching for a common element from the LCS. If both the 
+      heads of <CODE>xs</CODE> and <CODE>ys</CODE> match the next element in the 
+      common subsequence then this element in <CODE>ys</CODE> is a copy of that 
+      from <CODE>xs</CODE>. If <CODE>x</CODE> is in the LCS but <CODE>y</CODE> 
+      is not then <CODE>y</CODE> is a new line that has been inserted. 
+      Conversely, <CODE>x</CODE> is an old line that has been deleted. Finally, 
+      if neither <CODE>x</CODE> nor <CODE>y</CODE> match <CODE>d</CODE> then a 
+      line has been changed from <CODE>x</CODE> to <CODE>y</CODE>.</P>
+      <P>The second of the outer match cases deletes lines <CODE>x</CODE> from 
+      <CODE>xs</CODE> until it is empty. The third match case inserts lines 
+      <CODE>y</CODE> until nothing remains. The final match case returns the 
+      accumulated result when the input has been completely traversed. We use a 
+      catchall <CODE>_</CODE> pattern because the pattern matcher does not 
+      understand that empty sequences <CODE>xs</CODE> and <CODE>ys</CODE> must 
+      always produce an empty LCS <CODE>ds</CODE>.</P>
+      <P>Note how the output list <CODE>zs</CODE> that describes the changes 
+      from <CODE>xs</CODE> to <CODE>ys</CODE> is accumulated in reverse order as 
+      the first argument to the nested <CODE>loop</CODE> function before being 
+      reverised back in the final match case.</P>
+      <H2>Visualization</H2>
+      <P>One common way to visualize the differences between text files is to 
+      highlight deleted regions in red and inserted regions in green. The 
+      remainder of the program is devoted to this. We begin by referencing the 
+      usual .NET assemblies for WPF on .NET 4:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationCore.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationFramework.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"WindowsBase.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Xaml.dll";;</CODE></P>
+      <P>We shall be using definitions from <CODE>System.Windows</CODE> 
+      extensively as well as definitions from 
+      <CODE>System.Windows.Documents</CODE> in order to describe the contents of 
+      the <CODE>RichTextBox</CODE> that will be used to visualize the 
+output:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows.Documents;;</CODE></P>
+      <P>The following <CODE>ui</CODE> function simply upcasts an object of any 
+      type derived from the <CODE>UIElement</CODE> class:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ui&nbsp;x&nbsp;=&nbsp;(x&nbsp;:&gt;&nbsp;UIElement)<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ui&nbsp;:&nbsp;UIElement&nbsp;-&gt;&nbsp;UIElement</CODE></P>
+      <P>The following <CODE>Grid</CODE> module provides a <CODE>create</CODE> 
+      function that creates and fills a <CODE>Grid</CODE> WPF control:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Grid&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;create&nbsp;ctrlss&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid(Margin=Thickness&nbsp;5.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;ctrlss&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..Seq.reduce&nbsp;max&nbsp;(Seq.map&nbsp;Seq.length&nbsp;ctrlss)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ColumnDefinition()&nbsp;|&gt;&nbsp;grid.ColumnDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iteri&nbsp;(fun&nbsp;y&nbsp;ctrls&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iteri&nbsp;(fun&nbsp;x&nbsp;ctrl&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(ctrl,&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(ctrl,&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;ctrl&nbsp;|&gt;&nbsp;ignore)&nbsp;ctrls)&nbsp;ctrlss<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Grid&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;create&nbsp;:&nbsp;seq&lt;#seq&lt;'b&gt;&gt;&nbsp;-&gt;&nbsp;Controls.Grid&nbsp;when&nbsp;'b&nbsp;:&gt;&nbsp;UIElement<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The three kinds of change are mapped on to background colors by the 
+      following <CODE>color</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;color&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Copy&nbsp;-&gt;&nbsp;Media.Brushes.White<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Insert&nbsp;-&gt;&nbsp;Media.Brushes.Green<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Delete&nbsp;-&gt;&nbsp;Media.Brushes.Red;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;color&nbsp;:&nbsp;change&nbsp;-&gt;&nbsp;Media.SolidColorBrush</CODE></P>
+      <P>The following <CODE>auto</CODE> function is used to set the visibility 
+      of the horizontal scrollbars on the <CODE>TextBox</CODE> controls used to 
+      display the input texts:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;auto&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;s&nbsp;=&nbsp;Controls.ScrollViewer(Content=x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s.HorizontalScrollBarVisibility&nbsp;&lt;-&nbsp;Controls.ScrollBarVisibility.Auto<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;auto&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;Controls.ScrollViewer</CODE></P>
+      <P>The following <CODE>update</CODE> function updates the 
+      <CODE>FlowDocument</CODE> representing the contents of the 
+      <CODE>diffBox</CODE> rich text control based upon the output of the 
+      <CODE>diff</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;update&nbsp;(text1Box:&nbsp;Controls.TextBox)&nbsp;(text2Box:&nbsp;Controls.TextBox)&nbsp;(diffBox:&nbsp;Controls.RichTextBox)&nbsp;_&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;flow&nbsp;=&nbsp;FlowDocument()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;para&nbsp;=&nbsp;Paragraph()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;c,&nbsp;xs&nbsp;in&nbsp;diff&nbsp;text1Box.Text&nbsp;text2Box.Text&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Run(xs+"\n",&nbsp;Background=color&nbsp;c)&nbsp;|&gt;&nbsp;para.Inlines.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;flow.Blocks.Add&nbsp;para<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;diffBox.Document&nbsp;&lt;-&nbsp;flow;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;update&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.TextBox&nbsp;-&gt;&nbsp;Controls.TextBox&nbsp;-&gt;&nbsp;Controls.RichTextBox&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Finally, the following main program creates the controls and window and 
+      runs the application:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;text1Box&nbsp;=&nbsp;Controls.TextBox(Text=str1,&nbsp;AcceptsReturn=true)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;text2Box&nbsp;=&nbsp;Controls.TextBox(Text=str2,&nbsp;AcceptsReturn=true)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;diffBox&nbsp;=&nbsp;Controls.RichTextBox()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text1Box.TextChanged.Add(update&nbsp;text1Box&nbsp;text2Box&nbsp;diffBox)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text2Box.TextChanged.Add(update&nbsp;text1Box&nbsp;text2Box&nbsp;diffBox)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;update&nbsp;text1Box&nbsp;text2Box&nbsp;diffBox&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;t&nbsp;s&nbsp;=&nbsp;Controls.Label(Content=s)&nbsp;|&gt;&nbsp;ui<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pane&nbsp;=&nbsp;Grid.create&nbsp;[[auto&nbsp;text1Box&nbsp;|&gt;&nbsp;ui;&nbsp;auto&nbsp;text2Box&nbsp;|&gt;&nbsp;ui;&nbsp;ui&nbsp;diffBox]]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=pane))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <H2>Results</H2>
+      <P>This program produces the following GUI application that highlights the 
+      differences between two texts. Deletions from the old text are highlighted 
+      red and insertions into the new text are highlighted green.</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20diff%20tool_files/diff.png"></P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a simple 
+      program that uses the longest common subsequence algorithm to determine 
+      the differences between a pair of texts, visualizing the results in color 
+      using Windows Presentation Foundation.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of dynamic 
+      programming, text analysis and visualization.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript src="F%23%20Journal%20diff%20tool_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

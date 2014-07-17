@@ -1,0 +1,633 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0086)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/number_crunching.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Numerical Libraries: special functions, interpolation and 
+random numbers</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Numerical Libraries: special functions, 
+interpolation and random numbers</TITLE>     <LINK href="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Numerical Libraries: special functions, interpolation and random 
+      numbers</H1>
+      <P>The F# programming language provides an excellent foundation for 
+      technical computing on the Windows platform thanks to its high-performance 
+      interactive sessions and integrated support for mathematical types. This 
+      article is our first look at numerical libraries, both free and 
+      commercial, and describes the implementation quality and easy of use of 
+      these libraries in the context of special functions, interpolation and 
+      random numbers.</P>
+      <H2>Introduction</H2>
+      <P>The F# programming language is rapidly moving toward the functionality 
+      of a fully-fledged technical computing environment like              <A 
+      href="http://www.wolfram.com/">Mathematica</A> . The availability of 
+      high-quality numerical libraries is a critical part of this and this 
+      article is the first of three articles examining a variety of libraries 
+      from different backgrounds that can provide essential numerical methods to 
+      end users in a reliable form.           </P>
+      <P>Special functions, interpolation, random numbers, function plotting, 
+      spectral methods and linear algebra are the most important aspects of a 
+      technical computing environment. Many other forms of analysis exist but 
+      these dominate the vast majority of use that general technical computing 
+      environments see. This article focuses on the first four. Future F#.NET 
+      Journal articles will examine linear algebra and FFTs in more detail as 
+      well as graphing and charting.</P>
+      <H2>Libraries covered in this article</H2>
+      <H3>Free</H3>
+      <H4>Math.NET</H4>
+      <P><A href="http://mathnet.opensourcedotnet.info/">Math.NET</A> is a 
+      freely-available open source library implementing a variety of numerical 
+      methods including linear algebra and a fast Fourier transform. This 
+      library was written by Christoph Rüegg, Joannès Vermorel, and various 
+      other contributors.           </P>
+      <P>The Math.NET library provides physical constants, special functions, 
+      linear algebra, random numbers, statistical distributions, Fast Fourier 
+      Transforms and combinatorics.</P>
+      <H3>Commercial</H3>
+      <H4>Extreme Optimization</H4>
+      <P><A href="http://www.extremeoptimization.com/">Extreme Optimization</A> 
+      provide a commercial library for high-performance numerics with prices 
+      starting from US$399. This article describes the trial version 2.2 of 
+      Extreme Optimization. This library was written by Jeffrey Sax.           
+      </P>
+      <P>The latest version of the Extreme Optimization library provides complex 
+      numbers, equation solving, numerical integration and differentiation, 
+      special functions, curve fitting, function minimization, FFTs, matrices 
+      (including dense, symmetric, triangular, band and sparse), linear algebra, 
+      statistics and random numbers. Although this library provides an elegant 
+      .NET API and gives the appearance of being written in C# it actually wraps 
+      high-performance native-code libraries internally in order to obtain the 
+      best possible performance.</P>
+      <P>The design of the Extreme Optimization library is strongly geared 
+      toward idiomatic C#, with very heavy use of object oriented techniques 
+      including subtyping, inheritance and overloading. The quality of the 
+      implemented numerical methods is extremely high and the library contains a 
+      substantial range of numerical methods but nothing more, such as simple 
+      visualization.</P>
+      <H4>Centerspace's NMath Core and Stats</H4>
+      <P><A href="http://www.centerspace.net/">Centerspace</A> provide a 
+      commercial library for high-performance numerics that is split into four 
+      separate parts:           </P>
+      <P>
+      <UL>
+        <LI>The                  <B>Core</B>  library provides vectors, 
+        matrices, complex numbers, random numbers and numerical integration and 
+        differentiation for $295.               </LI>
+        <LI>The                  <B>Matrix</B> library provides structured 
+        sparse matrices, factorizations, decompositions and least squares 
+        solvers for a further $495.               </LI>
+        <LI>The                  <B>Stats</B> library provides descriptive 
+        statistics, probability distributions, combinatorial functions, linear 
+        regression, hypothesis testing, variance and multivariate statistics for 
+        a further $495.               </LI>
+        <LI>The                  <B>Analysis</B> library provides function 
+        minimization, root finding and linear programming for a further $295.    
+                   </LI></UL>
+      <P></P>
+      <P>This article describes our findings using the trial versions 2.4 and 
+      2.3 the Core and Stats libraries, respectively.</P>
+      <P>Like the Extreme Optimization library, the NMath libraries try to 
+      leverage the features of the C# programming language and, consequently, 
+      are slightly trickier to use from F# than necessary. However, one cannot 
+      help but get the feeling of wasting money when buying the NMath Core 
+      library because most of its functionality is already provided for free in 
+      the F# standard library. This is equally true of all of the other .NET 
+      libraries, of course, because they must reimplement basic mathematical 
+      types like complexes, vectors and matrices incompatibly with each other 
+      because the .NET framework lacks all of this functionality. However, other 
+      libraries do not make you pay for this basic functionality separately.</P>
+      <H4>Visual Numerics' IMSL</H4>
+      <P><A href="http://www.vni.com/">Visual Numerics</A> provide the 
+      commercial              <A href="http://www.vni.com/products/imsl/cSharp/overview.php">IMSL</A> 
+      library for a variety of languages including C#, with prices starting from 
+      US$1,175. Visual Numerics were kind enough to give us a temporary license 
+      for version 5.0.           </P>
+      <P>This library provides complex numbers, vectors, matrices, linear 
+      algebra, interpolation and approximation, numerical integration and 
+      differentiation, real and complex FFTs, constrained and unconstrained 
+      function minimization, special functions, physical constants, statistics, 
+      random numbers, neural networks, financial calculations and 2D graphing 
+      and charting.</P>
+      <P>The FFT implementation in this library appears to be a sophisticated 
+      split radix algorithm but without methods to retain O(n log n) asymptotic 
+      complexity. The linear algebra routines in this library are derived from   
+                 <A href="http://www.netlib.org/eispack/">EISPACK</A> , the 
+      predecessor to LAPACK.           </P>
+      <P>Visual Numerics have been selling numerical libraries for C, Fortran, 
+      Java and C# for 37 years now. Their port of IMSL to C# provides 
+      high-quality numerical libraries but clearly has a simple interface and, 
+      in particular, does comparatively little to leverage features specific to 
+      the C# programming language. However, this turns out to be an advantage 
+      for us because the F# programming language is very different to C# and the 
+      IMSL library is made easier to use in F# by the absence of overloading and 
+      the light use of inheritance, both of which undermine F#'s type 
+      inference.</P>
+      <H2>Visualization</H2>
+      <P>Although this article is about numerical libraries, the ability to 
+      visualize numerical results makes life much easier. Of the above 
+      libraries, only the IMSL library from Visual Numerics provides 
+      visualization, in the form of 2D graphing and charting functions. 
+      Consequently, we shall use the IMSL library for graphing special functions 
+      and plotting results in this article and Excel for visualizing benchmark 
+      results.</P>
+      <H3>Function plots</H3>
+      <P>The IMSL library was not designed to be used interactively but the 
+      graphing and charting functions in IMSL can be wrapped to allow 
+      visualizations to be spawned and run concurrently from F# interactive 
+      sessions quite easily. The following F# code wraps the IMSL              
+      <CODE>Chart2D.FrameChart</CODE> object and runs the chart in a separate 
+      GUI thread:           </P>
+<PRE>&gt; #light;;
+&gt; #I @"C:\Program Files\VNI\imsl\imslcs500\bin";;
+&gt; #r @"ImslCS.dll";;
+&gt; open Imsl;;
+&gt; open System;;
+&gt; open System.Threading;;
+&gt; let plot f x0 x1 =
+    let f =
+      { new Chart2D.ChartFunction
+	  with F x = f x }
+    let thread = new Thread(fun () -&gt;
+      let chart = new Chart2D.Chart()
+      let data = new Chart2D.Data(new Chart2D.AxisXY(chart), f, x0, x1)
+      new Chart2D.FrameChart(chart)
+      |&gt; Windows.Forms.Application.Run)
+    thread.SetApartmentState ApartmentState.STA
+    thread.Start();;
+val plot : (float -&gt; float) -&gt; float -&gt; float -&gt; unit</PRE>
+      <P>This can be used to visualize simple function plots immediately, 
+      directly from an F# interaction session. For example, the following plots 
+      the sinc function:</P>
+<PRE>&gt; plot (function 0. -&gt; 1. | x -&gt; sin x / x) -10. 10.;;
+val it : unit = ()</PRE>
+      <P>This spawns the following graph:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/sinc.gif"> 
+                  </P>
+      <P></P>
+      <P>We have found the 2D function plotting in the IMSL library to be very 
+      useful. However, the current implementation does have some problems. Most 
+      notably, providing very large numbers or floating point special values 
+      (like infinity) can cause the IMSL library to crash. This is particularly 
+      annoying when trying to visualize functions with asymptotes.</P>
+      <H3>Bar charts</H3>
+      <P>The following              <CODE>bar</CODE> function wraps the          
+          <CODE>Chart2D.Bar</CODE> class from the IMSL library to allow bar 
+      charts to be spawned from F# interactive sessions:           </P>
+<PRE>&gt; let bar (xys : #seq&lt;float * float&gt;) =
+    let xs = Seq.map fst xys |&gt; Array.of_seq
+    let ys = Seq.map snd xys |&gt; Array.of_seq
+    let thread = new Thread(fun () -&gt;
+      let chart = new Chart2D.Chart()
+      let bar = new Chart2D.Bar(new Chart2D.AxisXY(chart), xs, ys)
+      bar.BarType &lt;- Imsl.Chart2D.Bar.BAR_TYPE_VERTICAL
+      new Chart2D.FrameChart(chart)
+      |&gt; Windows.Forms.Application.Run)
+    thread.SetApartmentState ApartmentState.STA
+    thread.Start();;
+val bar : (float * float) seq -&gt; unit</PRE>
+      <P>For example, the following constructs a data set and plots it as a bar 
+      chart:</P>
+<PRE>&gt; bar [-3., 1.; -2., 3.; -1., 4.; 0., 5.; 1., 4.; 2., 3.; 3., 1.];;
+val it : unit = ()</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/bar.gif"> 
+                  </P>
+      <P></P>
+      <P>This function will be used to plot the eigenvalue distributions of 
+      random matrices later in this article.</P>
+      <H2>Special Functions</H2>
+      <P>The IMSL, NMath, Extreme Optimization and Math.NET libraries include a 
+      variety of special functions such as Bessel functions and the Gamma 
+      function. Many special functions are non-trivial to implement and 
+      high-quality implementations combine numerical stability with high 
+      performance.</P>
+      <H3>Gamma function</H3>
+      <P>The real-valued and even complex-valued Gamma function is commonly used 
+      in technical computing because it results from a variety of physically 
+      important integral expressions.</P>
+      <P>The IMSL library provides a              <CODE>Math.Sfun.Gamma</CODE> 
+      function that computes the real-valued Gamma function:           </P>
+<PRE>&gt; Math.Sfun.Gamma -1.5;;
+val it : float = 2.363271801
+&gt; Math.Sfun.Gamma -0.5;;
+val it : float = -3.544907702
+&gt; Math.Sfun.Gamma(1. / 3.) * Math.Sfun.Gamma(2. / 3.);;
+val it : float = 3.627598728</PRE>
+      <P>The last expression is a well-known identity with the following 
+      value:</P>
+<PRE>&gt; 2. * System.Math.PI / sqrt 3.;;
+val it : float = 3.627598728</PRE>
+      <P>The IMSL library gives very accurate answers for all three of these 
+      test cases and can be used as a control for the other libraries.</P>
+      <P>IMSL can graph this function provided it does not happen to sample the 
+      function in a region where its value is very large (i.e. around the 
+      asymptotes of the Gamma function):</P>
+<PRE>&gt; plot Math.Sfun.Gamma -5. 5.;;
+val it : unit = ()</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/gamma.gif"> 
+                  </P>
+      <P></P>
+      <P>Note the broken lines at the asymptotes.</P>
+      <P>The Extreme Optimization library not only provides a real-valued Gamma 
+      function but also a complex-valued Gamma function. However, the same 
+      function is overloaded for both uses and, consequently, using this Gamma 
+      function from F# may require type annotations to disambiguate between the 
+      overloads:</P>
+<PRE>&gt; #I @"C:\Program Files\Extreme Optimization\Numerical Libraries for .NET\bin";;
+&gt; #r "Extreme.Native.x86.20.dll";;
+&gt; #r "Extreme.Numerics.dll";;
+&gt; let gamma (x: float) =
+    Extreme.Mathematics.SpecialFunctions.GammaFunctions.Gamma x;;
+val gamma : float -&gt; float</PRE>
+      <P>Like IMSL, Extreme Optimization also gives very accurate answers for 
+      all three of our test cases:</P>
+<PRE>&gt; gamma -1.5;;
+val it : float = 2.363271801
+&gt; gamma -0.5;;
+val it : float = -3.544907702
+&gt; gamma(1. / 3.) * gamma(2. / 3.);;
+val it : float = 3.627598728</PRE>
+      <P>For some reason, Centerspace have chosen to put special functions in 
+      their statistics library. The NMath Stats library does not provide a Gamma 
+      function. However, it does provide two related functions:</P>
+      <P>
+      <UL>
+        <LI>The                  
+        <CODE>CenterSpace.NMath.Stats.StatsFunctions.GammaLn(a)</CODE> gives the 
+                         <CODE>float</CODE> value of the natural logarithm of 
+        the Gamma function for a                  <CODE>float</CODE> valued 
+        argument when possible, i.e. when the Gamma function is positive.        
+               </LI>
+        <LI>The                  
+        <CODE>CenterSpace.NMath.Stats.StatsFunctions.IncompleteGamma(a, 
+        x)</CODE> function is supposed to give a                  
+        <CODE>float</CODE> value of the upper incomplete Gamma function given 
+        two                  <CODE>float</CODE> valued arguments.               
+        </LI></UL>
+      <P></P>
+      <P>The log Gamma function is sometimes used in technical computing because 
+      the Gamma function (a generalization of the factorial) grows very rapidly. 
+      However, providing only a real-valued form of the log Gamma function means 
+      that this part of the NMath library cannot be used to calculate the Gamma 
+      function when it is negative:</P>
+<PRE>&gt; #I @"C:\Program Files\CenterSpace\NMath\Core 2.4\Assemblies";;
+&gt; #r "NMathCoreMath.dll";;
+&gt; #I @"C:\Program Files\CenterSpace\NMath\Stats 2.3\Assemblies";;
+&gt; #r "NMathStatsMain.dll";;
+&gt; let gamma = CenterSpace.NMath.Stats.StatsFunctions.GammaLn &gt;&gt; exp;;
+val gamma : float -&gt; float
+&gt; gamma -1.5;;
+val it : float = 2.363271801
+&gt; gamma -0.5;;
+val it : float = NaN
+&gt; gamma(1. / 3.) * gamma(2. / 3.);;
+val it : float = 3.627598728</PRE>
+      <P>Note that the answers are accurate for positive results but the         
+           <CODE>Nan</CODE> answer in the second case is wrong.           </P>
+      <P>In theory, the upper incomplete Gamma function recovers the Gamma 
+      function when x=1. However, we have been unable to get the NMath 
+      implementation of the incomplete gamma function to give correct results in 
+      any case. We did find that their implementation returns some of the 
+      correct results for the lower incomplete Gamma function but other results 
+      were also inconsistent with this function.</P>
+      <P>The freely available Math.NET library also does not contain an 
+      implementation of the Gamma function but it does contain a log Gamma 
+      function:</P>
+<PRE>&gt; #I @"C:\Documents and Settings\All Users\Documents\Installers\MathNet.Iridium-2008.2.10.364\Binaries\Release";;
+&gt; #r "MathNet.Iridium.dll";;
+&gt; let gamma = MathNet.Numerics.Fn.GammaLn &gt;&gt; exp;;
+val gamma : (float -&gt; float)
+&gt; gamma -1.5;;
+val it : float = 2.36327226
+&gt; gamma -0.5;;
+val it : float = NaN
+&gt; gamma(1. / 3.) * gamma(2. / 3.);;
+val it : float = 3.627595076
+&gt; 2. * System.Math.PI / sqrt 3.;;
+val it : float = 3.627598728</PRE>
+      <P>Note that the last result is significantly inaccurate, unlike the IMSL 
+      and Extreme Optimization libraries.</P>
+      <H3>Bessel functions</H3>
+      <P>Using IMSL, the Bessel J             <SUB>n</SUB> functions can be 
+      obtained using              <CODE>Math.Bessel.J(x, n)</CODE> , which 
+      returns an array of J             <SUB>i</SUB> (x) for i=0..n for n&gt;0:  
+               </P>
+<PRE>&gt; Imsl.Math.Bessel.J(0., 1);;
+val it : float [] = [|1.797693135e+308; 1.797693135e+308|]
+&gt; Imsl.Math.Bessel.J(epsilon_float, 1);;
+val it : float [] = [|0.0; 1.110223025e-16|]
+&gt; Imsl.Math.Bessel.J(1., 1);;
+val it : float [] = [|0.7651976866; 0.4400505857|]</PRE>
+      <P>To get the values of J             <SUB>0</SUB> (x) using IMSL it is 
+      necessary to take the first element of the returned array and disregard 
+      the result returned for J             <SUB>1</SUB> (x).           </P>
+      <P>Note that IMSL got both answers wrong in the first case (x=0), 
+      returning the maximum floating point number 10             <SUP>308</SUP> 
+      twice instead of 1 and 0, respectively. The second calculation used a very 
+      small positive value for              <I>x</I> and obtains a much more 
+      accurate answer. Although this huge numerical error appears for only a 
+      tiny range of numbers, this could undermine numerical calculations such as 
+      integrations that happen to evaluate Bessel functions around zero.         
+        </P>
+      <P>We can plot these Bessel functions using our IMSL-based              
+      <CODE>plot</CODE> function above. However, trying to plot the IMSL 
+      implementation of the Bessel function causes the IMSL graph plotter to 
+      crash:           </P>
+<PRE>&gt; plot (fun x -&gt; Math.Bessel.J(x, 1).[0]) 0. 30.;;</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/error.gif"> 
+                  </P>
+      <P></P>
+      <P>At this juncture, it is essential to click on "Continue" rather than 
+      "Quit" because the latter will kill the entire F# interactive session 
+      running in the same process and lose any outstanding work in it.</P>
+      <P>Investigating this problem, it turns out that the bug in the IMSL 
+      implementation of the Bessel function is triggering two more bugs in the 
+      IMSL graph plotter. Specifically, the code in the rendering loop is not 
+      numerically robust and causes an overflow exception (probably when a large 
+      float is cast into an integer type that is unable to represent it) and the 
+      rendering loop then fails to catch this exception, allowing it to 
+      propagate and take down the entire process.</P>
+      <P>The problem with the numerically-unstable IMSL implementation of the 
+      Bessel function can be worked around by starting the              <I>x</I> 
+      range from a small positive number instead of zero:           </P>
+<PRE>&gt; plot (fun x -&gt; Math.Bessel.J(x, 1).[0]) epsilon_float 30.;;
+val it : unit = ()</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/bessel.gif"> 
+                  </P>
+      <P></P>
+      <P>Using the Extreme Optimization library, Bessel J             
+      <SUB>n</SUB> functions can be obtained using the              
+      <CODE>Mathematics.SpecialFunctions.Bessel.Jn</CODE> functions:           
+      </P>
+<PRE>&gt; #I @"C:\Program Files\Extreme Optimization\Numerical Libraries for .NET\bin";;
+&gt; #r "Extreme.Native.x86.20.dll";;
+&gt; #r "Extreme.Numerics.dll";;
+&gt; Extreme.Mathematics.SpecialFunctions.Bessel.J0(0.);;
+val it : float = 1.0
+&gt; Extreme.Mathematics.SpecialFunctions.Bessel.J0(1.);;
+val it : float = 0.7651976866</PRE>
+      <P>Note that both results are accurate.</P>
+      <P>The IMSL graph plotter can be used to graph the well-behaved 
+      implementation of the Bessel function in the Extreme Optimization 
+      library:</P>
+<PRE>&gt; plot Extreme.Mathematics.SpecialFunctions.Bessel.J0 0. 30.;;
+val it : unit = ()</PRE>
+      <P>Neither the NMath or Math.NET libraries implement Bessel functions.</P>
+      <P>Whilst examining the properties of the numerical instability in the 
+      IMSL implementation of the Bessel function we discovered that this 
+      function can also be extremely slow:</P>
+<PRE>&gt; time (fun x -&gt; Math.Bessel.J(x, 1).[0]) 1e9;;</PRE>
+      <P>This single evaluation of the Bessel function failed to terminate after 
+      several minutes. On more modest values, we noted that the Extreme 
+      Optimization library can be  2,000,000× faster than the IMSL library. For 
+      example, it takes over a second to compute the IMSL Bessel function for x 
+      = 10             <SUP>7</SUP> :           </P>
+<PRE>&gt; time (fun x -&gt; Math.Bessel.J(x, 1).[0]) 1e7;;
+Took 1221ms
+val it : float = -8.683734864e-05</PRE>
+      <P>In contrast, the Extreme Optimization library can compute the same 
+      result over six orders of magnitude faster:</P>
+<PRE>&gt; Extreme.Mathematics.SpecialFunctions.Bessel.J0 1e7;;
+val it : float = -8.683734864e-05
+&gt; time (fun () -&gt;
+    for n=1 to 1000000 do
+      Extreme.Mathematics.SpecialFunctions.Bessel.J0 1e7
+      |&gt; ignore) ();;
+Took 0.601000s
+val it : unit = ()</PRE>
+      <P>This performance difference may become important if expressions 
+      involving the Bessel function are integrated to a large or infinite upper 
+      limit.</P>
+      <H2>Interpolation and extrapolation</H2>
+      <P>The ability to construct an interpolation function from a series of 
+      data points is extremely useful in a wide variety of circumstances.</P>
+      <P>The following function wraps the IMSL              
+      <CODE>Math.CsInterpolate</CODE> function to allow data sets specified as 
+      sequences of pairs of floats to be used to build a cubic spline 
+      interpolation:           </P>
+<PRE>&gt; let interpolation xys =
+    let xys = Array.of_seq xys
+    let spline = Math.CsInterpolate(Array.map fst xys, Array.map snd xys)
+    fun (x : float) -&gt; spline.Eval x;;
+val interpolation : (float * float) seq -&gt; (float -&gt; float)</PRE>
+      <P>Note the careful use of partial specialization. Application of the 
+      first curried argument              <CODE>xys</CODE> (the data) builds the 
+      interpolating function and application of the second argument              
+      <CODE>x</CODE> (the position) evaluates the interpolating function.        
+         </P>
+      <P>The representation of (x, y) pairs as 2-tuples and the use of currying 
+      makes this interface much more user friendly.</P>
+      <P>For example, the following constructs an interpolating function 
+      composed of first-order continuous cubic splines that go precisely through 
+      the data points, and then plots the resulting function:</P>
+<PRE>&gt; plot (interpolation [-3., 1.; -2., 3.; -1., 4.; 0., 0.; 1., 4.; 2., 3.; 3., 1.]) -3. 3.;;
+val it : unit = ()</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/interpolate_imsl_csinterpolate.gif"> 
+                  </P>
+      <P></P>
+      <P>Note how this form of interpolation has created minimia in the 
+      interpolation at either end of the range. The data do not imply the 
+      presence of these minima.</P>
+      <P>Fortunately, the IMSL library provides many different kinds of 
+      interpolation and the              <CODE>CsShape</CODE> interpolating 
+      function provides preferable results in this case:           </P>
+<PRE>&gt; let interpolation xys =
+    let xys = Array.of_seq xys
+    let spline = Math.CsShape(Array.map fst xys, Array.map snd xys)
+    fun (x : float) -&gt; spline.Eval x;;
+val interpolation : (float * float) seq -&gt; (float -&gt; float)
+&gt; plot (interpolation [-3., 1.; -2., 3.; -1., 4.; 0., 0.; 1., 4.; 2., 3.; 3., 1.]) -3. 3.;;
+val it : unit = ()</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/interpolate_imsl_csshape.gif"> 
+                  </P>
+      <P></P>
+      <P>The default form of interpolation provided by the              
+      <CODE>CubicSpline</CODE> class of the Extreme Optimization library is 
+      similarly productive:           </P>
+<PRE>&gt; let interpolation xys =
+    let xs, ys = [|for x, _ in xys -&gt; x|], [|for _, y in xys -&gt; y|]
+    let interp = Extreme.Mathematics.Curves.CubicSpline(xs, ys)
+    interp.ValueAt;;
+val interpolation : (float * float) seq -&gt; (float -&gt; float)
+&gt; plot (interpolation [-3., 1.; -2., 3.; -1., 4.; 0., 0.; 1., 4.; 2., 3.; 3., 1.]) -3. 3.;;
+val it : unit = ()</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/interpolate_extreme.gif"> 
+                  </P>
+      <P></P>
+      <P>In this case, the Extreme Optimization library does not use overloading 
+      so this functionality is easier to use from F#.</P>
+      <P>The NMath library also provides cubic spline interpolation using its    
+                <CODE>NaturalCubicSpline</CODE> class:           </P>
+<PRE>&gt; let interpolation (xys : #seq&lt;float * float&gt;) =
+    let xs = CenterSpace.NMath.Core.DoubleVector([|for x, _ in xys -&gt; x|])
+    let ys = CenterSpace.NMath.Core.DoubleVector([|for _, y in xys -&gt; y|])
+    let interp = CenterSpace.NMath.Core.NaturalCubicSpline(xs, ys)
+    fun (x : float) -&gt; interp.Evaluate x;;
+&gt; plot (interpolation [-3., 1.; -2., 3.; -1., 4.; 0., 0.; 1., 4.; 2., 3.; 3., 1.]) -3. 3.;;
+val it : unit = ()</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/interpolate_nmath.gif"> 
+                  </P>
+      <P></P>
+      <P>The Math.NET library provides a simple form of interpolation but the 
+      resulting curve only approximates the given points and does not go through 
+      them:</P>
+<PRE>&gt; let interpolation xys =
+    let samplelist = MathNet.Numerics.SampleList()
+    for x, y in xys do
+      samplelist.Add(x, y)
+    let interp = MathNet.Numerics.Interpolation.InterpolationSingleDimension samplelist
+    fun (x : float) -&gt; interp.Evaluate x;;
+val interpolation : (float * float) seq -&gt; (float -&gt; float)
+&gt; plot (interpolation [-3., 1.; -2., 3.; -1., 4.; 0., 0.; 1., 4.; 2., 3.; 3., 1.]) -3. 3.;;
+val it : unit = ()</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/interpolate_mathnet.gif"> 
+                  </P>
+      <P></P>
+      <H2>Random numbers</H2>
+      <P>Many numerical algorithms, such as Monte Carlo methods, require the 
+      generation of large numbers of pseudo-random numbers. Consequently, random 
+      number generation can sometimes be a bottleneck in numerical code.</P>
+      <P>The choice of pseudo-random number generator (PRNG) is also important 
+      and the              <A href="http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html">Mersenne 
+      Twister</A> algorithm is the currently the defacto standard due to its 
+      high performance and massive 2             <SUP>19937</SUP> -1 length 
+      periodic cycle.           </P>
+      <P>The following graph illustrates the times taken to generate 10          
+         <SUP>8</SUP> Gaussian-distributed random numbers using the Mersenne 
+      Twister implementations in various different libraries:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/random_bench.gif"> 
+                  </P>
+      <P></P>
+      <P>Note that the IMSL library provides two different ways to generate 
+      random numbers from a Gaussian distribution. The faster of the two is 
+      equivalent to the algorithm provided in the Extreme Optimization 
+      library.</P>
+      <P>The following code generates a              <CODE>float</CODE> randomly 
+      taken from the Gaussian distribution using the IMSL library's 
+      accept-reject method:           </P>
+<PRE>&gt; let gen = Imsl.Stat.MersenneTwister(0);;
+val gen : Imsl.Stat.MersenneTwister
+&gt; let rand = Imsl.Stat.Random(gen);;
+val rand : Imsl.Stat.Random
+&gt; rand.NextNormalAR();;</PRE>
+      <P>A slower but more accurate algorithm can be employed if necessary:</P>
+<PRE>&gt; rand.NextNormal();;</PRE>
+      <P>Note how a random number is generated using a simple function call with 
+      no arguments in both cases.</P>
+      <P>The following uses the Extreme Optimization library:</P>
+<PRE>&gt; let rand = Extreme.Statistics.Random.MersenneTwister();;
+val rand : Extreme.Statistics.Random.MersenneTwister
+&gt; let gaussian = Extreme.Statistics.Distributions.NormalDistribution();;
+val gaussian : Extreme.Statistics.Distributions.NormalDistribution
+&gt; gaussian.GetRandomVariate rand;;</PRE>
+      <P>Note how generating a random number requires the class implementing the 
+      random number generator to be passed at every invocation.</P>
+      <P>The following uses the NMath library by setting the              
+      <CODE>UniformDeviateMethod</CODE> of the              
+      <CODE>gaussian</CODE> object to generate random numbers using the Mersenne 
+      Twister algorithm:           </P>
+<PRE>&gt; let rand = CenterSpace.NMath.Core.RandGenMTwist();;
+val rand : CenterSpace.NMath.Core.RandGenMTwist
+&gt; let gaussian = CenterSpace.NMath.Core.RandGenNormal();;
+val gaussian : CenterSpace.NMath.Core.RandGenNormal
+&gt; gaussian.UniformDeviateMethod &lt;- rand.UniformDeviateMethod;;
+val it : unit = ()
+&gt; gaussian.NextDouble();;</PRE>
+      <P>Note how the underlying random number generator used by this Gaussian 
+      random number generator must be set explicitly.</P>
+      <P>The following uses the Math.NET library:</P>
+<PRE>&gt; let rand = MathNet.Numerics.RandomSources.MersenneTwisterRandomSource();;
+val rand : MathNet.Numerics.RandomSources.MersenneTwisterRandomSource
+&gt; let gaussian = MathNet.Numerics.Distributions.NormalDistribution(rand);;
+val gaussian : MathNet.Numerics.Distributions.NormalDistribution
+&gt; gaussian.NextDouble();;</PRE>
+      <P>The most amazing aspect of these results is that the free library not 
+      only provides substantially better performance but also provides one of 
+      the most elegant APIs.</P>
+      <P>The natural question is: why is the free library faster? The reason 
+      appears to be that all three commercial libraries use the standard 
+      Box-Muller accept reject algorithm (described in the book Numerical 
+      Recipies) whereas the free Math.NET library uses a lookup function, the 
+      cumulative distribution function (CDF) of the normal distribution, which 
+      can be calculated quickly and accurately in terms of an implementation of 
+      the error function (erf).</P>
+      <H2>Test machine</H2>
+      <P>The following machine was used for these benchmarks:</P>
+      <P>
+      <UL>
+        <LI>AMD Athlon64 X2 dual core 2.2GHz (4400+) Socket 939 CPU</LI>
+        <LI>Asustek A8N-SLI Premium S939 nForce4 SLI ATX motherboard</LI>
+        <LI>Gainward GeForce 7900GT 512MB DDR3 PCIE DUAL DVI graphics card</LI>
+        <LI>2x 1Gb Corsair Memory CMX1024 3200C2PT XMS3200 1GB 184DIMM CAS2 
+        RAM</LI>
+        <LI>Western Digital Caviar 250GB S300 16mb 7200rpm hard drive</LI>
+        <LI>HP LP2465 24" widescreen TFT monitor</LI></UL>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has taken a critical look at the implementations of the 
+      Gamma and Bessel J functions, interpolators and random number generators 
+      in four different libraries. The results show that cost does not correlate 
+      with quality.</P>
+      <P>By far the most serious problem is the broken implementation of the 
+      incomplete Gamma function in the NMath library from CenterSpace. Beyond 
+      that problem, the NMath library lacks an ordinary Gamma function and 
+      Bessel functions and has a slow random number generator.</P>
+      <P>In contrast, the IMSL and Extreme Optimization libraries appear to be 
+      of much higher quality than the NMath library, at least in the context of 
+      the functionality examined in this article. We have encountered issues 
+      with the IMSL library but none were serious. We have not found any 
+      problems with the Extreme Optimization library and its performance is 
+      uniformly excellent.</P>
+      <P>Future F#.NET Journal articles will examine the use of existing 
+      libraries for linear algebra and spectral 
+analysis.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Numerical%20Libraries%20special%20functions,%20interpolation%20and%20random%20numbers_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

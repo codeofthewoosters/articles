@@ -1,0 +1,205 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/parsingbyhand.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20hand%20written%20parsers_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20hand%20written%20parsers_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20hand%20written%20parsers_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20hand%20written%20parsers_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20hand%20written%20parsers_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Simple and efficient hand-written parsers</H1>
+      <P>In addition to the powerful code generation tools and libraries that 
+      assist with parsing, the ability to write simple and efficient parsers by 
+      hand can also be extremely useful. This article examines three different 
+      kinds of hand-written parsers ranging from very simple and extensible 
+      recursive-descent parsers to highly efficient bottom-up parsers.</P>
+      <H2>Introduction</H2>
+      <P>Tools like <CODE>fsyacc</CODE> and libraries like FParsec help to make 
+      complex parsers tractible in the F# programming language. However, heavy 
+      weight tools such as these are not always the best solution. In practice, 
+      parsers sometimes benefit from extreme simplicity (including avoiding 
+      external dependencies) and can sometimes require much better 
+      performance.</P>
+      <P>This article examines three different approaches to parsing. The first 
+      is the use of active patterns to write very simple recursive descent 
+      parsers. The second is Dijkstra's shunting yard algorithm. Finally, we 
+      examine a simple precedence climbing parser that offers extreme 
+      performance.</P>
+      <H2>Recursive-descent parsing with active patterns</H2>
+      <P>Recursive descent is a simple approach to parsing that makes complex 
+      parsers tractable in hand-written code even when higher-order functions 
+      are not available to facilitate parser combinators. The relative 
+      simplicity of hand-written recursive descent parsers stems from this being 
+      a "top-down" approach. This is effectively a form of search where the 
+      input is tested against a variety of patterns until either a matching 
+      pattern or syntax error is found.</P>
+      <P>Among functional programming languages, recursive descent parsers were 
+      particularly popular in OCaml because it offered an efficient imperative 
+      on-demand stream processing syntax that led to relatively simple parsers 
+      that were often several times faster than using parser combinators. In F#, 
+      the main advantage of recursive descent parsing is the ability to encode 
+      the parsers as active patterns and, therefore, embed them in pattern 
+      matches. This allows quite complicated patterns of input to be searched 
+      for in a single match case, allowing many parsers to be written very 
+      simply (but inefficiently) in F#.</P>
+      <P>Let's begin by defining an <CODE>expr</CODE> type for our abstract 
+      syntax tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;unop&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Neg;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;unop&nbsp;=&nbsp;|&nbsp;Neg<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;binop&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sub<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Div<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Pow;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;binop&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Sub<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Mul<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Div<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Pow<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;binOpOfChar&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'+'&nbsp;-&gt;&nbsp;Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'-'&nbsp;-&gt;&nbsp;Sub<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'*'&nbsp;-&gt;&nbsp;Mul<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'/'&nbsp;-&gt;&nbsp;Div<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'^'&nbsp;-&gt;&nbsp;Pow<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;c&nbsp;-&gt;&nbsp;invalidArg&nbsp;"binOpOfChar"&nbsp;(string&nbsp;c);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;binOpOfChar&nbsp;:&nbsp;char&nbsp;-&gt;&nbsp;binop<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;UnOp&nbsp;of&nbsp;unop&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;BinOp&nbsp;of&nbsp;binop&nbsp;*&nbsp;expr&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(~-)&nbsp;f&nbsp;=&nbsp;UnOp(Neg,&nbsp;f)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(+)&nbsp;(f,&nbsp;g)&nbsp;=&nbsp;BinOp(Add,&nbsp;f,&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(-)&nbsp;(f,&nbsp;g)&nbsp;=&nbsp;BinOp(Sub,&nbsp;f,&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(*)&nbsp;(f,&nbsp;g)&nbsp;=&nbsp;BinOp(Mul,&nbsp;f,&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(/)&nbsp;(f,&nbsp;g)&nbsp;=&nbsp;BinOp(Div,&nbsp;f,&nbsp;g)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;Pow(f,&nbsp;g)&nbsp;=&nbsp;BinOp(Pow,&nbsp;f,&nbsp;g);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;expr&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Int&nbsp;of&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;UnOp&nbsp;of&nbsp;unop&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;BinOp&nbsp;of&nbsp;binop&nbsp;*&nbsp;expr&nbsp;*&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;Pow&nbsp;:&nbsp;f:expr&nbsp;*&nbsp;g:expr&nbsp;-&gt;&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;+&nbsp;)&nbsp;:&nbsp;f:expr&nbsp;*&nbsp;g:expr&nbsp;-&gt;&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;/&nbsp;)&nbsp;:&nbsp;f:expr&nbsp;*&nbsp;g:expr&nbsp;-&gt;&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;*&nbsp;)&nbsp;:&nbsp;f:expr&nbsp;*&nbsp;g:expr&nbsp;-&gt;&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;-&nbsp;)&nbsp;:&nbsp;f:expr&nbsp;*&nbsp;g:expr&nbsp;-&gt;&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;static&nbsp;member&nbsp;(&nbsp;~-&nbsp;)&nbsp;:&nbsp;f:expr&nbsp;-&gt;&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>A recursive descent parser that converts lists of characters into 
+      values of the type <CODE>expr</CODE> may then be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;sums&nbsp;=&nbsp;Map['+',&nbsp;(+);&nbsp;'-',&nbsp;(-)]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;products&nbsp;=&nbsp;Map['*',&nbsp;(*);&nbsp;'/',&nbsp;(/)]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;(|Term|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Factor(e1,&nbsp;t)&nbsp;-&gt;&nbsp;Some(repeats&nbsp;sums&nbsp;e1&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;(|Factor|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Exponent(e1,&nbsp;t)&nbsp;-&gt;&nbsp;Some(repeats&nbsp;products&nbsp;e1&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;(|Exponent|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'-'::Exponent(e,&nbsp;t)&nbsp;-&gt;&nbsp;Some(-e,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Atom(e1,&nbsp;'^'::Exponent(e2,&nbsp;t))&nbsp;-&gt;&nbsp;Some(e1&nbsp;**&nbsp;e2,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Atom(e,&nbsp;t)&nbsp;-&gt;&nbsp;Some(e,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;(|Atom|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;c::t&nbsp;when&nbsp;'0'&lt;=c&nbsp;&amp;&amp;&nbsp;c&lt;='9'&nbsp;-&gt;&nbsp;Some(Int(int(string&nbsp;c)),&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'('::Term(e,&nbsp;')'::t)&nbsp;-&gt;&nbsp;Some(e,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;repeats&nbsp;seps&nbsp;e1&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;c::Factor(e2,&nbsp;t)&nbsp;when&nbsp;Map.containsKey&nbsp;c&nbsp;seps&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;repeats&nbsp;seps&nbsp;(seps.[c]&nbsp;e1&nbsp;e2)&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;t&nbsp;-&gt;&nbsp;e1,&nbsp;t;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;sums&nbsp;:&nbsp;Map&lt;char,(expr&nbsp;-&gt;&nbsp;expr&nbsp;-&gt;&nbsp;expr)&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;map&nbsp;[('+',&nbsp;&lt;fun:sums@250-4&gt;);&nbsp;('-',&nbsp;&lt;fun:sums@250-5&gt;)]<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;products&nbsp;:&nbsp;Map&lt;char,(expr&nbsp;-&gt;&nbsp;expr&nbsp;-&gt;&nbsp;expr)&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;map&nbsp;[('*',&nbsp;&lt;fun:products@251-4&gt;);&nbsp;('/',&nbsp;&lt;fun:products@251-5&gt;)]<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Term|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(expr&nbsp;*&nbsp;char&nbsp;list)&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Factor|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(expr&nbsp;*&nbsp;char&nbsp;list)&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Exponent|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(expr&nbsp;*&nbsp;char&nbsp;list)&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Atom|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(expr&nbsp;*&nbsp;char&nbsp;list)&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;repeats&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Map&lt;char,(expr&nbsp;-&gt;&nbsp;expr&nbsp;-&gt;&nbsp;expr)&gt;&nbsp;-&gt;&nbsp;expr&nbsp;-&gt;&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;expr&nbsp;*&nbsp;char&nbsp;list</CODE></P>
+      <P>Each search for a pattern of input is represented by a match case in a 
+      <CODE>match</CODE> expression. The <CODE>Term</CODE> active pattern 
+      searches for a term which is a sum of factors separated by <CODE>+</CODE> 
+      and <CODE>-</CODE> operators. Similarly, the <CODE>Factor</CODE> active 
+      pattern searches for a factor that is a product of exponents separated by 
+      <CODE>*</CODE> and <CODE>/</CODE> operators. The <CODE>Exponent</CODE> 
+      active pattern searches for powers that are either negated atoms (e.g. 
+      <CODE>-3</CODE>), atoms raised to the power of other exponents or lone 
+      atoms. The <CODE>Atom</CODE> active pattern searches for atomic 
+      expressions that are either single-digit numbers or bracketed 
+      expressions.</P>
+      <P>Note how elegantly the match cases 
+      <CODE>Atom(e1,&nbsp;'^'::Exponent(e2,&nbsp;t))</CODE> and 
+      <CODE>'('::Term(e,&nbsp;')'::t)</CODE> parse the exponent operator 
+      <CODE>^</CODE> and bracketed expressions, respectively. The use of active 
+      patterns allows multiple searches to be combined into a single pattern. 
+      This style of programming is most useful when productivity is much more 
+      important than performance. For example, this is an ideal way to write 
+      parsers for Behavioural-Driven Development (BDD) tests, as we shall see in 
+      a future article.</P>
+      <P>However, there is some subtle complexity here. The exponent operator 
+      <CODE>^</CODE> was easy to parse using this approach because it is right 
+      associative, i.e. <CODE>2^3^4</CODE> means <CODE>2^(3^4)</CODE>, but the 
+      <CODE>-</CODE> and <CODE>/</CODE> operators are left associative by 
+      convention. Recursive descent parsers cannot express left associative 
+      operators so easily because encoding them directly leads to left recursion 
+      that would cause the parser to go into an infinite loop. For example, the 
+      following is conceptually accurate but will not terminate when executed 
+      because <CODE>Term</CODE> calls itself directly:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|Term|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Term(e1,&nbsp;'-'::Factor(e2,&nbsp;t))&nbsp;-&gt;&nbsp;Some(e1&nbsp;-&nbsp;e2,&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;...</CODE></P>
+      <P>The solution is to use a separate function to eat sequences of 
+      left-associate operators, accumulating the resulting expression. This was 
+      achieved neatly using the <CODE>repeats</CODE> function that detects zero 
+      or more repeats of any of a given set of binary operators and applies the 
+      associated function. The <CODE>sums</CODE> and <CODE>products</CODE> maps 
+      provide the concrete mappings from the operator's character to its 
+      associated function.</P>
+      <P>Note that the <CODE>+</CODE> and <CODE>*</CODE> are non-associative but 
+      we have treated them as left associative in the interests of 
+      simplicity.</P>
+      <P>For example, the following uses this function to parse two example 
+      strings that demonstrate the handling of precedence:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(Term(e,&nbsp;[]))&nbsp;=&nbsp;List.ofSeq&nbsp;"1+2*3^4";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;e&nbsp;:&nbsp;expr&nbsp;=&nbsp;BinOp&nbsp;(Add,Int&nbsp;1,BinOp&nbsp;(Mul,Int&nbsp;2,BinOp&nbsp;(Pow,Int&nbsp;3,Int&nbsp;4)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(Term(e,&nbsp;[]))&nbsp;=&nbsp;List.ofSeq&nbsp;"1^2*3+4";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;e&nbsp;:&nbsp;expr&nbsp;=&nbsp;BinOp&nbsp;(Add,BinOp&nbsp;(Mul,BinOp&nbsp;(Pow,Int&nbsp;1,Int&nbsp;2),Int&nbsp;3),Int&nbsp;4)</CODE></P>
+      <P>And the next two examples demonstrate the handling of left- and 
+      right-associative operators, respectively:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(Term(e,&nbsp;[]))&nbsp;=&nbsp;List.ofSeq&nbsp;"1-2-3-4";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;e&nbsp;:&nbsp;expr&nbsp;=&nbsp;BinOp&nbsp;(Sub,BinOp&nbsp;(Sub,BinOp&nbsp;(Sub,Int&nbsp;1,Int&nbsp;2),Int&nbsp;3),Int&nbsp;4)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(Term(e,&nbsp;[]))&nbsp;=&nbsp;List.ofSeq&nbsp;"1^2^3^4";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;e&nbsp;:&nbsp;expr&nbsp;=&nbsp;BinOp&nbsp;(Pow,Int&nbsp;1,BinOp&nbsp;(Pow,Int&nbsp;2,BinOp&nbsp;(Pow,Int&nbsp;3,Int&nbsp;4)))</CODE></P>
+      <H2>Shunting yard</H2>
+      <P>Recursive descent parsers are slow because searching entails 
+      backtracking when a branch of the search fails to match completely. 
+      Fortunately, it is usually possible to remove all searching from a parser, 
+      leaving a parser that acts upon each input token in turn. Dijkstra 
+      described this as a "shunting yard" algorithm because the process of 
+      buffering up previously-seen tokens resembles the process used to reorder 
+      train carriages in a shunting yard.</P>
+      <P>The basic idea is to traverse each input token in turn accumulating 
+      both a stack of expressions and a stack of operators waiting to be 
+      applied.</P>
+      <P>The following <CODE>apply</CODE> function applies a binary operator by 
+      popping two expressions off the stack and pushing the result back on:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;apply&nbsp;exprs&nbsp;op&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;exprs&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;arg2::arg1::exprs&nbsp;-&gt;&nbsp;BinOp(op,&nbsp;arg1,&nbsp;arg2)::exprs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;invalidArg&nbsp;"parse"&nbsp;"Mismatched&nbsp;parenthesis.";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;apply&nbsp;:&nbsp;expr&nbsp;list&nbsp;-&gt;&nbsp;binop&nbsp;-&gt;&nbsp;expr&nbsp;list</CODE></P>
+      <P>The following <CODE>op</CODE> function detects whether or not a new 
+      operator has a lower precedence or equal precedence and left associativity 
+      compared to the operator at the top of the stack, applying the operator 
+      from the stack if so or pushing the new operator onto the stack 
+      otherwise:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;op&nbsp;(ops,&nbsp;opss)&nbsp;exprs&nbsp;op1&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;op1,&nbsp;ops&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(Add&nbsp;|&nbsp;Sub),&nbsp;(Add&nbsp;|&nbsp;Sub&nbsp;|&nbsp;Mul&nbsp;|&nbsp;Div&nbsp;|&nbsp;Pow&nbsp;as&nbsp;op2)::ops<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(Mul&nbsp;|&nbsp;Div),&nbsp;(Mul&nbsp;|&nbsp;Div&nbsp;|&nbsp;Pow&nbsp;as&nbsp;op2)::ops&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;op&nbsp;(ops,&nbsp;opss)&nbsp;(apply&nbsp;exprs&nbsp;op2)&nbsp;op1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;op1,&nbsp;ops&nbsp;-&gt;&nbsp;((op1::ops),&nbsp;opss),&nbsp;exprs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;op&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;binop&nbsp;list&nbsp;*&nbsp;'a&nbsp;-&gt;&nbsp;expr&nbsp;list&nbsp;-&gt;&nbsp;binop&nbsp;-&gt;&nbsp;(binop&nbsp;list&nbsp;*&nbsp;'a)&nbsp;*&nbsp;expr&nbsp;list</CODE></P>
+      <P>The following <CODE>aux</CODE> function accumulates the effect of a new 
+      token:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;aux&nbsp;((ops,&nbsp;opss),&nbsp;exprs)&nbsp;token&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;(ops,&nbsp;opss),&nbsp;token&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;opss,&nbsp;('+'&nbsp;|&nbsp;'-'&nbsp;|&nbsp;'*'&nbsp;|&nbsp;'/'&nbsp;|&nbsp;'^'&nbsp;as&nbsp;c)&nbsp;-&gt;&nbsp;op&nbsp;opss&nbsp;exprs&nbsp;(binOpOfChar&nbsp;c)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(ops,&nbsp;opss),&nbsp;'('&nbsp;-&gt;&nbsp;([],&nbsp;ops::opss),&nbsp;exprs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(op::ops,&nbsp;opss),&nbsp;')'&nbsp;-&gt;&nbsp;aux&nbsp;((ops,&nbsp;opss),&nbsp;apply&nbsp;exprs&nbsp;op)&nbsp;token<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;([],&nbsp;ops::opss),&nbsp;')'&nbsp;-&gt;&nbsp;(ops,&nbsp;opss),&nbsp;exprs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(_,&nbsp;[]),&nbsp;')'&nbsp;-&gt;&nbsp;invalidArg&nbsp;"parse"&nbsp;"Mismatched&nbsp;parenthesis."<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;qss,&nbsp;c&nbsp;-&gt;&nbsp;qss,&nbsp;Int(int(string&nbsp;c))::exprs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;aux&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(binop&nbsp;list&nbsp;*&nbsp;binop&nbsp;list&nbsp;list)&nbsp;*&nbsp;expr&nbsp;list&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char&nbsp;-&gt;&nbsp;(binop&nbsp;list&nbsp;*&nbsp;binop&nbsp;list&nbsp;list)&nbsp;*&nbsp;expr&nbsp;list</CODE></P>
+      <P>Finally, the <CODE>parse</CODE> function folds the <CODE>aux</CODE> 
+      function over the tokens and applies the remaining operators on the stack 
+      until a single expression remains (or an error has occurred):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parse&nbsp;tokens&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(ops,&nbsp;opss),&nbsp;exprs&nbsp;=&nbsp;Seq.fold&nbsp;aux&nbsp;(([],&nbsp;[]),&nbsp;[])&nbsp;tokens<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;Seq.fold&nbsp;apply&nbsp;exprs&nbsp;(Seq.append&nbsp;[ops]&nbsp;opss&nbsp;|&gt;&nbsp;Seq.concat)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[expr]&nbsp;-&gt;&nbsp;expr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;invalidArg&nbsp;"parse"&nbsp;"Syntax&nbsp;error";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parse&nbsp;:&nbsp;seq&lt;char&gt;&nbsp;-&gt;&nbsp;expr</CODE></P>
+      <P>The <CODE>-</CODE> operator is left associative so the following parses 
+      <CODE>1-2-3-4</CODE> as <CODE>((1-2)-3)-4</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;"1-2-3-4";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;expr&nbsp;=&nbsp;BinOp&nbsp;(Sub,BinOp&nbsp;(Sub,BinOp&nbsp;(Sub,Int&nbsp;1,Int&nbsp;2),Int&nbsp;3),Int&nbsp;4)</CODE></P>
+      <P>The <CODE>^</CODE> operator is right associative so the following 
+      parses <CODE>1^2^3^4</CODE> as <CODE>1^(2^(3^4))</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;"1^2^3^4";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;expr&nbsp;=&nbsp;BinOp&nbsp;(Pow,Int&nbsp;1,BinOp&nbsp;(Pow,Int&nbsp;2,BinOp&nbsp;(Pow,Int&nbsp;3,Int&nbsp;4)))</CODE></P>
+      <P>The following two examples demonstrate operator precedence:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;"1+2*3^4";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;expr&nbsp;=&nbsp;BinOp&nbsp;(Add,Int&nbsp;1,BinOp&nbsp;(Mul,Int&nbsp;2,BinOp&nbsp;(Pow,Int&nbsp;3,Int&nbsp;4)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parse&nbsp;"1^2*3+4";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;expr&nbsp;=&nbsp;BinOp&nbsp;(Add,BinOp&nbsp;(Mul,BinOp&nbsp;(Pow,Int&nbsp;1,Int&nbsp;2),Int&nbsp;3),Int&nbsp;4)</CODE></P>
+      <H2>Precedence climbing</H2>
+      <P>The shunting yard algorithm is much faster than the recursive descent 
+      parser but it still incurs the unnecessary overhead of a function call for 
+      each step down the sequence of precedences. The converse is a parser that 
+      climbs up precedence levels rather than recursing down them. The following 
+      is a set of three mutually recursive function and active pattern 
+      definitions that form a precedence climbing parser:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;(|Expr|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;P(f,&nbsp;xs)&nbsp;-&gt;&nbsp;Expr(loop&nbsp;('&nbsp;',&nbsp;f,&nbsp;xs))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs&nbsp;-&gt;&nbsp;invalidArg&nbsp;"Expr"&nbsp;(sprintf&nbsp;"%A"&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;loop&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'&nbsp;'&nbsp;as&nbsp;oop,&nbsp;f,&nbsp;('+'&nbsp;|&nbsp;'-'&nbsp;as&nbsp;op)::P(g,&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;('&nbsp;'&nbsp;|&nbsp;'+'&nbsp;|&nbsp;'-'&nbsp;as&nbsp;oop),&nbsp;f,&nbsp;('*'&nbsp;|&nbsp;'/'&nbsp;as&nbsp;op)::P(g,&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;oop,&nbsp;f,&nbsp;('^'&nbsp;as&nbsp;op)::P(g,&nbsp;xs)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;h,&nbsp;xs&nbsp;=&nbsp;loop&nbsp;(op,&nbsp;g,&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(oop,&nbsp;BinOp(binOpOfChar&nbsp;op,&nbsp;f,&nbsp;h),&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_,&nbsp;f,&nbsp;xs&nbsp;-&gt;&nbsp;f,&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;(|P|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;'('::Expr(f,&nbsp;')'::xs)&nbsp;-&gt;&nbsp;Some(P(f,&nbsp;xs))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;c::_&nbsp;as&nbsp;xs&nbsp;when&nbsp;'0'&nbsp;&lt;=&nbsp;c&nbsp;&amp;&amp;&nbsp;c&nbsp;&lt;=&nbsp;'9'&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;n&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;c2::xs&nbsp;when&nbsp;'0'&nbsp;&lt;=&nbsp;c2&nbsp;&amp;&amp;&nbsp;c2&nbsp;&lt;=&nbsp;'9'&nbsp;-&gt;&nbsp;loop&nbsp;(10*n&nbsp;+&nbsp;int(string&nbsp;c2))&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs&nbsp;-&gt;&nbsp;Some(P(Int&nbsp;n,&nbsp;xs))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;0&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Expr|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;expr&nbsp;*&nbsp;char&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;loop&nbsp;:&nbsp;char&nbsp;*&nbsp;expr&nbsp;*&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;expr&nbsp;*&nbsp;char&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|P|_|&nbsp;)&nbsp;:&nbsp;char&nbsp;list&nbsp;-&gt;&nbsp;(expr&nbsp;*&nbsp;char&nbsp;list)&nbsp;option</CODE></P>
+      <P>This style of parsing has the potential to be even more efficient than 
+      the shunting yard but there are still some unnecessary overheads. Firstly, 
+      the use of active patterns to simplify the code introduces unnecessary 
+      allocations.</P>
+      <H2>Performance</H2>
+      <P>The following <CODE>gen</CODE> function constructs an arbitrarily-long 
+      list of characters that form a valid expression and can then be used to 
+      benchmark the performance of the three different kinds of parsers 
+      presented here:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;gen&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n=0&nbsp;then&nbsp;['1']&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;list&nbsp;=&nbsp;gen(n-1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List.concat[list;&nbsp;['+'];&nbsp;list;&nbsp;['*';&nbsp;'('];&nbsp;list;&nbsp;['-'];&nbsp;list;&nbsp;[')']];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;gen&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;char&nbsp;list</CODE></P>
+      <P>For example, using the following expression measures the time taken to 
+      parse inputs of different lengths:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;i&nbsp;in&nbsp;1..10&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;text&nbsp;=&nbsp;gen&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;length&nbsp;=&nbsp;List.length&nbsp;text<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parse&nbsp;text&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;length,&nbsp;timer.Elapsed.TotalSeconds&nbsp;]</CODE></P>
+      <P>The following graph illustrates the performance characteristics of the 
+      resulting parsers:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20hand%20written%20parsers_files/ParserPerformance.png"></P>
+      <P>Note that the performance of the recursive descent parser is so poor 
+      that it would only be suitable for parsing small inputs. One application 
+      of this style of recursive descent parser is in interpreting high-level 
+      descriptions of tests, such as those used for Behavioural-Driven 
+      Development.</P>
+      <H2>Summary</H2>
+      <P>This article has examined a way of constructing recursive descent 
+      parsers using active patterns that is quick and simple to use as well as 
+      two efficient approaches to parsing: shunting yard and precedence 
+      climbing. These are all general-purpose solutions that can be applied 
+      under different circumstances.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of parsing to 
+      look at the FParsec combinator library and major applicatons for parsers 
+      such as BDD test frameworks.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20hand%20written%20parsers_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

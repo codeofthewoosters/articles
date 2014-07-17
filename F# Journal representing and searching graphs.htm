@@ -1,0 +1,183 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0090)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/basicgraphalgorithms.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20representing%20and%20searching%20graphs_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20representing%20and%20searching%20graphs_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20representing%20and%20searching%20graphs_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20representing%20and%20searching%20graphs_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20representing%20and%20searching%20graphs_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Representing and searching graphs</H1>
+      <P>Graph theory is an important branch of mathematics in the context of 
+      programming because important problems can often be phrased in terms of 
+      graphs. This articles takes a look at the representation of graphs in F# 
+      and introduces the basic operations of depth-first and breadth-first 
+      searches.</P>
+      <H2>Introduction</H2>
+      <P>Graph are represented by a pair <CODE>(V,&nbsp;E)</CODE> of vertices 
+      and edges. The edges are links from one vertex to another. Undirected 
+      graphs have edges that effectively point in both directions simultaneously 
+      whereas directed graphs have edges that point in a single direction, from 
+      source to destination.</P>
+      <P>In some domains, graphs are referred to as networks. For example, 
+      social networks that describe the relationships between people are graphs. 
+      Other applications include chemistry, where molecules are represented as 
+      graphs with atoms as vertices and atomic bonds as edges connecting those 
+      vertices.</P>
+      <P>This article examines an abstract representation of graphs that allows 
+      the same code to be reused for a wide variety of graph-related problems 
+      and goes on to discuss imperative and purely functional ways to implement 
+      some basic graph algorithms.</P>
+      <H2>Representing graphs</H2>
+      <P>The simplest way to represent a graph in F# is as a collection of 
+      vertices and a function that gives the outward edges from any given 
+      vertex. Here, we call that function <CODE>edgesFrom</CODE>.</P>
+      <P>The following union type defines a variety of vertices that we shall 
+      use to form an example graph:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;vertex&nbsp;=&nbsp;M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;vertex&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;M<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;N<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;O<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;P<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Q<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;R<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;S<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;U<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;V<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;W<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;X<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Y<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Z</CODE></P>
+      <P>The following <CODE>vertices</CODE> value enumerates the vertices:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;vertices&nbsp;=&nbsp;[M;N;O;P;Q;R;S;T;U;V;W;X;Y;Z];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;vertices&nbsp;:&nbsp;vertex&nbsp;list&nbsp;=&nbsp;[M;&nbsp;N;&nbsp;O;&nbsp;P;&nbsp;Q;&nbsp;R;&nbsp;S;&nbsp;T;&nbsp;U;&nbsp;V;&nbsp;W;&nbsp;X;&nbsp;Y;&nbsp;Z]</CODE></P>
+      <P>The following <CODE>edgesFrom</CODE> function returns a list of 
+      vertices for any of the possible input vertices:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;edgesFrom&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;M&nbsp;-&gt;&nbsp;[X;Q;R]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;N&nbsp;-&gt;&nbsp;[Q;U;O]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;O&nbsp;-&gt;&nbsp;[R;S]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;P&nbsp;-&gt;&nbsp;[O;S;Z]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Q&nbsp;|&nbsp;U&nbsp;-&gt;&nbsp;[T]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;R&nbsp;-&gt;&nbsp;[U;Y]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;S&nbsp;-&gt;&nbsp;[R]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;V&nbsp;-&gt;&nbsp;[X;W]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;W&nbsp;-&gt;&nbsp;[Z]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Y&nbsp;-&gt;&nbsp;[V]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;T&nbsp;|&nbsp;X&nbsp;|&nbsp;Z&nbsp;-&gt;&nbsp;[];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;edgesFrom&nbsp;:&nbsp;vertex&nbsp;-&gt;&nbsp;vertex&nbsp;list</CODE></P>
+      <P>Together, these represent the following example graph:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20representing%20and%20searching%20graphs_files/example.png"></P>
+      <H2>Depth-first search</H2>
+      <P>Perhaps the simplest graph algorithm is a search that recursively 
+      searches child vertices by traversing edges until the entire graph has 
+      been traversed.</P>
+      <P>The following <CODE>depthFirstSearch</CODE> function does exactly this 
+      using the <CODE>edgesFrom</CODE> function, collection of all vertices 
+      <CODE>vs</CODE> and a start vertex <CODE>v</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Collections.Generic;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;depthFirstSearch&nbsp;edgesFrom&nbsp;vs&nbsp;v&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stack&nbsp;=&nbsp;Stack&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stack.Push&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;visited&nbsp;=&nbsp;HashSet&lt;_&gt;(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;result&nbsp;=&nbsp;ResizeArray()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;stack.Count&nbsp;&gt;&nbsp;0&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;v&nbsp;=&nbsp;stack.Pop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;&lt;|&nbsp;visited.Contains&nbsp;v&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;visited.Add&nbsp;v&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.Add&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;edgesFrom&nbsp;v&nbsp;|&gt;&nbsp;Seq.iter&nbsp;stack.Push<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.ToArray()&nbsp;|&gt;&nbsp;seq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;depthFirstSearch&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;'c&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;seq&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>For example, a depth-first search of our example graph starting from 
+      the vertex <CODE>P</CODE> traverses the reachable vertices in the 
+      following order:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;depthFirstSearch&nbsp;edgesFrom&nbsp;vertices&nbsp;P;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;vertex&gt;&nbsp;=&nbsp;[|P;&nbsp;Z;&nbsp;S;&nbsp;R;&nbsp;Y;&nbsp;V;&nbsp;W;&nbsp;X;&nbsp;U;&nbsp;T;&nbsp;O|]</CODE></P>
+      <P>The essence of depth-first search is to maintain a "visit" stack of the 
+      vertices waiting to be visited. As new child vertices are discovered they 
+      are pushed onto the top of this stack before the next vertex to be 
+      traversed is popped off from the top of the stack.</P>
+      <H2>Breadth-first search</H2>
+      <P>A closely related algorithm is breadth-first search which, as the name 
+      suggests, searches a graph in a different order. The traversal order of a 
+      breadth-first search might be described as an expanding wavefront that 
+      covers the vertices reachable by traversing a single edge from the origin, 
+      then those reachable via two edges and three edges and so on until all 
+      reachable vertices have been traversed.</P>
+      <P>The following imperative <CODE>breadthFirstSearch</CODE> function 
+      implements this algorithm:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;breadthFirstSearch&nbsp;edgesFrom&nbsp;vs&nbsp;v&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;queue&nbsp;=&nbsp;System.Collections.Generic.Queue&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;queue.Enqueue&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;visited&nbsp;=&nbsp;System.Collections.Generic.HashSet&lt;_&gt;(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;result&nbsp;=&nbsp;ResizeArray()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;queue.Count&nbsp;&gt;&nbsp;0&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;v&nbsp;=&nbsp;queue.Dequeue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;&lt;|&nbsp;visited.Contains&nbsp;v&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;visited.Add&nbsp;v&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.Add&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;edgesFrom&nbsp;v&nbsp;|&gt;&nbsp;Seq.iter&nbsp;queue.Enqueue<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.ToArray()&nbsp;|&gt;&nbsp;seq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;breadthFirstSearch&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;'c&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;seq&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>For example, a breadth-first search of our example graph starting from 
+      the vertex <CODE>P</CODE> traverses the reachable vertices in the 
+      following order:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;breadthFirstSearch&nbsp;edgesFrom&nbsp;vertices&nbsp;P;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;vertex&gt;&nbsp;=&nbsp;[|P;&nbsp;O;&nbsp;S;&nbsp;Z;&nbsp;R;&nbsp;U;&nbsp;Y;&nbsp;T;&nbsp;V;&nbsp;X;&nbsp;W|]</CODE></P>
+      <P>Note how the vertices <CODE>U</CODE> and <CODE>Y</CODE> appear next to 
+      each other because they are both reachable from the origin vertex 
+      <CODE>P</CODE> by traversing three edges.</P>
+      <H2>Reuse</H2>
+      <P>An interesting property of the depth-first and breadth-first searches 
+      defined above is that they both use exactly the same algorithm except for 
+      the data structure used to represent the vertices waiting to be visited. 
+      The depth-first search used a stack whereas the breadth-first search used 
+      a queue. Consequently, we can productively factor out this commonality, 
+      producing a generic <CODE>search</CODE> function parameterized over the 
+      operations on the visit collection:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;search&nbsp;add&nbsp;tryTake&nbsp;edgesFrom&nbsp;vs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;visited&nbsp;=&nbsp;System.Collections.Generic.HashSet&lt;_&gt;(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;result&nbsp;=&nbsp;ResizeArray()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;tryTake()&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;v&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;&lt;|&nbsp;visited.Contains&nbsp;v&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;visited.Add&nbsp;v&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.Add&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;edgesFrom&nbsp;v&nbsp;|&gt;&nbsp;Seq.iter&nbsp;add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;result.ToArray()&nbsp;|&gt;&nbsp;seq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;search&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;(unit&nbsp;-&gt;&nbsp;'b&nbsp;option)&nbsp;-&gt;&nbsp;('b&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;'d&nbsp;-&gt;&nbsp;seq&lt;'b&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'b&nbsp;:&nbsp;equality</CODE></P>
+      <P>Depth-first search may then be implemented by providing the operations 
+      for a stack:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;depthFirstSearch&nbsp;edgesFrom&nbsp;vs&nbsp;v&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stack&nbsp;=&nbsp;System.Collections.Generic.Stack[v]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tryPop()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;stack.Count&nbsp;=&nbsp;0&nbsp;then&nbsp;None&nbsp;else&nbsp;Some(stack.Pop())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;search&nbsp;stack.Push&nbsp;tryPop&nbsp;edgesFrom&nbsp;vs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;depthFirstSearch&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;'c&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;seq&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>Breadth-first search may then be implemented by providing the 
+      operations for a queue:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;breadthFirstSearch&nbsp;edgesFrom&nbsp;vs&nbsp;v&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;queue&nbsp;=&nbsp;System.Collections.Generic.Queue[v]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tryDequeue()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;queue.Count&nbsp;=&nbsp;0&nbsp;then&nbsp;None&nbsp;else&nbsp;Some(queue.Dequeue())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;search&nbsp;queue.Enqueue&nbsp;tryDequeue&nbsp;edgesFrom&nbsp;vs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;breadthFirstSearch&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;'c&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;seq&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <H2>Purely functional implementations</H2>
+      <P>The mutable <CODE>HashSet</CODE> and <CODE>Dictionary</CODE> data 
+      structures used in the preceding implementations may be replaced with 
+      immutable data structures in order to construct purely functional 
+      implementations of the relevant algorithms.</P>
+      <P>The generic <CODE>search</CODE> function may then be written:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;search&nbsp;empty&nbsp;adds&nbsp;tryTake&nbsp;edgesFrom&nbsp;vs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;waiting&nbsp;visited&nbsp;vs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;tryTake&nbsp;waiting&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;List.rev&nbsp;vs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(v,&nbsp;waiting)&nbsp;when&nbsp;Set.contains&nbsp;v&nbsp;visited&nbsp;-&gt;&nbsp;loop&nbsp;waiting&nbsp;visited&nbsp;vs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(v,&nbsp;waiting)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(adds&nbsp;waiting&nbsp;(edgesFrom&nbsp;v))&nbsp;(Set.add&nbsp;v&nbsp;visited)&nbsp;(v::vs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;empty&nbsp;Set.empty&nbsp;[];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;search&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;('c&nbsp;*&nbsp;'a)&nbsp;option)&nbsp;-&gt;&nbsp;('c&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;'d&nbsp;-&gt;&nbsp;'c&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'c&nbsp;:&nbsp;comparison</CODE></P>
+      <P>This implementation is shorter and more comprehensible than the 
+      previous imperative implementation. The nested <CODE>loop</CODE> function 
+      uses the <CODE>tryTake</CODE> function to try to extract a vertex from the 
+      <CODE>waiting</CODE> collection of vertices waiting to be visited. If no 
+      vertices are left then the accumulated list is reversed and returned. If a 
+      previously-visited vertex is found then it is skipped. If a new vertex is 
+      discovered then <CODE>loop</CODE> repeats with all of the vertices 
+      directly reachable added to the <CODE>waiting</CODE> collection, the new 
+      vertex added to the <CODE>visited</CODE> set and the new vertex prepended 
+      onto the accumulated list. The search begins using an <CODE>empty</CODE> 
+      initial <CODE>waiting</CODE> collection, an empty <CODE>visited</CODE> set 
+      and the empty list.</P>
+      <P>Depth-first search may then be implemented as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;depthFirstSearch&nbsp;edgesFrom&nbsp;vs&nbsp;v&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tryTake&nbsp;=&nbsp;function&nbsp;[]&nbsp;-&gt;&nbsp;None&nbsp;|&nbsp;x::xs&nbsp;-&gt;&nbsp;Some(x,&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;search&nbsp;[v]&nbsp;(List.fold&nbsp;(fun&nbsp;ys&nbsp;x&nbsp;-&gt;&nbsp;x::ys))&nbsp;tryTake&nbsp;edgesFrom&nbsp;vs<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;depthFirstSearch&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;'a&nbsp;list)&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>The complexity of this implementation is comparable to that of the 
+      imperative alternative. The stack data structure is represented by a 
+      simple singly-linked list. New elements are pushed onto the stack by 
+      prepending them onto the list. Existing elements are taken off the stack 
+      by decapitating them from the front of the list.</P>
+      <P>Breadth-first search is trickier to implement due to the absence of a 
+      purely functional queue data structure in .NET and the F# standard 
+      library. A minimal implementation of a real-time queue (that performs 
+      every invocation of every operation in constant time) may be written as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Queue&lt;'a&gt;&nbsp;=&nbsp;private&nbsp;{&nbsp;xs:&nbsp;LazyList&lt;'a&gt;;&nbsp;ys:&nbsp;'a&nbsp;list;&nbsp;zs:&nbsp;LazyList&lt;'a&gt;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;private&nbsp;rotate&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LazyList.Nil,&nbsp;y::_,&nbsp;zs&nbsp;-&gt;&nbsp;LazyList.cons&nbsp;y&nbsp;zs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LazyList.Cons(x,&nbsp;xs),&nbsp;y::ys,&nbsp;zs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LazyList.cons&nbsp;x&nbsp;(rotate(xs,&nbsp;ys,&nbsp;LazyList.cons&nbsp;y&nbsp;zs))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_,&nbsp;[],&nbsp;_&nbsp;-&gt;&nbsp;invalidArg&nbsp;""&nbsp;"Queue.rotate"<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;private&nbsp;exec&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs,&nbsp;ys,&nbsp;LazyList.Cons(_,&nbsp;zs)&nbsp;-&gt;&nbsp;{xs=xs;&nbsp;ys=ys;&nbsp;zs=zs}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs,&nbsp;ys,&nbsp;LazyList.Nil&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs'&nbsp;=&nbsp;rotate&nbsp;(xs,&nbsp;ys,&nbsp;LazyList.empty)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{xs=xs';&nbsp;ys=[];&nbsp;zs=xs'}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;empty&nbsp;=&nbsp;{&nbsp;xs&nbsp;=&nbsp;LazyList.empty;&nbsp;ys&nbsp;=&nbsp;[];&nbsp;zs&nbsp;=&nbsp;LazyList.empty}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;isEmpty&nbsp;q&nbsp;=&nbsp;LazyList.isEmpty&nbsp;q.xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;add&nbsp;q&nbsp;y&nbsp;=&nbsp;exec(q.xs,&nbsp;y::q.ys,&nbsp;q.zs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tryTake&nbsp;q&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;q.xs&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LazyList.Cons(x,&nbsp;xs)&nbsp;-&gt;&nbsp;Some(x,&nbsp;exec(xs,&nbsp;q.ys,&nbsp;q.zs))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;LazyList.Nil&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Queue&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;private&nbsp;{xs:&nbsp;LazyList&lt;'a&gt;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ys:&nbsp;'a&nbsp;list;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;zs:&nbsp;LazyList&lt;'a&gt;;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;rotate&nbsp;:&nbsp;LazyList&lt;'a&gt;&nbsp;*&nbsp;'a&nbsp;list&nbsp;*&nbsp;LazyList&lt;'a&gt;&nbsp;-&gt;&nbsp;LazyList&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;exec&nbsp;:&nbsp;LazyList&lt;'a&gt;&nbsp;*&nbsp;'a&nbsp;list&nbsp;*&nbsp;LazyList&lt;'a&gt;&nbsp;-&gt;&nbsp;Queue&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;empty&lt;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison&gt;&nbsp;:&nbsp;Queue&lt;obj&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;isEmpty&nbsp;:&nbsp;Queue&lt;'a&gt;&nbsp;-&gt;&nbsp;bool<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;Queue&lt;'a&gt;&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;Queue&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;tryTake&nbsp;:&nbsp;Queue&lt;'a&gt;&nbsp;-&gt;&nbsp;('a&nbsp;*&nbsp;Queue&lt;'a&gt;)&nbsp;option</CODE></P>
+      <P>A breadth-first search may now be written in terms of the generic 
+      <CODE>search</CODE> function and the <CODE>Queue</CODE> module as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;breadthFirstSearch&nbsp;edgesFrom&nbsp;vs&nbsp;v&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;search&nbsp;(add&nbsp;empty&nbsp;v)&nbsp;(Seq.fold&nbsp;add)&nbsp;tryTake&nbsp;edgesFrom&nbsp;vs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;breadthFirstSearch&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;'c&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>These search functions have a wide variety of practical 
+      applications.</P>
+      <H2>Summary</H2>
+      <P>This article has examined the representation of graphs in F# and walked 
+      through the construction of depth-first and breadth-first search functions 
+      written in both imperative and purely functional styles. The use of 
+      mutable data structures, as is often the case, makes the imperative 
+      solutions significantly faster. However, it is worth noting that purely 
+      functional solutions including those described here have better 
+      performance in terms of latency. These latency characteristics are a 
+      consequence of all operations being guaranteed O(1) even in the worst case 
+      (where as the imperative <CODE>Queue</CODE> will sometimes resize its 
+      internally array in O(n)) and also because the resulting heap is more 
+      suitable for incremental traversal by the garbage collector because the 
+      maximum object size is bounded.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of graph 
+      algorithms.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20representing%20and%20searching%20graphs_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

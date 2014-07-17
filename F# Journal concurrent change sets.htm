@@ -1,0 +1,134 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0080)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/changesets.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20concurrent%20change%20sets_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20concurrent%20change%20sets_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20concurrent%20change%20sets_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20concurrent%20change%20sets_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20concurrent%20change%20sets_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Change sets</H1>
+      <P>Many applications that perform a series of insertions and removals to 
+      and from a set can benefit from the ability to maintain the 
+      currently-outstanding added and removed elements such that an external 
+      replica of the changing set can be updated in batches on demand. Perhaps 
+      the most valuable application is to decouple the performance of a 
+      background worker from the user interface thread and vice versa. This 
+      article studies a a solution that uses an asynchronous agent sitting 
+      between the worker and visualizer that allows the worker to add and remove 
+      elements while the visualizer concurrently requests change sets.</P>
+      <H2>Introduction</H2>
+      <P>A common problem in computationally-intensive GUI programs is neatly 
+      decoupling the performance of the background worker and user interface 
+      threads. If the background worker is only able to progress when explicitly 
+      allowed to do so by the UI thread (e.g. if it is being invoked by the UI 
+      thread) then the worker slows down when the UI thread is under load. 
+      Conversely, if the worker thread runs as quickly as possible posting all 
+      results to the UI thread then the UI thread quickly becomes overwhelmed 
+      and the user interface becomes sluggish.</P>
+      <P>The solution described in this article is to introduce an asynchronous 
+      agent between the two communicating components that decouples their 
+      performance characteristics. This agent can handle high-throughput results 
+      from the worker thread efficiently and respond to queries from the UI 
+      thread with low latency, giving the desired performance characteristics 
+      for the whole system.</P>
+      <P>This article actually develops three separate implementations of this 
+      asynchronous agent, using different techniques to implement the necessary 
+      set-theoretic operations. Finally, the performance of the three 
+      implementations is examined.</P>
+      <H2>Implementation</H2>
+      <P>We shall be accumulating the sets of elements that have been removed 
+      and added ready for the user interface thread to query. As these two sets 
+      will be of the same type, it is particularly valuable to factor them into 
+      a record type that names the two:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Updates&lt;'a&gt;&nbsp;=&nbsp;{&nbsp;removed:&nbsp;'a;&nbsp;added:&nbsp;'a&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Updates&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{removed:&nbsp;'a;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;added:&nbsp;'a;}</CODE></P>
+      <P>Note that we have left the underlying type generic in order to allow 
+      our implementations to return collections of different types.</P>
+      <P>Our asynchronous agents will process messages to add and remove 
+      elements and to query the sets of elements that have been removed and 
+      added since the last query. These three messages are represented by the 
+      following union type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Message&lt;'a,&nbsp;'b&nbsp;when&nbsp;'a:&nbsp;comparison&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Remove&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;RequestChanges&nbsp;of&nbsp;(Updates&lt;'b&gt;&nbsp;-&gt;&nbsp;unit);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Message&lt;'a,'b&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Remove&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;RequestChanges&nbsp;of&nbsp;(Updates&lt;'b&gt;&nbsp;-&gt;&nbsp;unit)</CODE></P>
+      <H2>Simple purely functional solution</H2>
+      <P>The sets of removed and added elements can be calculated as the set 
+      difference between the old and new sets and the new and old sets. This 
+      yields the simplest implementation of the asynchronous agent:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Pure1ChangeSet&lt;'a&nbsp;when&nbsp;'a:&nbsp;comparison&gt;()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;oldSet&nbsp;newSet&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;oldSet,&nbsp;newSet&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;x&nbsp;-&gt;&nbsp;oldSet,&nbsp;Set.add&nbsp;x&nbsp;newSet<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Remove&nbsp;x&nbsp;-&gt;&nbsp;oldSet,&nbsp;Set.remove&nbsp;x&nbsp;newSet<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;RequestChanges&nbsp;reply&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reply&nbsp;{&nbsp;removed&nbsp;=&nbsp;oldSet&nbsp;-&nbsp;newSet;&nbsp;added&nbsp;=&nbsp;newSet&nbsp;-&nbsp;oldSet&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;newSet,&nbsp;newSet<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;oldSet&nbsp;newSet<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;Set.empty&nbsp;Set.empty)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Add&nbsp;x&nbsp;=&nbsp;agent.Post(Add&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Remove&nbsp;x&nbsp;=&nbsp;agent.Post(Remove&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Changes()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.PostAndReply(fun&nbsp;reply&nbsp;-&gt;&nbsp;RequestChanges&nbsp;reply.Reply)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Dispose()&nbsp;=&nbsp;(agent&nbsp;:&gt;&nbsp;System.IDisposable).Dispose();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Pure1ChangeSet&lt;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;SimpleChangeSet&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Add&nbsp;:&nbsp;x:System.IComparable&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Changes&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Updates&lt;Set&lt;System.IComparable&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Remove&nbsp;:&nbsp;x:System.IComparable&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The F# <CODE>Set</CODE> collection makes set-theoretic operations 
+      remarkably simple. In this case, the old and new sets are accumulated and 
+      requests for updates are handled by computing the set differences (using 
+      the <CODE>-</CODE> operator).</P>
+      <H2>Incremental purely functional solution</H2>
+      <P>Another solution to this problem is to accumulate the sets of elements 
+      that have been removed and added incrementally rather than computing them 
+      on-demand as the previous solution did. The following implementation does 
+      this using the purely functional <CODE>Set</CODE> collection:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Pure2ChangeSet&lt;'a&nbsp;when&nbsp;'a:&nbsp;comparison&gt;()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;updates&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;updates&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Set.contains&nbsp;x&nbsp;updates.removed&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;updates&nbsp;with&nbsp;removed&nbsp;=&nbsp;Set.remove&nbsp;x&nbsp;updates.removed&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;updates&nbsp;with&nbsp;added&nbsp;=&nbsp;Set.add&nbsp;x&nbsp;updates.added&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Remove&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Set.contains&nbsp;x&nbsp;updates.added&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;updates&nbsp;with&nbsp;added&nbsp;=&nbsp;Set.remove&nbsp;x&nbsp;updates.added&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;updates&nbsp;with&nbsp;removed&nbsp;=&nbsp;Set.add&nbsp;x&nbsp;updates.removed&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;RequestChanges&nbsp;reply&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reply&nbsp;updates<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;removed&nbsp;=&nbsp;Set.empty;&nbsp;added&nbsp;=&nbsp;Set.empty&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;updates<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;{&nbsp;removed&nbsp;=&nbsp;Set.empty;&nbsp;added&nbsp;=&nbsp;Set.empty&nbsp;})<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Add&nbsp;x&nbsp;=&nbsp;agent.Post(Add&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Remove&nbsp;x&nbsp;=&nbsp;agent.Post(Remove&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Changes()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.PostAndReply(fun&nbsp;reply&nbsp;-&gt;&nbsp;RequestChanges&nbsp;reply.Reply)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Dispose()&nbsp;=&nbsp;(agent&nbsp;:&gt;&nbsp;System.IDisposable).Dispose();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Pure2ChangeSet&lt;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;PureChangeSet&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Add&nbsp;:&nbsp;x:System.IComparable&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Changes&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Updates&lt;Set&lt;System.IComparable&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Remove&nbsp;:&nbsp;x:System.IComparable&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Note that, when an element is being added, we are careful to attempt to 
+      remove an element from the set of removed elements before resorting to 
+      adding it to the set of added elements. This ensures that the two sets are 
+      kept disjoint.</P>
+      <H2>Impure solution</H2>
+      <P>The first purely functional solution cannot be rewritten using mutable 
+      data structures without having to copy the collections, degrading the 
+      performance of a query from O(1) to O(m+n). However, the second purely 
+      functional solution can be rewritten using mutable data structures as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Collections.Generic;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;ImpureChangeSet&lt;'a&nbsp;when&nbsp;'a:&nbsp;comparison&gt;()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;removed&nbsp;=&nbsp;HashSet(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;added&nbsp;=&nbsp;HashSet(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop()&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not(removed.Remove&nbsp;x)&nbsp;then&nbsp;added.Add&nbsp;x&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Remove&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not(added.Remove&nbsp;x)&nbsp;then&nbsp;removed.Add&nbsp;x&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;RequestChanges&nbsp;reply&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reply&nbsp;{&nbsp;removed&nbsp;=&nbsp;Array.ofSeq&nbsp;removed;&nbsp;added&nbsp;=&nbsp;Array.ofSeq&nbsp;added&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;removed.Clear()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;added.Clear()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Add&nbsp;x&nbsp;=&nbsp;agent.Post(Add&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Remove&nbsp;x&nbsp;=&nbsp;agent.Post(Remove&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Changes()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.PostAndReply(fun&nbsp;reply&nbsp;-&gt;&nbsp;RequestChanges&nbsp;reply.Reply)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Dispose()&nbsp;=&nbsp;(agent&nbsp;:&gt;&nbsp;System.IDisposable).Dispose();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ImpureChangeSet&lt;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;ImpureChangeSet&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Add&nbsp;:&nbsp;x:System.IComparable&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Changes&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Updates&lt;System.IComparable&nbsp;[]&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Remove&nbsp;:&nbsp;x:System.IComparable&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <H2>Benchmarking</H2>
+      <P>Perhaps the most obvious way to benchmark these three different 
+      implementations of our <CODE>ChangeSet</CODE> agent is to make them all 
+      adhere to a common interface. However, this would introduce unnecessary 
+      virtual dispatch when used generically (e.g. from benchmark code) so we 
+      choose to keep the implementations separate and opt instead to create a 
+      reusable <CODE>bench</CODE> function marked <CODE>inline</CODE> that will, 
+      therefore, invoke the necessary members directly:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;bench&nbsp;add&nbsp;remove&nbsp;changes&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;10<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;s&nbsp;=&nbsp;Array.create&nbsp;n&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k&nbsp;=&nbsp;Array.init&nbsp;n&nbsp;(sprintf&nbsp;"%d")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;100000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;rand.Next&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;s.[n]&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s.[n]&nbsp;&lt;-&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;remove&nbsp;k.[n]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s.[n]&nbsp;&lt;-&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;add&nbsp;k.[n]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;changes()&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%gs,&nbsp;%d&nbsp;elements"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(s&nbsp;|&gt;&nbsp;Seq.sumBy&nbsp;(function&nbsp;false&nbsp;-&gt;&nbsp;0&nbsp;|&nbsp;true&nbsp;-&gt;&nbsp;1));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;bench&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;(string&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;(unit&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"\nPure1/Pure2/Impure"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;s&nbsp;=&nbsp;new&nbsp;Pure1ChangeSet&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bench&nbsp;s.Add&nbsp;s.Remove&nbsp;s.Changes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;s&nbsp;=&nbsp;new&nbsp;Pure2ChangeSet&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bench&nbsp;s.Add&nbsp;s.Remove&nbsp;s.Changes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;s&nbsp;=&nbsp;new&nbsp;ImpureChangeSet&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;bench&nbsp;s.Add&nbsp;s.Remove&nbsp;s.Changes;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Pure1/Pure2/Impure<BR>&nbsp;&nbsp;&nbsp;&nbsp;1.21074s,&nbsp;4&nbsp;elements<BR>&nbsp;&nbsp;&nbsp;&nbsp;0.661671s,&nbsp;6&nbsp;elements<BR>&nbsp;&nbsp;&nbsp;&nbsp;0.657517s,&nbsp;8&nbsp;elements<BR>&nbsp;&nbsp;&nbsp;&nbsp;Pure1/Pure2/Impure<BR>&nbsp;&nbsp;&nbsp;&nbsp;0.615369s,&nbsp;8&nbsp;elements<BR>&nbsp;&nbsp;&nbsp;&nbsp;0.662707s,&nbsp;6&nbsp;elements<BR>&nbsp;&nbsp;&nbsp;&nbsp;0.640008s,&nbsp;4&nbsp;elements<BR>&nbsp;&nbsp;&nbsp;&nbsp;...</CODE></P>
+      <P>Surprisingly, the purely functional solutions are competitively 
+      performant, at least for simple keys where comparison is efficient such as 
+      the short strings used here. Even more surprising is that the simplest 
+      implementation, that uses set difference, the fastest of the three 
+      solutions on the second iteration here. The solution using the mutable 
+      <CODE>HashSet</CODE> collection is faster for larger sets though.</P>
+      <H2>Summary</H2>
+      <P>This article has examined three different implementations of an 
+      asynchronous agent that can be used to decouple the performance of two 
+      subsystems. The simplest solution is competitively performant despite 
+      relying entirely upon simple set theoretic operations.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of decoupling 
+      worker and UI threads.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20concurrent%20change%20sets_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

@@ -1,0 +1,431 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0096)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/web_services_and_databases.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Quick introduction to web services and databases</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Quick introduction to web services and 
+databases</TITLE>     <LINK href="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Quick introduction to web services and databases</H1>
+      <P>The F# programming language combines the expressive power of a modern 
+      functional programming language with the comprehensive libraries provided 
+      by the .NET framework. This article provides a quick introduction to two 
+      of the most widely used aspects of the .NET framework: web services and 
+      databases.</P>
+      <H2>Web services</H2>
+      <P>The term "web service" refers to any software system that exposes an 
+      interface over a network that is designed for use by a machine. Web 
+      services are already common on the internet but also play an important 
+      role inside many organizations.</P>
+      <P>One of the world's most popular web services is the              <A 
+      href="http://code.google.com/apis/maps/">Google Maps API</A> that allows 
+      users to embed the functionality of Google's enormous catographic database 
+      into their own applications. Other important web services include the 
+      multitude of genomics and proteinomics databases exposed over the web for 
+      bioinformaticians, such as the              <A href="http://www.ncbi.nlm.nih.gov/entrez/query/static/esoap_help.html">NCBI's 
+      Entrez Utilities</A> .           </P>
+      <P>One of the most popular web service protocols is the              <A 
+      href="http://www.w3.org/TR/soap/">Simple Object Access Protocol</A> (      
+             <B>SOAP</B> ). This protocol provides a simple way to interrogate a 
+      remote server using remote procedure calls (             <B>RPC</B> s). 
+      The API exposed by a SOAP web service is often detailed in the             
+       <A href="http://www.w3.org/TR/wsdl">Web Service Definition Language</A> ( 
+                  <B>WSDL</B> ).           </P>
+      <P>Although SOAP and WSDL can be quite complicated to use, the .NET 
+      framework already provides tools designed to make them easy to access from 
+      C# code and, naturally, the F# programming language can steal this 
+      benefit.</P>
+      <P>Creating a web service for an F# program simply entails creating a C# 
+      DLL, adding the appropriate web reference to it, loading the C# DLL from 
+      F# and using the definitions that it contains in order to invoke the web 
+      service.</P>
+      <H3>Creating the C# DLL</H3>
+      <P>Create a solution for a new F# project called              
+      <CODE>SQLDB</CODE> . Once this is done, right click on the solution and 
+      add a new C# project inside the directory of this solution. Right click on 
+      the              <I>References</I> of the C# project in the Solution 
+      Explorer pane and select              <I>Add Web Reference...</I> to 
+      obtain the following dialog box:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/web_reference1.gif"> 
+                  </P>
+      <P></P>
+      <P>In this case, we'll use the following URL of the WSDL file that 
+      describes the API exposed by this web service:</P>
+<PRE>http://www.webservicex.net/periodictable.asmx?wsdl</PRE>
+      <P>Click              <I>Go</I> and Visual Studio will download and parse 
+      the WSDL file that describes the API exposed by the web reference, 
+      providing a brief summary when it completes:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/web_reference2.gif"> 
+                  </P>
+      <P></P>
+      <P>Click              <I>Add Reference</I> to add this web reference to 
+      the C# project.           </P>
+      <P>Visual Studio must be made aware of the fact that the F# code will 
+      depend upon this C# DLL. To do this, click on the              
+      <I>Project</I> menu, select              <I>Project Dependencies</I> and 
+      select the tick box in the Project Dependencies dialog box to indicate 
+      that the F#              <CODE>SQLDB</CODE> project depends upon the C#    
+                <CODE>ChemicalElementsWS</CODE> project:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/dependencies.gif"> 
+                  </P>
+      <P></P>
+      <P>The Solution Explorer pane will now look like this:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/ws_solution.gif"> 
+                  </P>
+      <P></P>
+      <P>Hit              <CODE>CTRL+SHIFT+B</CODE>  to build the whole solution 
+      and the C# project will build a managed .NET DLL called              
+      <CODE>ChemicalElementsWS</CODE> in its              <CODE>Debug</CODE> 
+      directory. Now you're ready to start using the new web reference from F#.  
+               </P>
+      <H2>Using the DLL from F#</H2>
+      <P>The first step in using the new DLL is to reference it from the F# 
+      project. This can either be done using the              <CODE>-r</CODE> 
+      compiler switch or in the source code using the              
+      <CODE>#r</CODE> declaration:           </P>
+<PRE>&gt; #r @"..\ChemicalElementsWS\bin\Debug\ChemicalElementsWS.dll";;</PRE>
+      <P>The definitions from the DLL are in a namespace that can be opened to 
+      simplify later code:</P>
+<PRE>&gt; open ChemicalElementsWS.net.webservicex;;</PRE>
+      <P>This web service actually returns strings containing XML. Fortunately, 
+      .NET provides ample functionality in the              
+      <CODE>System.Xml</CODE> namespace for us to dissect this XML data with 
+      ease:           </P>
+<PRE>&gt; open System.Xml;;</PRE>
+      <P>Web service APIs provide a class that represents a service provided by 
+      a remote server that must be instantiated in order to use the web service. 
+      In this case, it is the              <CODE>periodictable</CODE> class:     
+            </P>
+<PRE>&gt; let server = new www.periodictable();;
+val server : www.periodictable</PRE>
+      <P>At the time of writing, there appears to be a bug in the F# interactive 
+      session that requires this definition to be evaluated twice before it will 
+      work.</P>
+      <P>We're going to use this web service to obtain the names, atomic numbers 
+      and atomic weights of the chemical elements. The data for each element is 
+      encapsulated in the following F# record type:</P>
+<PRE>&gt; type element = { name: string; number: int; weight: float };;
+type element = {name: string;
+                number: int;
+                weight: float;}</PRE>
+      <P>The following              <CODE>select</CODE> function uses .NET's XML 
+      capabilities to extract the text at a certain path through the XML data:   
+              </P>
+<PRE>&gt; let select xml query =
+    let doc = new XmlDocument()
+    doc.LoadXml xml
+    let nodes = doc.SelectNodes query
+    seq { for node in nodes -&gt;
+	    node.InnerText };;
+val select : string -&gt; string -&gt; seq&lt;string&gt;</PRE>
+      <P>In this case, the text inside the              <CODE>ElementName</CODE> 
+      XML element nodes of the              <CODE>Table</CODE> element node of 
+      the              <CODE>NewDataSet</CODE> root node of the string returned 
+      by the              <CODE>GetAtoms()</CODE> function provided by the web 
+      service contains the chemical names of each element:           </P>
+<PRE>&gt; let names = select (server.GetAtoms()) "/NewDataSet/Table/ElementName";;
+val names : seq&lt;string&gt;</PRE>
+      <P>The following function interrogates the web service again for each 
+      chemical element, requesting the atomic number and weight of each element 
+      and returning a record of the              <CODE>element</CODE> type as 
+      its result:           </P>
+<PRE>&gt; let data_of name =
+    let data = server.GetAtomicNumber name
+    let select q = select data ("/NewDataSet/Table/" + q) |&gt; Seq.hd
+    { name = name;
+      number = select "AtomicNumber" |&gt; int;
+      weight = select "AtomicWeight" |&gt; float };;
+val data_of : string -&gt; element</PRE>
+      <P>For example, the              <CODE>data_of</CODE> function can be used 
+      to obtain information about the chemical element Helium using the web 
+      service:           </P>
+<PRE>&gt; data_of "Helium";;
+val it : element = {name = "Helium";
+                    number = 2;
+                    weight = 4.0026;}</PRE>
+      <P>The returned result correctly indicates that Helium has an atomic 
+      number of 2 and an atomic weight of 4.0026.</P>
+      <P>The following definition uses a comprehension to map the              
+      <CODE>data_of</CODE> function over the              <CODE>names</CODE> 
+      sequence to extract the data for all chemical elements as a list:          
+       </P>
+<PRE>&gt; let elements =
+    [ for name in names -&gt;
+	data_of name ];;
+val elements : element list</PRE>
+      <P>Note that this computation is performed immediately because the result 
+      is a list rather than a sequence. Using a sequence would continue to defer 
+      computation until the sequence was actually enumerated.</P>
+      <P>The              <CODE>elements</CODE> list will be used to populate a 
+      local database in the next section.           </P>
+      <H2>Databases</H2>
+      <P>The Active Data Object (             <B>ADO</B> ) part of the .NET 
+      framework provides a rich set of components for creating distributed, 
+      data-sharing applications and, in particular, provides database 
+      interoperability for .NET programs.           </P>
+      <P>This section describes how you can programmatically connect to a SQL 
+      database (in this case using Microsoft's free SQL Server Express), create 
+      new databases and tables, insert rows into the tables and query a 
+      database.</P>
+      <P>The following namespaces contain the functions that we'll be using in 
+      this section:</P>
+<PRE>&gt; open System.Data;;
+&gt; open System.Data.SqlClient;;</PRE>
+      <H3>Connection to a database</H3>
+      <P>Databases are connected to using "connection strings". Although these 
+      can be built naively using string concatenation, that is a potential 
+      security risk because incorrect information might be supplied by the user 
+      and injected into the database by the application. So programmatic 
+      construction of connection strings is more secure. The              
+      <CODE>SqlConnectionStringBuilder</CODE> class provides exactly this 
+      functionality:           </P>
+<PRE>&gt; let connString = new SqlConnectionStringBuilder();;
+val connString : SqlConnectionStringBuilder</PRE>
+      <P>The following lines indicate that we're accessing a database hosted by 
+      SQL Server Express using its integrated security feature (the connection 
+      might be rejected if we don't specify this):</P>
+<PRE>&gt; connString.DataSource &lt;- @".\SQLEXPRESS";;
+val it : unit = ()
+&gt; connString.IntegratedSecurity &lt;- true;;
+val it : unit = ()</PRE>
+      <P>The following lines create a              <CODE>SqlConnection</CODE> 
+      object that will use our connection string when opening its connection to 
+      the database:           </P>
+<PRE>&gt; let conn = new SqlConnection();;
+val conn : SqlConnection
+&gt; conn.ConnectionString &lt;- connString.ConnectionString;;
+val it : unit = ()</PRE>
+      <P>The connection is actually opened by calling the              
+      <CODE>Open</CODE> member of the SQL connection:           </P>
+<PRE>&gt; conn.Open();;
+val it : unit = ()</PRE>
+      <H3>Executing SQL statements</H3>
+      <P>The following function can be used to execute SQL statements:</P>
+<PRE>&gt; let execNonQuery conn s =
+    let comm = new SqlCommand(s, conn, CommandTimeout=10)
+    try comm.ExecuteNonQuery() |&gt; ignore with e -&gt;
+    printf "Error: %A\n" e;;
+val execNonQuery : SqlConnection -&gt; string -&gt; unit</PRE>
+      <P>For example, we can now create our database using the SQL statement     
+               <CODE>CREATE DATABASE</CODE> :           </P>
+<PRE>&gt; execNonQuery conn "CREATE DATABASE chemicalelements";;
+val it : unit = ()</PRE>
+      <P>Similarly, we can create a database table to hold the data about our 
+      chemical elements:</P>
+<PRE>&gt; execNonQuery conn "CREATE TABLE Elements (
+    Name varchar(50) NOT NULL,
+    Number int NOT NULL,
+    Weight float NOT NULL,
+    PRIMARY KEY (Number))";;
+val it : unit = ()</PRE>
+      <P>The SQL type              <CODE>varchar(               <I>n</I> )       
+            </CODE> denotes a string with a maximum length. Note that we are 
+      using the atomic number as the primary key for this table. This makes 
+      searching by atomic number fast.           </P>
+      <P>The following SQL statements add two rows to our database table, for 
+      Hydrogen and Helium:</P>
+<PRE>&gt; execNonQuery conn "INSERT INTO Elements (Name, Number, Weight)
+    VALUES ('Hydrogen', 1, 1.008)";;
+val it : unit = ()
+&gt; execNonQuery conn "INSERT INTO Elements (Name, Number, Weight)
+    VALUES ('Helium', 2, 4.003)"
+val it : unit = ()</PRE>
+      <H3>Evaluating SQL expressions</H3>
+      <P>We can query the database to see the current contents of our table 
+      using the following function:</P>
+<PRE>&gt; let query() =
+    seq { use conn = new SqlConnection(connString.ConnectionString)
+	  do conn.Open()
+	  use comm = new SqlCommand("SELECT Name, Number, Weight FROM Elements", conn)
+	  use reader = comm.ExecuteReader()
+	  while reader.Read() do
+	    yield (reader.GetString 0, reader.GetInt32 1, reader.GetDouble 2) };;
+val query : unit -&gt; seq&lt;string * int * float&gt;</PRE>
+      <P>Note the use of a sequence expression to enumerate the rows in the 
+      database table and dispose of the connection when enumeration of the 
+      sequence is complete. The              <CODE>reader</CODE> object is used 
+      to obtain results for given database columns of the expected type. In this 
+      case, columns 0, 1 and 2 contain strings (chemical names), ints (atomic 
+      numbers) and double-precision floats (atomic weights).           </P>
+      <P>Executing this query returns the data for Hydrogen and Helium as 
+      expected:</P>
+<PRE>&gt; query();;
+val it : seq&lt;string * int * float&gt;
+= seq [("Hydrogen", 1, 1.008); ("Helium", 2, 4.003)]</PRE>
+      <P>Accessing databases by encoding SQL commands as strings is fine for 
+      trivial, rare and interactive operations like creating the database itself 
+      but is not suitable for more sophisticated use. To perform significant 
+      amount of computation on the database, such as injecting the data we 
+      downloaded from the web service, we need to access the database 
+      programmatically.</P>
+      <H3>Interrogating the database programmatically</H3>
+      <P>The              <CODE>SqlDataAdapter</CODE> acts as a bridge between a 
+      DataSet and SQL Server for retrieving and saving data:           </P>
+<PRE>&gt; let dataAdapter = new SqlDataAdapter();;
+val dataAdapter : SqlDataAdapter</PRE>
+      <P>A              <CODE>DataSet</CODE> is an in-memory cache of data 
+      retrieved from a data source. The following function queries our database 
+      and fills a new              <CODE>DataSet</CODE> with the results:        
+         </P>
+<PRE>&gt; let buildDataSet conn queryString =
+    dataAdapter.SelectCommand &lt;- new SqlCommand(queryString, conn)
+    let dataSet = new DataSet()
+    new SqlCommandBuilder(dataAdapter) |&gt; ignore
+    dataAdapter.Fill dataSet |&gt; ignore
+    dataSet;;
+val buildDataSet : SqlConnection -&gt; string -&gt; DataSet</PRE>
+      <P>For example, the following query finds all rows in the database table   
+                 <CODE>Elements</CODE> and returns all three columns in each:    
+             </P>
+<PRE>&gt; let dataSet = buildDataSet conn "SELECT Name, Number, Weight from Elements";;
+val dataSet : DataSet</PRE>
+      <P>The following extracts the              <CODE>DataTable</CODE> of 
+      results from this              <CODE>DataSet</CODE> and iterates over the 
+      rows printing the results:           </P>
+<PRE>&gt; let table = dataSet.Tables.Item 0;;
+val table : DataTable
+&gt; for row in table.Rows do;;
+    printf "%A\n" (row.Item "Name", row.Item "Number", row.Item "Weight");;
+("Hydrogen", 1, 1.008)
+("Helium", 2, 4.003)
+val it : unit = ()</PRE>
+      <P>Note how the value of the field with the string name              
+      <CODE>field</CODE> in the row              <CODE>row</CODE> is obtained 
+      using              <CODE>row.Item field</CODE> .           </P>
+      <P>In addition to programmatically enumerating over the results of a 
+      query, the              <CODE>DataSet</CODE> can be used to inject data 
+      into the database programmatically as well. The following creates a new 
+      row in the table and populates it with the data for Lithium:           
+</P>
+<PRE>&gt; let row = table.NewRow();;
+val row : DataRow
+&gt; row.Item "Name" &lt;- "Lithium";;
+val it : unit = ()
+&gt; row.Item "Number" &lt;- 3;;
+val it : unit = ()
+&gt; row.Item "Weight" &lt;- 6.941;;
+val it : unit = ()
+&gt; table.Rows.Add row;;
+val it : unit = ()</PRE>
+      <P>This change can be uploaded to the database using the              
+      <CODE>Update</CODE> member of the              <CODE>SqlDataAdapter</CODE>
+       :           </P>
+<PRE>&gt; dataAdapter.Update dataSet;;
+val it : int = 1</PRE>
+      <P>The return value of 1 indicates that a single row was altered.</P>
+      <P>Querying the database again shows that it does indeed now contain three 
+      rows:</P>
+<PRE>&gt; query();;
+val it : seq&lt;string * int * float&gt;
+= seq [("Hydrogen", 1, 1.008); ("Helium", 2, 4.003); ("Lithium", 3, 6.941)]</PRE>
+      <H3>Filling the database from a data structure</H3>
+      <P>Now we're ready to inject our data about all of the chemical elements 
+      into the database programmatically. We begin by deleting the three 
+      existing rows to avoid conflicts:</P>
+<PRE>&gt; execNonQuery conn "DELETE FROM Elements";;
+val it : unit = ()</PRE>
+      <P>The following loop adds the data for each element to the table and then 
+      uploads the result:</P>
+<PRE>&gt; for element in elements do
+    let row = table.NewRow()
+    row.Item "Name" &lt;- element.name
+    row.Item "Number" &lt;- element.number
+    row.Item "Weight" &lt;- element.weight
+    table.Rows.Add row;;
+val it : unit = ()
+&gt; dataAdapter.Update dataSet |&gt; ignore;;
+val it : unit = ()</PRE>
+      <H2>Visualizing the result</H2>
+      <P>As an industrial-strength platform, .NET naturally makes it as easy as 
+      possible to visualize the contents of a database table.</P>
+      <P>We begin by creating a blank Windows Form:</P>
+<PRE>&gt; open System.Windows.Forms;;
+&gt; let form = new Form(Text="Elements", Visible=true);;
+val form : Form</PRE>
+      <P>As usual, forcing the form to stay on top is useful when developing in 
+      an interactive session:</P>
+<PRE>&gt; form.TopMost &lt;- true;;
+val it : unit = ()</PRE>
+      <P>The              <CODE>DataGrid</CODE> class provides a Windows Forms 
+      control that can be bound to a database table in order to visualize it 
+      interactively:           </P>
+<PRE>&gt; let grid = new DataGrid(DataSource=table, Dock=DockStyle.Fill);;
+val grid : DataGrid</PRE>
+      <P>Note that the grid was bound to our database table and its dock style 
+      was set to fill the whole form when it is added:</P>
+<PRE>&gt; form.Controls.Add grid;;
+val it : unit = ()</PRE>
+      <P>This tiny amount of code produces the following interactive GUI 
+      application:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/elements.gif"> 
+                  </P>
+      <P></P>
+      <H2>Cleaning up</H2>
+      <P>The key advantage of using a database is persistence: the contents of 
+      the database will still be here the next time we restart F# or Visual 
+      Studio or even the machine itself. However, we inevitably want to delete 
+      our rows, tables and databases. This line deletes the              
+      <CODE>Elements</CODE> table:           </P>
+<PRE>&gt; execNonQuery conn "DROP TABLE Elements";;
+val it : unit = ()</PRE>
+      <P>And this line deletes the database itself:</P>
+<PRE>&gt; execNonQuery conn "DROP DATABASE chemicalelements";;
+val it : unit = ()</PRE>
+      <H2>Summary</H2>
+      <P>This article has shown how web services can be consumed easily in F# 
+      program by reusing the capabilities of C#, and how databases can be 
+      created and used from F# programs.</P>
+      <P>Web applications and databases are the bread and butter of the .NET 
+      platform and a great many C# and Visual Basic programs already use this 
+      technology. However, F# is the first modern functional programming 
+      language to provide professional-quality web and database functionality 
+      and, consequently, is opening new avenues for combining these techniques. 
+      Functional programming will doubtless play an increasingly important role 
+      in web and database programming just as it is changing the way we think 
+      about other areas of programming.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Quick%20introduction%20to%20web%20services%20and%20databases_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

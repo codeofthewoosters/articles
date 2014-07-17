@@ -1,0 +1,304 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0080)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/TicTacToe2.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20tic%20tac%20toe%20revisited_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20tic%20tac%20toe%20revisited_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20tic%20tac%20toe%20revisited_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20tic%20tac%20toe%20revisited_files/title.gif"> </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20tic%20tac%20toe%20revisited_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Tic-tac-toe revisited</H1>
+      <P>This article rearchitects a GUI application from a previous article to 
+      use an asynchronous concurrent design. The result is a clean separation 
+      between view and model that closely resembles a client-server architecture 
+      due to the use of explicit message passing. This design pattern is 
+      generally applicable.</P>
+      <H2>Introduction</H2>
+      <P>Graphical user interface (GUI) applications can be architecturally 
+      divided into two subsystems called the view and the model. The model is 
+      the core logic behind the application that determines how the application 
+      responds to user input by sending instructions to the view. The view is 
+      responsible for visualizing the model and sending user input to the 
+      model.</P>
+      <P>The mutual recursion between the view and model immediately presents a 
+      problem in F# because we cannot define both simultaneously as is possible 
+      in other languages such as C#. The simplest solution to this problem is to 
+      untangle the two components by introducing events. Both the view and model 
+      will have a function that posts a message into that component and an event 
+      that is triggered whenever that component sends a message to the other. 
+      These events exist solely to connect the two systems to each other during 
+      initialization.</P>
+      <P>The use of explicit message passing not only makes the interface 
+      between the two systems clearer but also makes it easy to adopt a 
+      distributed architecture where the messages are passed over the network. 
+      The view becomes a client and the model becomes the server. Multiple views 
+      can then be used to manipulate the model. For example, this makes it easy 
+      to add network play to our game.</P>
+      <H2>The Domain</H2>
+      <P>The definitions required for both the view and the model, including the 
+      definitions of the messages passed between them, can be factored out into 
+      a module that is conventionally called the Domain. For this program we 
+      shall use <CODE>fsi</CODE> files to provide explicit interfaces to modules 
+      and namespaces. The <CODE>Domain.fsi</CODE> file begins with a line 
+      specifying that its definitions are to appear in a <CODE>Domain</CODE> 
+      module inside a <CODE>TicTacToe</CODE> namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;TicTacToe.Domain</CODE></P>
+      <P>The remainder of this file is as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Player&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;O<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;X<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Ending&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Draw<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Win&nbsp;of&nbsp;Player&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;BoardState&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;InPlay<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Ended&nbsp;of&nbsp;Ending<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;other&nbsp;:&nbsp;Player&nbsp;-&gt;&nbsp;Player<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Board&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Board<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Add&nbsp;:&nbsp;(int&nbsp;*&nbsp;int)&nbsp;*&nbsp;p:Player&nbsp;-&gt;&nbsp;Board<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;TryFind&nbsp;:&nbsp;i:int&nbsp;*&nbsp;j:int&nbsp;-&gt;&nbsp;Player&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Full&nbsp;:&nbsp;bool<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;State&nbsp;:&nbsp;BoardState<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ViewToModel&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TryMove&nbsp;of&nbsp;Player&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ModelToView&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MadeMove&nbsp;of&nbsp;Player&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)&nbsp;*&nbsp;Board<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DisplayEnding&nbsp;of&nbsp;Ending<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;IAgent&lt;'Input,&nbsp;'Output&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;Post&nbsp;:&nbsp;'Input&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;Output&nbsp;:&nbsp;IEvent&lt;'Output&gt;</CODE></P>
+      <P>The <CODE>Player</CODE> type represents the two players, <CODE>O</CODE> 
+      and <CODE>X</CODE>. The <CODE>Ending</CODE> type represents the possible 
+      game endings, specifically a draw or a win by one of the two players. The 
+      <CODE>BoardState</CODE> type represents the state of a board, either still 
+      in-play or finished with some game ending. The <CODE>other</CODE> function 
+      returns the opponent of the given player. The <CODE>Board</CODE> type is a 
+      class that encapsulates the functionality we require from the 3x3 game 
+      board. Namely, adding a <CODE>O</CODE> or <CODE>X</CODE> at a given 
+      location, finding the <CODE>O</CODE> or <CODE>X</CODE> (if any) at a given 
+      location, testing if the board is full and computing the state of a 
+      board.</P>
+      <P>The <CODE>ViewToModel</CODE> union type is the catalogue of messages 
+      that the view can send to the model. In this case, there is only one 
+      possible message: attempt to place a <CODE>O</CODE> or <CODE>X</CODE> at 
+      the given location. Note that our asynchronous concurrent architecture 
+      means that this message is sent without blocking for a response so there 
+      is no reply function in the message. Instead, any reply will be sent from 
+      the model back to the view completely independently at some later 
+time.</P>
+      <P>The <CODE>ModelToView</CODE> union type is a catalogue of messages that 
+      the model can send to the view. In this case, there are two such messages. 
+      The <CODE>MadeMove</CODE> message is used to notify the view that the 
+      model successfully inserted a new <CODE>O</CODE> or <CODE>X</CODE> on the 
+      board. The <CODE>DisplayEnding</CODE> message is used to notify the view 
+      that the model has identified an end game.</P>
+      <P>The <CODE>Domain.fs</CODE> file may be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;TicTacToe.Domain</CODE></P>
+      <P>The type definitions are identical to those in the interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Player&nbsp;=&nbsp;O&nbsp;|&nbsp;X<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Ending&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Draw<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Win&nbsp;of&nbsp;Player&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;BoardState&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;InPlay<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Ended&nbsp;of&nbsp;Ending</CODE></P>
+      <P>The <CODE>other</CODE> function is defined using a simple pattern 
+      match:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;other&nbsp;=&nbsp;function&nbsp;O&nbsp;-&gt;&nbsp;X&nbsp;|&nbsp;X&nbsp;-&gt;&nbsp;O</CODE></P>
+      <P>We collate all of the rows, columns and diagonals into a list 
+      <CODE>wins</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;wins&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;i&nbsp;in&nbsp;0..2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;[i,&nbsp;0;&nbsp;i,&nbsp;1;&nbsp;i,&nbsp;2]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;[0,&nbsp;i;&nbsp;1,&nbsp;i;&nbsp;2,&nbsp;i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;[0,&nbsp;0;&nbsp;1,&nbsp;1;&nbsp;2,&nbsp;2]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;[0,&nbsp;2;&nbsp;1,&nbsp;1;&nbsp;2,&nbsp;0]&nbsp;]</CODE></P>
+      <P>The <CODE>Board</CODE> class is defined as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Board&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;board&nbsp;:&nbsp;Player&nbsp;option&nbsp;[,]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new()&nbsp;=&nbsp;{&nbsp;board&nbsp;=&nbsp;Array2D.create&nbsp;3&nbsp;3&nbsp;None&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(board)&nbsp;=&nbsp;{&nbsp;board&nbsp;=&nbsp;board&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;b.Add((i,&nbsp;j),&nbsp;p)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Board(Array2D.mapi&nbsp;(fun&nbsp;x&nbsp;y&nbsp;o&nbsp;-&gt;&nbsp;if&nbsp;x=i&nbsp;&amp;&amp;&nbsp;y=j&nbsp;then&nbsp;Some&nbsp;p&nbsp;else&nbsp;o)&nbsp;b.board)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;b.TryFind&nbsp;(i,&nbsp;j)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;b.board.[i,&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;b.Full&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array2D.toSeq&nbsp;b.board<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.forall&nbsp;(function&nbsp;None&nbsp;-&gt;&nbsp;false&nbsp;|&nbsp;Some&nbsp;_&nbsp;-&gt;&nbsp;true)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;board.State&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;wins<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.tryPick&nbsp;(fun&nbsp;ps&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;List.map&nbsp;board.TryFind&nbsp;ps&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[Some&nbsp;X;&nbsp;Some&nbsp;X;&nbsp;Some&nbsp;X]&nbsp;-&gt;&nbsp;Some(X,&nbsp;ps)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[Some&nbsp;O;&nbsp;Some&nbsp;O;&nbsp;Some&nbsp;O]&nbsp;-&gt;&nbsp;Some(O,&nbsp;ps)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(player,&nbsp;ps)&nbsp;-&gt;&nbsp;Ended(Win(player,&nbsp;ps))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;if&nbsp;board.Full&nbsp;then&nbsp;Ended&nbsp;Draw&nbsp;else&nbsp;InPlay</CODE></P>
+      <P>Note the use of explicit constructors to allow us to have two different 
+      constructors. The constructs that accepts no arguments is public because 
+      it was exposed in the <CODE>fsi</CODE> file but the other constructor is 
+      not exposed and it used internally to create a new non-empty board.</P>
+      <P>We have chosen to represent a <CODE>Board</CODE> as a 
+      <CODE>Player&nbsp;option&nbsp;[,]</CODE> which is a 2D array of optional 
+      <CODE>Player</CODE> values. A 
+      <CODE>Map&lt;int&nbsp;*&nbsp;int,&nbsp;Player&gt;</CODE> is a perfectly 
+      valid alternative but testing showed that a 2D array is faster.</P>
+      <P>The only non-trivial method is the <CODE>State</CODE> property which 
+      tries to pick a winner by searching the rows, columns and diagonals for 
+      three-in-a-row or returning <CODE>Draw</CODE> if the board is full or 
+      <CODE>InPlay</CODE> otherwise.</P>
+      <P>The remaining type definitions are identical to those in the 
+      <CODE>fsi</CODE> file:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ViewToModel&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TryMove&nbsp;of&nbsp;Player&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ModelToView&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MadeMove&nbsp;of&nbsp;Player&nbsp;*&nbsp;(int&nbsp;*&nbsp;int)&nbsp;*&nbsp;Board<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DisplayEnding&nbsp;of&nbsp;Ending<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;IAgent&lt;'Input,&nbsp;'Output&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;Post&nbsp;:&nbsp;'Input&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;abstract&nbsp;Output&nbsp;:&nbsp;IEvent&lt;'Output&gt;</CODE></P>
+      <H2>The Model</H2>
+      <P>Our model has a very simple <CODE>fsi</CODE> file:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;namespace&nbsp;TicTacToe<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;Domain<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Model&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Model<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IAgent&lt;ViewToModel,&nbsp;ModelToView&gt;</CODE></P>
+      <P>This exposes a single type, <CODE>Model</CODE>, that is a class 
+      implementing the <CODE>IAgent</CODE> interface receiving messages of the 
+      type <CODE>ViewToModel</CODE> and sending messages of the type 
+      <CODE>ModelToView</CODE>.</P>
+      <P>The <CODE>fs</CODE> file for the model is as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;namespace&nbsp;TicTacToe<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;Domain<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Model()&nbsp;=</CODE></P>
+      <P>The <CODE>Model</CODE> class contains one field for the output event 
+      that is triggered whenever the model wishes to send a message to the 
+      view:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;outputEvent&nbsp;=&nbsp;Event&lt;ModelToView&gt;()</CODE></P>
+      <P>and an agent field that is an asynchronous agent to serialize the 
+      messages coming from the view and handle them concurrently with the view 
+      running:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;(board:&nbsp;Board)&nbsp;nextPlayer&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;nextPlayer,&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;O,&nbsp;TryMove(O&nbsp;as&nbsp;player,&nbsp;p)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;X,&nbsp;TryMove(X&nbsp;as&nbsp;player,&nbsp;p)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None,&nbsp;TryMove(player,&nbsp;p)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;board.TryFind&nbsp;p&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;board&nbsp;nextPlayer<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;board&nbsp;=&nbsp;board.Add(p,&nbsp;player)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outputEvent.Trigger&nbsp;(MadeMove(player,&nbsp;p,&nbsp;board))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;board.State&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;InPlay&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;board&nbsp;(Some(other&nbsp;player))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Ended&nbsp;ending&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outputEvent.Trigger&nbsp;(DisplayEnding&nbsp;ending)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;(Board())&nbsp;(Some&nbsp;X)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;O,&nbsp;TryMove(X,&nbsp;_)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;X,&nbsp;TryMove(O,&nbsp;_)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;board&nbsp;nextPlayer&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(Board())&nbsp;None)</CODE></P>
+      <P>The state machine in the model's agent maintains the board and 
+      <CODE>nextPlayer</CODE> that is expected to try to move next (if any) and 
+      matches it with the <CODE>TryMove</CODE> message that is received. If some 
+      <CODE>O</CODE> or <CODE>X</CODE> is already found at the given position on 
+      the board then the move is ignored and the state machine continues as-is. 
+      If the board position is empty then a <CODE>O</CODE> or <CODE>X</CODE> is 
+      added to the board at the given position, the <CODE>MadeMove</CODE> 
+      message is sent and the state of the board is computed and examined. If 
+      the board is in play then the state machine continues with the new board. 
+      If the game has ended then the model sends a <CODE>DisplayEnding</CODE> 
+      message to the view before continuing with an empty board. Finally, if the 
+      wrong player is attempting to move then the move is ignored.</P>
+      <P>The <CODE>Model</CODE> class implements the <CODE>IAgent</CODE> 
+      interface by posting received messages to the <CODE>agent</CODE> and 
+      exposing the <CODE>Output</CODE> event.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IAgent&lt;ViewToModel,&nbsp;ModelToView&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Post&nbsp;msg&nbsp;=&nbsp;agent.Post&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Output&nbsp;=&nbsp;outputEvent.Publish</CODE></P>
+      <P>The <CODE>IDisposable</CODE> interface is implemented, wrapping the 
+      agent's disposal:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Dispose()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;agent&nbsp;=&nbsp;agent<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;()</CODE></P>
+      <H2>The human player's view</H2>
+      <P>We provide one view for the human player and its interface is almost as 
+      simple as the model's interface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;namespace&nbsp;TicTacToe<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;Domain<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;View&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;Player&nbsp;-&gt;&nbsp;View<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IAgent&lt;ModelToView,&nbsp;ViewToModel&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Control&nbsp;:&nbsp;UIElement</CODE></P>
+      <P>The only addition is a <CODE>Control</CODE> property that exposes the 
+      GUI control that the main program is responsible for visualizing in a 
+      window.</P>
+      <P>The <CODE>View.fs</CODE> file is as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;namespace&nbsp;TicTacToe<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;Domain</CODE></P>
+      <P>The <CODE>View</CODE> class is constructed from the human's 
+      <CODE>player</CODE>, i.e. <CODE>O</CODE> or <CODE>X</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;View(player)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>The <CODE>View</CODE> class contains an <CODE>output</CODE> field as 
+      before:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;output&nbsp;=&nbsp;Event&lt;ViewToModel&gt;()</CODE></P>
+      <P>Several local functions are used to help construct the user interface. 
+      The <CODE>viewOfEnding</CODE> function converts an <CODE>Ending</CODE> 
+      into a string to display and a list of board positions to highlight:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;viewOfEnding&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Draw&nbsp;-&gt;&nbsp;"Draw!",&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Win(O,&nbsp;ps)&nbsp;-&gt;&nbsp;"Os&nbsp;win!",&nbsp;ps<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Win(X,&nbsp;ps)&nbsp;-&gt;&nbsp;"Xs&nbsp;win!",&nbsp;ps</CODE></P>
+      <P>The board is visualized as a <CODE>Grid</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid(Margin=Thickness&nbsp;11.0)</CODE></P>
+      <P>The grid will be populated by a 3x3 array of <CODE>Button</CODE> 
+      controls:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;button&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array2D.init&nbsp;3&nbsp;3&nbsp;(fun&nbsp;_&nbsp;_&nbsp;-&gt;&nbsp;Controls.Button())</CODE></P>
+      <P>The following <CODE>handle</CODE> function handles a message that has 
+      been received:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;handle&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;MadeMove(player,&nbsp;(i,&nbsp;j),&nbsp;_)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Content&nbsp;&lt;-&nbsp;sprintf&nbsp;"%A"&nbsp;player<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;DisplayEnding&nbsp;ending&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;str,&nbsp;ps&nbsp;=&nbsp;viewOfEnding&nbsp;ending<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;background&nbsp;=&nbsp;button.[0,&nbsp;0].Background<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;ps&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Background&nbsp;&lt;-&nbsp;Media.Brushes.Salmon<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ok&nbsp;=&nbsp;MessageBoxButton.OK<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;image&nbsp;=&nbsp;MessageBoxImage.Information<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(str,&nbsp;"Tic&nbsp;Tac&nbsp;Toe",&nbsp;ok,&nbsp;image)&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;j&nbsp;in&nbsp;ps&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Background&nbsp;&lt;-&nbsp;background<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;0..2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;0..2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.[i,&nbsp;j].Content&nbsp;&lt;-&nbsp;""</CODE></P>
+      <P>The <CODE>MadeMove</CODE> message is handled by displaying the move on 
+      the board by setting the content of the appropriate <CODE>Button</CODE> 
+      control. The <CODE>DisplayEnding</CODE> message is handled by changing the 
+      background color of the relevance cells (if any) to <CODE>Salmon</CODE> 
+      and displaying a dialog box before resetting the background and clearing 
+      the board.</P>
+      <P>The <CODE>post</CODE> function evaluates the given function on the UI 
+      thread:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;post&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;unit&nbsp;=&nbsp;fun&nbsp;f&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Dispatcher.BeginInvoke(new&nbsp;System.Action&lt;_&gt;(f),&nbsp;[|box&nbsp;x|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <P>The constructor add three rows and columns to the grid and populates 
+      the nine cells with the <CODE>Button</CODE> controls, registering a 
+      callback that sends a <CODE>TryMove</CODE> message to the model whenever 
+      the user clicks on one of the buttons:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;0..2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;column&nbsp;=&nbsp;Controls.ColumnDefinition()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;column.Width&nbsp;&lt;-&nbsp;GridLength&nbsp;30.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.ColumnDefinitions.Add&nbsp;column<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;row&nbsp;=&nbsp;Controls.RowDefinition()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row.Height&nbsp;&lt;-&nbsp;GridLength&nbsp;30.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.RowDefinitions.Add&nbsp;row<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;0..2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;button&nbsp;=&nbsp;button.[i,&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(button,&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(button,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;button&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button.Click.Add(fun&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output.Trigger(TryMove(player,&nbsp;(i,&nbsp;j))))</CODE></P>
+      <P>The <CODE>Control</CODE> property returns the <CODE>grid</CODE> 
+      control:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Control&nbsp;=&nbsp;grid&nbsp;:&gt;&nbsp;UIElement</CODE></P>
+      <P>The <CODE>IAgent</CODE> interface is implemented as before:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IAgent&lt;ModelToView,&nbsp;ViewToModel&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Post&nbsp;msg&nbsp;=&nbsp;post&nbsp;handle&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Output&nbsp;=&nbsp;output.Publish</CODE></P>
+      <H2>The computer player's view</H2>
+      <P>We provide another view for the computer player and its view is 
+      similar:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;namespace&nbsp;TicTacToe<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;Domain<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ComputerPlayer&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;Player&nbsp;-&gt;&nbsp;ComputerPlayer<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IAgent&lt;ModelToView,&nbsp;ViewToModel&gt;</CODE></P>
+      <P>The <CODE>ComputerPlayer.fs</CODE> file is as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;namespace&nbsp;TicTacToe<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;Domain</CODE></P>
+      <P>The <CODE>ComputerPlayer</CODE> class is constructed from the 
+      computer's <CODE>player</CODE>, i.e. <CODE>O</CODE> or <CODE>X</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;ComputerPlayer(player)&nbsp;=</CODE></P>
+      <P>A local value <CODE>posns</CODE> enumerates all of the positions on the 
+      3x3 board:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;posns&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;i&nbsp;in&nbsp;0..2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;0..2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;i,&nbsp;j&nbsp;]</CODE></P>
+      <P>The <CODE>bestFor</CODE> function returns the best score and a function 
+      to compute the better of two scores for the given player:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;bestFor&nbsp;player&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;player&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;O&nbsp;-&gt;&nbsp;1,&nbsp;max<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;X&nbsp;-&gt;&nbsp;-1,&nbsp;min</CODE></P>
+      <P>Note that a score good for <CODE>O</CODE> is bad for <CODE>X</CODE> and 
+      vice-versa.</P>
+      <P>The local <CODE>play</CODE> function is responsible for the core 
+AI:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;play&nbsp;player&nbsp;(board:&nbsp;Board)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;p::ps&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;board.TryFind&nbsp;p&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;_&nbsp;-&gt;&nbsp;play&nbsp;player&nbsp;board&nbsp;ps<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;bestScore,&nbsp;bestOf&nbsp;=&nbsp;bestFor&nbsp;player<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cont1&nbsp;score1&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;play&nbsp;player&nbsp;board&nbsp;ps&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;score1,&nbsp;p<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(score2,&nbsp;p2)&nbsp;-&gt;&nbsp;bestOf&nbsp;(score1,&nbsp;p)&nbsp;(score2,&nbsp;p2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cont2&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;play&nbsp;player&nbsp;board&nbsp;ps<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(score1,&nbsp;_)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;score1&nbsp;=&nbsp;bestScore&nbsp;then&nbsp;Some(score1,&nbsp;p)&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(cont1&nbsp;score1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;board&nbsp;=&nbsp;board.Add(p,&nbsp;player)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;board.State&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Ended(Win&nbsp;_)&nbsp;-&gt;&nbsp;Some(bestScore,&nbsp;p)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Ended&nbsp;Draw&nbsp;-&gt;&nbsp;Some(cont1&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;InPlay&nbsp;-&gt;&nbsp;play&nbsp;(other&nbsp;player)&nbsp;board&nbsp;posns&nbsp;|&gt;&nbsp;cont2</CODE></P>
+      <P>The <CODE>play</CODE> function considers moving at each position on the 
+      board. If some player has already moved at a position then it is skipped 
+      and the search continues with the remaining positions <CODE>ps</CODE>. If 
+      the position <CODE>p</CODE> on the board is empty then the AI potentially 
+      considers both moving at that position <CODE>p</CODE> and moving any other 
+      positions in <CODE>ps</CODE> instead. However, if moving at position 
+      <CODE>p</CODE> can guarantee a win then the algorithm does not bother 
+      considering what might happen if it moved on another position instead, 
+      i.e. the algorithm terminates early. This logic appears in the final 
+      pattern match.</P>
+      <P>The state of the board is examined after the moving at position 
+      <CODE>p</CODE>. If the game is drawn then the <CODE>cont1</CODE> function 
+      is invoked to search the remaining possible positions <CODE>ps</CODE> to 
+      move this go and the best score between the result and this draw is 
+      returned. Note that <CODE>board</CODE> inside the body of the 
+      <CODE>cont2</CODE> function refers to the original board without having 
+      moved at <CODE>p</CODE>. If the game remains <CODE>InPlay</CODE> after 
+      moving at <CODE>p</CODE> then the search deepens to find the best play the 
+      opponent might then make and the best outcome for us of this play a the 
+      result is fed into the <CODE>cont2</CODE> function. If the result was the 
+      best possible score then we return it immediately. Otherwise, we find the 
+      best score from the wider search of considering other moves instead of 
+      <CODE>p</CODE> this turn and the better of the two is returned.</P>
+      <P>The <CODE>computerMove</CODE> function calls the <CODE>play</CODE> 
+      function to compute the optimal move for the computer player:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;computerMove&nbsp;board&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;play&nbsp;player&nbsp;board&nbsp;posns&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(_,&nbsp;p)&nbsp;-&gt;&nbsp;Some(TryMove(player,&nbsp;p))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;None</CODE></P>
+      <P>As before, the class contains an <CODE>output</CODE> event:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;output&nbsp;=&nbsp;Event&lt;ViewToModel&gt;()</CODE></P>
+      <P>and an agent:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;player,&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;O,&nbsp;MadeMove(X,&nbsp;(i,&nbsp;j),&nbsp;board)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;X,&nbsp;MadeMove(O,&nbsp;(i,&nbsp;j),&nbsp;board)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;computerMove&nbsp;board<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Option.iter&nbsp;output.Trigger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;()&nbsp;})</CODE></P>
+      <P>The agent waits for the opponent to move before spawning an 
+      asynchronous workflow to compute the optimal move for the computer player 
+      and send it to the model.</P>
+      <P>The <CODE>IAgent</CODE> interface is as before:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;IAgent&lt;ModelToView,&nbsp;ViewToModel&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Post&nbsp;msg&nbsp;=&nbsp;agent.Post&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Output&nbsp;=&nbsp;output.Publish</CODE></P>
+      <P>The <CODE>IDisposable</CODE> interface disposes of the agent, as the 
+      model did:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Dispose()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;agent&nbsp;=&nbsp;agent<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;()</CODE></P>
+      <P>\sub Main program</P>
+      <P>Finally, the main program creates the model and views, hooks them up to 
+      each other using their <CODE>Output</CODE> events and starts the WPF user 
+      interface. The <CODE>Main.fs</CODE> file begins:</P>
+      <P></P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;TicTacToe.Main<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Windows<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;TicTacToe<BR>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;TicTacToe.Domain</CODE></P>
+      <P>The methods implemented for the <CODE>IAgent</CODE> interface are not 
+      visible on the model and views in F# without an upcast which is most 
+      simply accomplished by moving the code into a separate function. The 
+      following <CODE>pipe</CODE> function adds the <CODE>Post</CODE> member of 
+      the <CODE>consumer</CODE> agent to the list of subscribers to the 
+      producer's <CODE>Output</CODE> event:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pipe&nbsp;(producer:&nbsp;IAgent&lt;_,&nbsp;_&gt;)&nbsp;(consumer:&nbsp;IAgent&lt;_,&nbsp;_&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;producer.Output.Add&nbsp;consumer.Post</CODE></P>
+      <P>The following <CODE>connect</CODE> function connects two agents 
+      back-to-back:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;connect&nbsp;a&nbsp;b&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pipe&nbsp;a&nbsp;b<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pipe&nbsp;b&nbsp;a</CODE></P>
+      <P>The main program is then:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;model&nbsp;=&nbsp;new&nbsp;Model()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;view&nbsp;=&nbsp;new&nbsp;View(X)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;computerPlayer&nbsp;=&nbsp;new&nbsp;ComputerPlayer(O)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;connect&nbsp;view&nbsp;model<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;connect&nbsp;computerPlayer&nbsp;model<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;box&nbsp;=&nbsp;Controls.Viewbox(Child=view.Control)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Window(Title="Tic&nbsp;Tac&nbsp;Toe",&nbsp;Content=box)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Application().Run<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <H2>Summary</H2>
+      <P>This article has rearchitected the code from a previous article to use 
+      an asynchronous concurrent design. The result is a clean separation 
+      between view and model in a GUI application that closely resembles a 
+      client-server architecture due to the use of explicit message passing. 
+      This design pattern is generally applicable and scales to much more 
+      sophisticated applications.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of 
+      asynchronous concurrency and artificial 
+intelligence.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20tic%20tac%20toe%20revisited_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

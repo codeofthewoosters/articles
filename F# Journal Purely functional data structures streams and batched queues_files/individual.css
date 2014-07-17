@@ -1,0 +1,27 @@
+table#page {
+	border: 2px solid rgb(255, 187, 119); width: 960px; background-color: rgb(255, 251, 247);
+}
+table#page td {
+	border: 0px solid rgb(255, 187, 119); width: 900px; vertical-align: top;
+}
+.left {
+	width: 100px;
+}
+table#cards {
+	width: 95%; text-align: center;
+}
+table#cards td {
+	width: 12.5%;
+}
+table#overview {
+	width: 900px;
+}
+table#overview td.left {
+	width: 150px;
+}
+table#overview td.center {
+	
+}
+table#overview td.right {
+	width: 150px; text-align: center;
+}

@@ -1,0 +1,446 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0073)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/mpi.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Scalable distributed parallelism with MPI.NET</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Scalable distributed parallelism with 
+MPI.NET</TITLE>     <LINK href="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Scalable distributed parallelism with MPI.NET</H1>
+      <P>High-performance programs are often run on clusters of machines and the 
+      Message Passing Interface (MPI) is the defacto standard for inter-process 
+      communication for this kind of distributed parallelism. This article 
+      demonstrates just how easily existing .NET libraries can be used to 
+      parallelize F# programs across clusters of machines using MPI.</P>
+      <H2>Introduction</H2>
+      <P>Before diving into the use of MPI from F# it is instructive to examine 
+      the underlying infrastructure required to leverage MPI from F#. We look at 
+      MPI itself, the native-code MSMPI library and the managed code MPI.NET 
+      library.</P>
+      <H3>MPI</H3>
+      <P>The Message Passing Interface (MPI) is a standard library of functions 
+      for sending and receiving messages on parallel/distributed computers or 
+      workstation clusters. MPI bindings are available for many languages but 
+      C++ and Fortran are the most common because MPI is used predominantly for 
+      high-performance number crunching.</P>
+      <P>Computations comprise a fixed set of processes created at startup. One 
+      process is usually used per node in the cluster and the Task Parallel 
+      Library (TPL) can then be used to parallelize more efficiently over the 
+      shared memory CPUs and cores in each individual cluster node.</P>
+      <P>Processes communicate with each other using the MPI library functions 
+      to send and receive messages. Over 120 standard MPI library functions are 
+      provided but only six are required for basic communication.</P>
+      <H3>MSMPI</H3>
+      <P>The Microsoft Compute Cluster Pack (CCP) SDK provides a robust MPI 
+      implementation for writing distributed, parallel native-code programs to 
+      be run on a Windows HPC Server cluster. The CCP SDK may be downloaded for 
+      free from              <A href="http://go.microsoft.com/FWLink/?LinkId=85312">here</A>
+       .           </P>
+      <H3>MPI.NET</H3>
+      <P>MPI.NET provides a safe high-level interface to MS-MPI for .NET 
+      programming languages. F# programs use MS-MPI via MPI.NET to obtain 
+      distributed parallelism. The MPI.NET SDK may be downloaded for free from   
+                 <A href="http://osl.iu.edu/research/mpi.net/software/">here</A>
+       .           </P>
+      <H2>Basic use</H2>
+      <P>This section describes the core constructs required to use MPI in order 
+      to parallelize programs.</P>
+      <H3>Hello world</H3>
+      <P>Once MPI.NET is installed, the following F# program can be compiled to 
+      test it:</P>
+<PRE>#light</PRE>
+<PRE>#r @"C:\Program Files\MPI.NET\Lib\MPI.dll"</PRE>
+<PRE>do
+  use mpi = new MPI.Environment(ref Sys.argv)
+  printf "Hello, from process number %d of 0..%d\n"
+    MPI.Communicator.world.Rank (MPI.Communicator.world.Size - 1)</PRE>
+      <P>This program has several interesting features:</P>
+      <P>
+      <UL>
+        <LI>The MPI.dll file is referenced in order to use MPI.NET.</LI>
+        <LI>The                  <CODE>mpi</CODE> variable that represents an 
+        MPI instance is in a                  <CODE>use</CODE> binding to ensure 
+        that the object is properly disposed of when the application completes, 
+        which is essential for any MPI program to function.               </LI>
+        <LI>The                  <CODE>Rank</CODE> property of the               
+           <CODE>world</CODE> value is used to identify this particular process. 
+                      </LI>
+        <LI>The                  <CODE>Size</CODE> property of the               
+           <CODE>world</CODE> value is used to find the total number of 
+        processes on this cluster.               </LI></UL>
+      <P></P>
+      <P>The rank number of the current process and the total number of 
+      processes are printed to the console.</P>
+      <P>This program can be run directly from the DOS prompt, in which case it 
+      will run on a single process and produce the following output:</P>
+<PRE>&gt; hpcsdktest.exe
+Hello, from process number 0 of 0..0</PRE>
+      <P>MPI applications using multiple nodes must be run using the mpiexec.exe 
+      tool and the -n option to specify the number of nodes. As this is likely 
+      to be done repeatedly, it can be easier to start the MPI program using F# 
+      code invoked in an F# interactive mode. For example, the following F# code 
+      starts the MPI program with eight nodes:</P>
+<PRE>let mpiexec = @"""C:\Program Files\Microsoft Compute Cluster Pack\Bin\mpiexec.exe"""
+let test = @"-n 8 """ + __SOURCE_DIRECTORY__ + @"\hpcsdktest.exe"""
+System.Diagnostics.Process.Start(mpiexec, test)</PRE>
+      <P>This spawns a console that displays the data printed by the program 
+      running on each of the eight nodes:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/hello.gif"> 
+                  </P>
+      <P></P>
+      <P>Note how the lines printed to the console do not necessarily appear in 
+      sequence one after the other but are occasionally printed during another 
+      print. This occurs precisely because the program is being executed several 
+      times in parallel. </P>
+      <H3>Sending and receiving messages</H3>
+      <P>The simplest way to pass messages between the nodes of a cluster is to 
+      use the send and receive commands that are implemented in MPI.NET as 
+      members of the              <CODE>Communicator</CODE> class.           
+</P>
+      <P>The pedagogical example of passing messages between the nodes of a 
+      cluster is to pass a simple message in a ring around each node in turn. 
+      The following F# program does exactly this, printing the message as it is 
+      passed:</P>
+<PRE>#light</PRE>
+<PRE>#r @"C:\Program Files\MPI.NET\Lib\MPI.dll"</PRE>
+<PRE>let main (comm : #MPI.Communicator) =
+  let rank = comm.Rank
+  let succ = (rank + 1) % comm.Size
+  match rank with
+  | 0 -&gt;
+      comm.Send("Rosie", succ, 0)
+      comm.Receive(MPI.Communicator.anySource, 0)
+      |&gt; printf "%s\n"
+  | rank -&gt;
+      let msg = comm.Receive(MPI.Communicator.anySource, 0)
+      printf "%s\n" msg
+      comm.Send(sprintf "%s, %d" msg rank, succ, 0)</PRE>
+<PRE>do
+  use mpi = new MPI.Environment(ref Sys.argv)
+  main MPI.Communicator.world</PRE>
+      <P>There are several important aspects to this program:</P>
+      <P>
+      <UL>
+        <LI>The rank of the current node is used to dynamically dispatch using a 
+        pattern match to different functionality for the master (zero) node and 
+        all other slave nodes. This allows the master node to behave 
+        differently, in this case spawning the original message and completing 
+        upon receipt of the result.</LI>
+        <LI>The                  <CODE>succ</CODE> value is the rank of the next 
+        process in the cluster.               </LI>
+        <LI>The message handled by this program is a string although the type 
+        never has to be declared explicitly thanks to type inference in 
+      F#.</LI></UL>
+      <P></P>
+      <P>Running this program produces the following output:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/rosie.gif"> 
+                  </P>
+      <P></P>
+      <P>Each slave node appended its rank to the string message, resulting in a 
+      final message "Rosie, 1, 2, 3, 4, 5, 6, 7" on this eight-node simulated 
+      cluster.</P>
+      <H2>Higher-level data parallel constructs</H2>
+      <P>MPI actually provides some higher-level data parallel constructs that 
+      allow computations to be farmed out across a cluster and the results 
+      collected again.</P>
+      <H3>Scatter</H3>
+      <P>The scatter functionality allows data to be farmed out to each process 
+      in the cluster on an individual basis. The data are specified as an array 
+      with one element for each process. The MPI.NET implementation does not 
+      scatter data to the master node.</P>
+      <P>The following program demonstrates the use of scatter functionality by 
+      farming slices of an array out to the processes:</P>
+<PRE>#light</PRE>
+<PRE>#r @"C:\Program Files\MPI.NET\Lib\MPI.dll"</PRE>
+<PRE>let partition (a : _ array) n =
+  [|for i in 0 .. n - 1 -&gt;
+      let i, j = a.Length * i / n, a.Length * (i + 1) / n
+      Array.sub a i (j - i)|]</PRE>
+<PRE>let slave rank (ns : int array) =
+  printf "%d got %A\n" rank ns</PRE>
+<PRE>let main (comm : #MPI.Communicator) =
+  let rank = comm.Rank
+  System.Threading.Thread.Sleep(300 * rank)
+  match rank with
+  | 0 -&gt;
+      let slices = partition [|1 .. 100|] comm.Size
+      slave rank (comm.Scatter(slices, 0))
+  | rank -&gt;
+      slave rank (comm.Scatter(0))</PRE>
+<PRE>do
+  use mpi = new MPI.Environment(ref Sys.argv)
+  main MPI.Communicator.world</PRE>
+      <P>The              <CODE>partition</CODE> function slices an array of any 
+      length into an array of a given number of subarrays. The subdivision is 
+      uneven if necessary, as it is in this case with 100 elements divided 
+      between the eight processes of this cluster.           </P>
+      <P>When run with eight processes in the cluster, this program produces the 
+      following output:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/scatter.gif"> 
+                  </P>
+      <P></P>
+      <P>Note how each node in the cluster received a different slice of the 
+      array.</P>
+      <H3>Gather</H3>
+      <P>The gather functionality is the converse of scatter, collecting a 
+      result from each node and collating them into an array for the master node 
+      to handle.</P>
+      <P>The following program uses the gather functionality to collate the 
+      results of computing a different Fibonacci number of each node:</P>
+<PRE>#light</PRE>
+<PRE>#r @"C:\Program Files\MPI.NET\Lib\MPI.dll"</PRE>
+<PRE>let rec fib = function
+  | 0 | 1 as n -&gt; n
+  | n -&gt; fib(n-1) + fib(n-2)</PRE>
+<PRE>let main (comm : #MPI.Communicator) =
+  let rank = comm.Rank
+  let result = fib rank
+  match rank with
+  | 0 -&gt;
+      for i in comm.Gather(result, 0) do
+        printf "%d\n" i
+  | rank -&gt;
+      comm.Gather(result, 0) |&gt; ignore</PRE>
+<PRE>do
+  use mpi = new MPI.Environment(ref Sys.argv)
+  main MPI.Communicator.world</PRE>
+      <P>Note that a result is computed on every node including the master node. 
+      This is slightly asymmetric in comparison with the              
+      <CODE>Scatter</CODE> function that did not scatter to the master node.     
+            </P>
+      <P>When run with eight processes, this program produces the following 
+      output:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/gather.gif"> 
+                  </P>
+      <P></P>
+      <P>Note that the master node returned the first of the given results (the 
+      0th number in the Fibonacci sequence).</P>
+      <H3>Reduce</H3>
+      <P>The reduce functionality folds an operation over the results from the 
+      processes.</P>
+      <P>The following program uses the              <CODE>Reduce</CODE> 
+      function to accumulate the total number of random samples found to lie 
+      within the unit circle and uses the total to approximate the value of pi:  
+               </P>
+<PRE>#light</PRE>
+<PRE>#r @"C:\Program Files\MPI.NET\Lib\MPI.dll"</PRE>
+<PRE>let main (comm : #MPI.Communicator) =
+  let rand = new System.Random()
+  let sqr x = x * x
+  let mutable count = 0
+  let iters = 1000000
+  for n=1 to iters do
+    if sqr(rand.NextDouble()) + sqr(rand.NextDouble()) &lt; 1. then
+      count &lt;- count + 1
+  let total = comm.Reduce(count, MPI.Operation.Add, 0)
+  if comm.Rank = 0 then
+    printf "pi = %f\n" (4. * float total / float comm.Size / float iters)</PRE>
+<PRE>do
+  use mpi = new MPI.Environment(ref Sys.argv)
+  main MPI.Communicator.world</PRE>
+      <P>The              <CODE>Reduce</CODE> member of the              
+      <CODE>comm</CODE> object is used to accumulate the sum of the results from 
+      each process. The return value              <CODE>total</CODE> of this 
+      function call on the node with rank zero (in this case) is the total sum. 
+      On node zero, this sum is used to print the approximation to pi that was 
+      found.           </P>
+      <P>When run, this program produces the following output:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/pi.gif"> 
+                  </P>
+      <P></P>
+      <P>The scatter, gather and reduce constructs are the bread and butter of 
+      MPI programming, automating the most common tasks easily and 
+      efficiently.</P>
+      <H2>Complete example</H2>
+      <P>The following serial Mandelbrot generator is a suitable candidate for 
+      parallelization:</P>
+<PRE>#light</PRE>
+<PRE>open System.IO
+open System.Runtime.Serialization
+open Math</PRE>
+<PRE>let n = 1024</PRE>
+<PRE>let norm (z : Complex) =
+  z.r * z.r + z.i * z.i</PRE>
+<PRE>let rec f c i z =
+  if i &lt; 255 &amp;&amp; norm z &lt; 4. then f c (i + 1) (z * z + c) else i</PRE>
+<PRE>let lerp x0 x1 n i =
+  x0 + float i / float n * (x1 - x0)</PRE>
+<PRE>do
+  let data =
+    Array2.init n n
+      (fun x y -&gt;
+        let c = complex (lerp -2. 2. n x) (lerp -2. 2. n y)
+        f c 0 Complex.zero)
+  let file = __SOURCE_DIRECTORY__ + @"\..\mandelbrot.dat"
+  use out = File.OpenWrite(file)
+  let formatter = new Formatters.Binary.BinaryFormatter()
+  formatter.Serialize(out, box data)</PRE>
+      <P>Note the use of binary serialization as an easy way to store the 
+      resulting 2D array.</P>
+      <P>This program may altered to leverage distributed parallelism by 
+      distributing horizontal scans of the image across the available processes 
+      and gathering the results together:</P>
+<PRE>#light</PRE>
+<PRE>#r @"C:\Program Files\MPI.NET\Lib\MPI.dll"</PRE>
+<PRE>open System.IO
+open System.Runtime.Serialization
+open Math</PRE>
+<PRE>let n = 4096</PRE>
+<PRE>let norm (z : Complex) =
+  z.r * z.r + z.i * z.i</PRE>
+<PRE>let rec f c i z =
+  if i &lt; 255 &amp;&amp; norm z &lt; 4. then f c (i + 1) (z * z + c) else i</PRE>
+<PRE>let lerp x0 x1 n i =
+  x0 + float i / float n * (x1 - x0)</PRE>
+<PRE>let main (comm : #MPI.Communicator) =
+  let rows =
+    [|for y in comm.Rank .. comm.Size .. n-1 -&gt;
+        y,
+        [|for x in 0 .. n-1 -&gt;
+            let c = complex (lerp -2. 2. n x) (lerp -2. 2. n y)
+            f c 0 Complex.zero|]|]
+  match comm.Rank with
+  | 0 -&gt;
+      let data = Array2.zero_create n n
+      for rows in comm.Gather(rows, 0) do
+        for y, row in rows do
+          for x=0 to n-1 do
+            data.[x, y] &lt;- row.[x]
+      let file = __SOURCE_DIRECTORY__ + @"\..\mandelbrot.dat"
+      use out = File.OpenWrite(file)
+      let formatter = new Formatters.Binary.BinaryFormatter()
+      formatter.Serialize(out, box data)
+  | rank -&gt;
+      comm.Gather(rows, 0) |&gt; ignore</PRE>
+<PRE>do
+  use mpi = new MPI.Environment(ref Sys.argv)
+  main MPI.Communicator.world</PRE>
+      <P>In this case, the horizontal scans of pixels handled by each process 
+      are implicit. A more sophisticated implementation might run a scheduler on 
+      the head node that farmed out each scan in turn as processes became free 
+      until all scans were completed. However, computation is sufficiently 
+      evenly distributed in this case that such sophistication is not 
+      required.</P>
+      <P>The results may be visualized using the following Windows Forms 
+      application:</P>
+<PRE>#light</PRE>
+<PRE>open System.IO
+open System.Runtime.Serialization
+open System.Drawing
+open System.Windows.Forms</PRE>
+<PRE>let data : int [,] =
+  let file = __SOURCE_DIRECTORY__ + @"\..\mandelbrot.dat"
+  use out = File.OpenRead(file)
+  let formatter = new Formatters.Binary.BinaryFormatter()
+  formatter.Deserialize(out) |&gt; unbox</PRE>
+<PRE>let n = Array2.length1 data
+let m = Array2.length2 data</PRE>
+<PRE>let pixmap =
+  let format = Imaging.PixelFormat.Format24bppRgb
+  new Bitmap(n, n, format)</PRE>
+<PRE>do
+  let pi = System.Math.PI
+  Array2.iteri
+    (fun x y i -&gt;
+      let r, g, b =
+        if i=255 then -1., -1., -1. else
+          let t = float i / 255. |&gt; sqrt |&gt; sqrt |&gt; sqrt |&gt; sqrt
+          sin(2. / 3. * pi * t) / t,
+          sin(2. / 3. * pi * (t + 0.33)) / t,
+          sin(2. / 3. * pi * (t + 0.66)) / t
+      let clamp i j n = max i (min j n)
+      let f x = int(255. * (0.5 + 0.5 * x)) |&gt; clamp 0 255
+      pixmap.SetPixel(x, y, Color.FromArgb(255, f r, f g, f b)))
+    data</PRE>
+<PRE>let form =
+  { new Form(Text="Mandelbrot", Width=1024, Height=1024) with
+    member form.OnPaintBackground _ = ()
+    member form.OnPaint e =
+      let r = form.ClientRectangle
+      let dest = new Rectangle(0, 0, r.Width, r.Height)
+      let src = new Rectangle(1, 1, n-2, m-2)
+      e.Graphics.DrawImage(pixmap, dest, src, GraphicsUnit.Pixel)
+    member form.OnResize _ = form.Invalidate()
+    member form.OnKeyDown e = if e.KeyCode = Keys.Escape then form.Close() }</PRE>
+<PRE>#if COMPILED
+Application.Run(form)
+#endif</PRE>
+      <P>Note the use of an object expression to construct a Windows form with 
+      an appropriate paint method. In particular, the              
+      <CODE>PaintBackground</CODE> event is turned into a no-op in order to 
+      eliminate flicker and the              <CODE>Resize</CODE> event is made 
+      to always invalidate the form to ensure that the display is updated when 
+      expanding the window as well as when shrinking it.           </P>
+      <P>When run, this produces the following image:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/mandelbrot.gif"> 
+                  </P>
+      <P></P>
+      <P>The overhead required to parallelize this program using MPI was larger 
+      than the overhead that would have been required to use the Task Parallel 
+      Library but, unlike the TPL, MPI facilitates the distribution of 
+      computation across many separate machines that do not have shared 
+      memory.</P>
+      <H2>Summary</H2>
+      <P>This article has described how the freely available MPI.NET bindings to 
+      the MSMPI implementation of MPI for Microsoft Windows can be used to build 
+      distributed parallel applications written in F#.</P>
+      <P>In addition to the MPI.NET bindings, the commercial              <A 
+      href="http://www.purempi.net/">Pure MPI</A> library for .NET 3 provides a 
+      complete MPI implementation written entirely in managed code. This 
+      implementation builds upon Windows Communication Foundation (WCF) to 
+      provide the best possible interoperability. Non-commercial use of this 
+      library is free but commercial use requires the purchase of a licence.     
+            </P>
+      <P>The F# programming language also provides concurrency capabilities 
+      based upon message passing and asynchronous workflows. This is somewhat 
+      similar to MPI but more generic and designed for programming concurrent 
+      applications rather than high-performance distributed parallelism. These 
+      subjects will be covered in detail in future F#.NET Journal 
+    articles.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Scalable%20distributed%20parallelism%20with%20MPI_NET_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

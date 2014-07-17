@@ -1,0 +1,167 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0086)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/kmeansclustering.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20kmeans%20clustering_files/style.css"><LINK rel=stylesheet 
+type=text/css 
+href="F%23%20Journal%20kmeans%20clustering_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20kmeans%20clustering_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20kmeans%20clustering_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20kmeans%20clustering_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>k-means clustering</H1>
+      <P>The k-means clustering algorithm is a simple form of machine learning 
+      that categorizes a set of data points into k clusters each centered on its 
+      own centroid. This article describes the design and implementation of the 
+      k-means clustering algorithm and an example application to a standard Iris 
+      flower data set including downloading and massaging the data directly from 
+      the web and visualization of the resulting clusters using WPF and the new 
+      charting and graping functionality in .NET 4.</P>
+      <H2>Introduction</H2>
+      <P>The k-means clustering algorithm is remarkably simple. The algorithm 
+      begins with k randomly-placed centroids. Each point in the data is 
+      associated with its nearest centroid according to a given distance 
+      function. Each centroid is then moved to the average of the positions of 
+      the points that have been associated with it. The process is repeated 
+      until the algorithm reaches fixed point or an iteration limit is 
+      exceeded.</P>
+      <P>This article begins by describing a remarkably simple implementation of 
+      the k-means clustering algorithm in F# that leverages functional 
+      programming, sequence expressions and some of the many built-in functions 
+      for manipulating data. The second part of the article uses .NET 
+      functionality to obtain a pedagogical example data set for k-means by 
+      downloading it from the web and massaging it into an appropriate form 
+      using pattern matching with active patterns. The final part of the article 
+      creates a compelling visualization of the four-dimensional data set that 
+      conveys the clusters found.</P>
+      <H2>Implementing the k-means algorithm in F#</H2>
+      <P>We being by referencing the <CODE>PresentationCore</CODE>, 
+      <CODE>PresentationFramework</CODE>, <CODE>WindowsBase</CODE>, 
+      <CODE>WindowsFormsIntegration</CODE>, <CODE>System.Xaml</CODE>, 
+      <CODE>System.Windows.Forms</CODE> and 
+      <CODE>System.Windows.Forms.DataVisualization</CODE> DLLs.</P>
+      <P>We define a <CODE>nest</CODE> function that nests up to <CODE>n</CODE> 
+      applications of a function <CODE>f</CODE> around an initial value 
+      <CODE>x</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;nest&nbsp;n&nbsp;f&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f_x&nbsp;=&nbsp;f&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;f_x=x&nbsp;||&nbsp;n=0&nbsp;then&nbsp;x&nbsp;else&nbsp;nest&nbsp;(n-1)&nbsp;f&nbsp;f_x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;nest&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a</CODE></P>
+      <P>The following <CODE>random</CODE> function creates a set of 
+      <CODE>k</CODE> random locations within the ranges of the <CODE>data</CODE> 
+      in each dimension:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;random&nbsp;(data:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;k&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random().NextDouble<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;gen&nbsp;i&nbsp;_&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;data&nbsp;|&gt;&nbsp;Seq.map&nbsp;(fun&nbsp;u&nbsp;-&gt;&nbsp;u.[i])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;rand()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;*&nbsp;Seq.min&nbsp;xs&nbsp;+&nbsp;(1.0&nbsp;-&nbsp;x)&nbsp;*&nbsp;Seq.max&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.init&nbsp;k&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;Array.mapi&nbsp;gen&nbsp;data.[0]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;random&nbsp;:&nbsp;float&nbsp;[]&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;[]</CODE></P>
+      <P>The core of the algorithm is remarkable simple to express in F# as the 
+      following <CODE>kmeans</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;kmeans&nbsp;(data:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;distance&nbsp;k&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;nearestCentroid&nbsp;centroids&nbsp;u&nbsp;=&nbsp;Array.minBy&nbsp;(distance&nbsp;u)&nbsp;centroids<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;iteration&nbsp;(centroids:&nbsp;float&nbsp;[]&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|for&nbsp;_,&nbsp;us&nbsp;in&nbsp;Seq.groupBy&nbsp;(nearestCentroid&nbsp;centroids)&nbsp;data&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;Seq.length&nbsp;us<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;&lt;&gt;&nbsp;0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;Array.mapi&nbsp;(fun&nbsp;i&nbsp;_&nbsp;-&gt;&nbsp;us&nbsp;|&gt;&nbsp;Seq.averageBy&nbsp;(fun&nbsp;u&nbsp;-&gt;&nbsp;u.[i]))&nbsp;data.[0]|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;random&nbsp;data&nbsp;k<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;nest&nbsp;100&nbsp;iteration<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;fun&nbsp;centroids&nbsp;-&gt;&nbsp;Seq.groupBy&nbsp;(nearestCentroid&nbsp;centroids)&nbsp;data;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;kmeans&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;[]&nbsp;[]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(float&nbsp;[]&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;seq&lt;float&nbsp;[]&nbsp;*&nbsp;seq&lt;float&nbsp;[]&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>The <CODE>kmeans</CODE> function contains a nested 
+      <CODE>iteration</CODE> function that performs a single iteration of the 
+      algorithm, accepting one <CODE>centroids</CODE> array and returning 
+      another. This <CODE>iteration</CODE> function contains a nested 
+      <CODE>nearestCentroid</CODE> function that finds the centroid nearest to 
+      the given point. The <CODE>data</CODE> are then grouped by their nearest 
+      centroid and the data points nearest to each centroid are averaged to 
+      produce the new centroid position. In the event that a centroid has zero 
+      associated data points, it is removed and the algorithm continues with one 
+      fewer centroids. Finally, the data are grouped by their nearest centroid 
+      in order to return not only the centroids but also the clusters 
+      themselves.</P>
+      <H2>Downloading an example data set</H2>
+      <P>The pedagogical example data used to demonstrate the k-means clustering 
+      algorithm is a classic Iris flower data set.</P>
+      <P>We begin by defining a union type representing each of the three 
+      species of Iris flower in this data set:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;species&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Setosa<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Versicolor<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Virginica;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;species&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Setosa<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Versicolor<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Virginica</CODE></P>
+      <P>The following definition uses a <CODE>WebClient</CODE> to download the 
+      data over the web as a string. The string is then split into lines and 
+      each line is split into comma-separated strings before they are 
+      interpreted using active patterns with expected syntax producing a row of 
+      data consisting of four floating-point measurements and the 
+      officially-recognised classification as a species and any unexpected 
+      syntax being ignored.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;irisData&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;client&nbsp;=&nbsp;new&nbsp;System.Net.WebClient()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;url&nbsp;=&nbsp;"http://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|Float|_|)&nbsp;string&nbsp;=&nbsp;try&nbsp;Some(Float(float&nbsp;string))&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|Species|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"Iris-setosa"&nbsp;-&gt;&nbsp;Some(Species&nbsp;Setosa)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"Iris-versicolor"&nbsp;-&gt;&nbsp;Some(Species&nbsp;Versicolor)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;"Iris-virginica"&nbsp;-&gt;&nbsp;Some(Species&nbsp;Virginica)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;line&nbsp;in&nbsp;(client.DownloadString&nbsp;url).Split[|'\n'|]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;line.Split[|','|]&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[|Float&nbsp;w;&nbsp;Float&nbsp;x;&nbsp;Float&nbsp;y;&nbsp;Float&nbsp;z;&nbsp;Species&nbsp;species|]&nbsp;-&gt;&nbsp;yield&nbsp;[|w;&nbsp;x;&nbsp;y;&nbsp;z|],&nbsp;species<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;()&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;irisData&nbsp;:&nbsp;(float&nbsp;[]&nbsp;*&nbsp;species)&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[([|5.1;&nbsp;3.5;&nbsp;1.4;&nbsp;0.2|],&nbsp;Setosa);&nbsp;([|4.9;&nbsp;3.0;&nbsp;1.4;&nbsp;0.2|],&nbsp;Setosa);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;([|4.7;&nbsp;3.2;&nbsp;1.3;&nbsp;0.2|],&nbsp;Setosa);&nbsp;([|4.6;&nbsp;3.1;&nbsp;1.5;&nbsp;0.2|],&nbsp;Setosa);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;([|5.0;&nbsp;3.6;&nbsp;1.4;&nbsp;0.2|],&nbsp;Setosa);&nbsp;([|5.4;&nbsp;3.9;&nbsp;1.7;&nbsp;0.4|],&nbsp;Setosa);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;...]</CODE></P>
+      <P>As we have seen before (e.g. in the article about behaviour-driven 
+      development in F#), active patterns are an excellent way to write short 
+      and sweet parsers. In this case, the first match case is only matched if 
+      all four floating-pointing values and the string name of the species are 
+      correctly matched. In this case, <CODE>yield</CODE> is used to produce a 
+      row containing the data for one individual flower. This results in a list 
+      of data points, one for each flower measured, containing each of the four 
+      measurements and its official classification.</P>
+      <P>The data are now ready for further analysis using k-means 
+      clustering.</P>
+      <H2>Example application</H2>
+      <P>With the implementation of the core algorithm complete, we are now in a 
+      position to apply the algorithm to an example data set.</P>
+      <P>The following <CODE>euclidean</CODE> function computes the Euclidean 
+      distance from one point to another:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;euclidean&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.fold2&nbsp;(fun&nbsp;x&nbsp;u&nbsp;v&nbsp;-&gt;&nbsp;x&nbsp;+&nbsp;pown&nbsp;(u&nbsp;-&nbsp;v)&nbsp;2)&nbsp;0.0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;euclidean&nbsp;:&nbsp;(float&nbsp;[]&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;-&gt;&nbsp;float)</CODE></P>
+      <P>The following creates an infinite sequence of k-means solutions using 
+      three initial centroids and picks the first that culminates in three 
+      centroids:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;clusters&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k&nbsp;=&nbsp;3<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;while&nbsp;true&nbsp;do&nbsp;yield&nbsp;kmeans&nbsp;[|for&nbsp;u,&nbsp;_&nbsp;in&nbsp;IrisData.data&nbsp;-&gt;&nbsp;u|]&nbsp;euclidean&nbsp;k&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.find&nbsp;(fun&nbsp;xs&nbsp;-&gt;&nbsp;Seq.length&nbsp;xs&nbsp;=&nbsp;k);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;clusters&nbsp;:&nbsp;seq&lt;float&nbsp;[]&nbsp;*&nbsp;seq&lt;float&nbsp;[]&gt;&gt;</CODE></P>
+      <P>This can be tested by comparing the clusters obtained using k-means 
+      with the classifications given in the original data as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;clusters&nbsp;|&gt;&nbsp;Seq.map&nbsp;(snd&nbsp;&gt;&gt;&nbsp;Seq.countBy&nbsp;(Map&nbsp;IrisData.data&nbsp;|&gt;&nbsp;fun&nbsp;m&nbsp;k&nbsp;-&gt;&nbsp;m.[k]));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;seq&lt;seq&lt;IrisData.species&nbsp;*&nbsp;int&gt;&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[seq&nbsp;[(Setosa,&nbsp;50)];&nbsp;seq&nbsp;[(Versicolor,&nbsp;48);&nbsp;(Virginica,&nbsp;14)];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;[(Versicolor,&nbsp;2);&nbsp;(Virginica,&nbsp;36)]]</CODE></P>
+      <P>This result shows that each of the three clusters contain predominantly 
+      a single classification. The first cluster correctly identifies all Setaso 
+      irises. The second cluster contains mostly Versicolor but also a 
+      significant number of Virginica irises, which could be better but there is 
+      still a clear majority. The first cluster contains almost entirely 
+      Virginica irises with just 2 flowers classified differently, </P>
+      <H2>Visualization</H2>
+      <P>Finally, the effect of this example application of k-means clustering 
+      can be visualized by plotting a 4x4 grid of graphs, each displaying two of 
+      the four dimensions in this data set and colored according to which 
+      cluster they belong to.</P>
+      <P>We begin by opening two relevant namespaces:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows.Forms.DataVisualization.Charting;;</CODE></P>
+      <P>Our task can then be easily accomplished in .NET 4 by using the new 
+      charting and graphing functionality as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;0..3&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ColumnDefinition()&nbsp;|&gt;&nbsp;grid.ColumnDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;0..3&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;0..3&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;series&nbsp;=&nbsp;[|for&nbsp;_&nbsp;in&nbsp;1..3&nbsp;-&gt;&nbsp;new&nbsp;Series(ChartType=SeriesChartType.Point)|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;area&nbsp;=&nbsp;new&nbsp;ChartArea()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;chart&nbsp;=&nbsp;new&nbsp;Chart(Dock=Forms.DockStyle.Fill)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chart.ChartAreas.Add&nbsp;area<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_,&nbsp;data&nbsp;in&nbsp;clusters&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;series&nbsp;=&nbsp;new&nbsp;Series(ChartType=SeriesChartType.Point)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;u&nbsp;in&nbsp;data&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;series.Points.AddXY(u.[i],&nbsp;u.[j])&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chart.Series.Add&nbsp;series<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;chart&nbsp;=&nbsp;new&nbsp;Forms.Integration.WindowsFormsHost(Child=chart)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(chart,&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(chart,&nbsp;j)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;chart&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=grid))&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <P>This code creates a grid control with four rows and columns. Each of 
+      these 16 grid positions is filled with a chart. The grid coordinates 
+      <CODE>i</CODE> and <CODE>j</CODE> are used to index dimensions of the 
+      data. For each cluster, a series is added to each graph and filled with 
+      the data points associated with that cluster. The charting control 
+      automatically colors them differently.</P>
+      <P>The result is as follows:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20kmeans%20clustering_files/kmeans.png"></P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of the k-means 
+      clustering algorithm in F#, an example application of this technique to a 
+      standard data set and visualization of the results using WPF and the new 
+      .NET 4 charting library.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of machine 
+      learning and charting.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20kmeans%20clustering_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

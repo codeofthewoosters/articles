@@ -1,0 +1,183 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0077)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/graphs2.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20graph%20algorithms_files/style.css"><LINK rel=stylesheet 
+type=text/css 
+href="F%23%20Journal%20graph%20algorithms_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20graph%20algorithms_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20graph%20algorithms_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20graph%20algorithms_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Graph algorithms: topological sort and all-pairs shortest paths</H1>
+      <P>Following on from our previous article about depth- and breadth-first 
+      searches of graphs, this article examines some more involved algorithms 
+      that also have many practical applications. A topological sort of a 
+      directed acyclic graph produces the vertices in a sequence where every 
+      vertex reachable from another appears after it in the sequence. All-pairs 
+      shortest paths finds the shortest path from any vertex to any other 
+      vertex.</P>
+      <H2>Topological sort</H2>
+      <P>The result of an attempted topological sort is either that the graph 
+      contained one or more cycles or it is the resulting sequence of vertices. 
+      Thus, we begin by defining a discriminated union type 
+      <CODE>TopologicalSort&lt;'a&gt;</CODE> that describes these two 
+      possibilities:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;TopologicalSort&lt;'a&gt;&nbsp;=&nbsp;Cyclic&nbsp;|&nbsp;Order&nbsp;of&nbsp;'a&nbsp;seq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;TopologicalSort&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Cyclic<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Order&nbsp;of&nbsp;seq&lt;'a&gt;</CODE></P>
+      <P>Let us examine an imperative implementation of this algorithm before 
+      considering the purely functional implementation.</P>
+      <H3>Imperative algorithm</H3>
+      <P>The topological sort is most easily computed in terms of parent 
+      vertices, i.e. those with edges leading to a vertex. This information can 
+      be computed from the usual child vertex mapping as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parentsOf&nbsp;edgesFrom&nbsp;vs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;parents&nbsp;=&nbsp;System.Collections.Generic.Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;v&nbsp;in&nbsp;vs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parents.[v]&nbsp;&lt;-&nbsp;System.Collections.Generic.HashSet(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;u&nbsp;in&nbsp;vs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;v&nbsp;in&nbsp;edgesFrom&nbsp;u&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parents.[v].Add&nbsp;u&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parents;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parentsOf&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;seq&lt;'a&gt;&nbsp;-&gt;&nbsp;Generic.Dictionary&lt;'a,Generic.HashSet&lt;'a&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>Consider the example graph from the previous article:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20graph%20algorithms_files/example.png"></P>
+      <P>Applying this <CODE>parentsOf</CODE> function to the 
+      <CODE>edgesFrom</CODE> function that gives the set of child vertices of a 
+      given vertex yields a dictionary that maps any given vertex to its set of 
+      parent vertices:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;parentsOf&nbsp;ExampleGraph.edgesFrom&nbsp;ExampleGraph.vertices;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Collections.Generic.Dictionary&lt;ExampleGraph.vertex,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Collections.Generic.HashSet&lt;ExampleGraph.vertex&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;=&nbsp;dict<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[(M,&nbsp;seq&nbsp;[]);&nbsp;(N,&nbsp;seq&nbsp;[]);&nbsp;(O,&nbsp;seq&nbsp;[N;&nbsp;P]);&nbsp;(P,&nbsp;seq&nbsp;[]);&nbsp;(Q,&nbsp;seq&nbsp;[M;&nbsp;N]);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(R,&nbsp;seq&nbsp;[M;&nbsp;O;&nbsp;S]);&nbsp;(S,&nbsp;seq&nbsp;[O;&nbsp;P]);&nbsp;(T,&nbsp;seq&nbsp;[Q;&nbsp;U]);&nbsp;(U,&nbsp;seq&nbsp;[N;&nbsp;R]);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(V,&nbsp;seq&nbsp;[Y]);&nbsp;(W,&nbsp;seq&nbsp;[V]);&nbsp;(X,&nbsp;seq&nbsp;[M;&nbsp;V]);&nbsp;(Y,&nbsp;seq&nbsp;[R]);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Z,&nbsp;seq&nbsp;[P;&nbsp;W])]</CODE></P>
+      <P>For example, the parents of <CODE>R</CODE> are <CODE>M</CODE>, 
+      <CODE>O</CODE> and <CODE>S</CODE>.</P>
+      <P>The following <CODE>topologicalSort</CODE> function computes the 
+      topological sort of a graph using imperative data structures and in-place 
+      mutation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;topologicalSort&nbsp;edgesFrom&nbsp;vs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;parents&nbsp;=&nbsp;parentsOf&nbsp;edgesFrom&nbsp;vs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;E&nbsp;=&nbsp;System.Collections.Generic.Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;v&nbsp;in&nbsp;vs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;E.[v]&nbsp;&lt;-&nbsp;System.Collections.Generic.HashSet(edgesFrom&nbsp;v,&nbsp;HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;L&nbsp;=&nbsp;ResizeArray()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;S&nbsp;=&nbsp;System.Collections.Generic.HashSet(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;v&nbsp;in&nbsp;vs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;parents.[v].Count&nbsp;=&nbsp;0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S.Add&nbsp;v&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;S.Count&nbsp;&gt;&nbsp;0&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;Seq.head&nbsp;S<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S.Remove&nbsp;n&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;L.Add&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;m&nbsp;in&nbsp;Array.ofSeq&nbsp;E.[n]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;parents.[m].Remove&nbsp;n&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;E.[n].Remove&nbsp;m&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;parents.[m].Count&nbsp;=&nbsp;0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;S.Add&nbsp;m&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;E&nbsp;|&gt;&nbsp;Seq.forall&nbsp;(fun&nbsp;kv&nbsp;-&gt;&nbsp;kv.Value.Count=0)&nbsp;then&nbsp;Order(L.ToArray())&nbsp;else&nbsp;Cyclic;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;topologicalSort&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;seq&lt;'a&gt;&nbsp;-&gt;&nbsp;TopologicalSort&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The <CODE>parentsOf</CODE> function is used to compute the set of 
+      parents of each vertex. The edges are stored in <CODE>E</CODE>, making it 
+      easy to simplify the graph by removing edges. The result <CODE>L</CODE> is 
+      a <CODE>ResizeArray</CODE> that has new vertices appended onto it. The set 
+      <CODE>S</CODE> is initialized to the set of roots, i.e. vertices with no 
+      parents.</P>
+      <P>The algorithm then extracts a vertex <CODE>n</CODE> from <CODE>S</CODE> 
+      and appends it to <CODE>L</CODE> before looping over the outgoing edges 
+      from <CODE>n</CODE>. Each edge to a child vertex <CODE>m</CODE> is removed 
+      from both <CODE>parents</CODE> and <CODE>E</CODE> and <CODE>m</CODE> is 
+      added to <CODE>S</CODE> if it has become a root, i.e. its last parent was 
+      just deleted. The process is repeated until <CODE>S</CODE> is empty. If no 
+      edges remain then the graph was free of cycles and the resulting 
+      topological order is returned.</P>
+      <P>For example, the topological sort of our example graph is:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;topologicalSort&nbsp;ExampleGraph.edgesFrom&nbsp;ExampleGraph.vertices;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;TopologicalSort&lt;ExampleGraph.vertex&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Order&nbsp;[|M;&nbsp;N;&nbsp;Q;&nbsp;P;&nbsp;O;&nbsp;S;&nbsp;R;&nbsp;U;&nbsp;T;&nbsp;Y;&nbsp;V;&nbsp;X;&nbsp;W;&nbsp;Z|]</CODE></P>
+      <P>Correctness is easily determined by inspection in this case, by 
+      observing that every vertex <CODE>m</CODE> that is reachable from another 
+      vertex <CODE>n</CODE> appears after it in the topological order.</P>
+      <H3>Purely functional solution</H3>
+      <P>The same computation can be performed using purely functional data 
+      structures. Specifically, the <CODE>Set</CODE> and <CODE>Map</CODE> data 
+      structures provided by F#. In particular, the efficiency of lookups in 
+      maps is dependent upon the number of bindings in the map so we shall 
+      remove bindings that map vertices to empty sets.</P>
+      <P>We begin by defining a <CODE>find</CODE> function that searches for a 
+      key in a map and returns the empty set as a default if the key was not 
+      present:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;find&nbsp;k&nbsp;map&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;Map.tryFind&nbsp;k&nbsp;map&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;v&nbsp;-&gt;&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;Set.empty;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;find&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;-&gt;&nbsp;Map&lt;'a,Set&lt;'b&gt;&gt;&nbsp;-&gt;&nbsp;Set&lt;'b&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison&nbsp;and&nbsp;'b&nbsp;:&nbsp;comparison</CODE></P>
+      <P>In the interests of efficiency, we shall omit vertices from the edge 
+      map when they have no edges.</P>
+      <P>The following <CODE>update</CODE> function applies a function 
+      <CODE>f</CODE> to the set of values in a map associated with the key 
+      <CODE>x</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;update&nbsp;x&nbsp;f&nbsp;(m:&nbsp;Map&lt;_,&nbsp;Set&lt;_&gt;&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;s&nbsp;=&nbsp;find&nbsp;x&nbsp;m&nbsp;|&gt;&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Set.isEmpty&nbsp;s&nbsp;then&nbsp;Map.remove&nbsp;x&nbsp;m&nbsp;else&nbsp;Map.add&nbsp;x&nbsp;s&nbsp;m;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;update&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;-&gt;&nbsp;(Set&lt;'b&gt;&nbsp;-&gt;&nbsp;Set&lt;'b&gt;)&nbsp;-&gt;&nbsp;Map&lt;'a,Set&lt;'b&gt;&gt;&nbsp;-&gt;&nbsp;Map&lt;'a,Set&lt;'b&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison&nbsp;and&nbsp;'b&nbsp;:&nbsp;comparison</CODE></P>
+      <P>Note that this function tests the resulting set after the application 
+      of <CODE>f</CODE> and, if it is empty, removes the binding from the 
+      map.</P>
+      <P>The topological sort may then be implemented as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;topologicalSort&nbsp;edgesFrom&nbsp;vs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;xs&nbsp;(ins:&nbsp;Map&lt;_,&nbsp;_&gt;,&nbsp;outs:&nbsp;Map&lt;_,&nbsp;_&gt;,&nbsp;s)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Set.isEmpty&nbsp;s&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Map.isEmpty&nbsp;outs&nbsp;then&nbsp;Order(List.rev&nbsp;xs)&nbsp;else&nbsp;Cyclic<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;Set.minElement&nbsp;s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((ins,&nbsp;outs,&nbsp;Set.remove&nbsp;n&nbsp;s),&nbsp;find&nbsp;n&nbsp;outs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;||&gt;&nbsp;Seq.fold&nbsp;(fun&nbsp;(ins,&nbsp;outs,&nbsp;s)&nbsp;m&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ins&nbsp;=&nbsp;update&nbsp;m&nbsp;(Set.remove&nbsp;n)&nbsp;ins<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ins,&nbsp;update&nbsp;n&nbsp;(Set.remove&nbsp;m)&nbsp;outs,&nbsp;if&nbsp;Map.containsKey&nbsp;m&nbsp;ins&nbsp;then&nbsp;s&nbsp;else&nbsp;Set.add&nbsp;m&nbsp;s)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;loop&nbsp;(n::xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ins,&nbsp;outs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((Map.empty,&nbsp;Map.empty),&nbsp;vs)&nbsp;||&gt;&nbsp;Seq.fold&nbsp;(fun&nbsp;(ins,&nbsp;outs)&nbsp;u&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.fold&nbsp;(fun&nbsp;(ins,&nbsp;outs)&nbsp;v&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;update&nbsp;v&nbsp;(Set.add&nbsp;u)&nbsp;ins,&nbsp;update&nbsp;u&nbsp;(Set.add&nbsp;v)&nbsp;outs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(ins,&nbsp;outs)&nbsp;(edgesFrom&nbsp;u))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;noParents&nbsp;=&nbsp;Map.foldBack&nbsp;(fun&nbsp;m&nbsp;_&nbsp;-&gt;&nbsp;Set.remove&nbsp;m)&nbsp;ins&nbsp;(set&nbsp;vs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;[]&nbsp;(ins,&nbsp;outs,&nbsp;noParents);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;topologicalSort&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;seq&lt;'a&gt;&nbsp;-&gt;&nbsp;TopologicalSort&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>Compared to the previous imperative solution to the same problem, the 
+      mutable <CODE>Dictionary</CODE> and <CODE>HashSet</CODE> collections have 
+      been replaced with immutable <CODE>Map</CODE> and <CODE>Set</CODE> 
+      collections and the loops have been replaced with folds.</P>
+      <H2>All-pairs shortest paths</H2>
+      <P>This algorithm finds the shortest distance and route from every vertex 
+      to every other vertex in a graph.</P>
+      <P>The pedagogical solution to this problem actually only finds the 
+      distance between each vertex and auxiliary information that can be used to 
+      reconstruct the shortest path. There are two common formulations of this 
+      solution. The first is a direct purely-functional encoding of the 
+      recurrence relation that accumulates the shortest path lengths:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;allPairsShortestPaths&nbsp;vs&nbsp;es&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;vs&nbsp;=&nbsp;Array.ofSeq&nbsp;vs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;d&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j,&nbsp;_&nbsp;when&nbsp;i=j&nbsp;-&gt;&nbsp;Some(0,&nbsp;None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j,&nbsp;-1&nbsp;-&gt;&nbsp;if&nbsp;es&nbsp;i&nbsp;|&gt;&nbsp;Set.contains&nbsp;j&nbsp;then&nbsp;Some(1,&nbsp;None)&nbsp;else&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j,&nbsp;k&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;d(i,&nbsp;j,&nbsp;k-1),&nbsp;d(i,&nbsp;vs.[k],&nbsp;k-1),&nbsp;d(vs.[k],&nbsp;j,&nbsp;k-1)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(lij,&nbsp;_)&nbsp;as&nbsp;l,&nbsp;Some(lik,&nbsp;_),&nbsp;Some(lkj,&nbsp;_)&nbsp;when&nbsp;lij&nbsp;&lt;&nbsp;lik&nbsp;+&nbsp;lkj&nbsp;-&gt;&nbsp;l<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(lij,&nbsp;_)&nbsp;as&nbsp;l,&nbsp;_,&nbsp;_&nbsp;-&gt;&nbsp;l<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_,&nbsp;Some(lik,&nbsp;_),&nbsp;Some(lkj,&nbsp;_)&nbsp;-&gt;&nbsp;Some(lik&nbsp;+&nbsp;lkj,&nbsp;Some&nbsp;vs.[k])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;d(i,&nbsp;j,&nbsp;vs.Length-1);;</CODE></P>
+      <P>Searching for the shortest path from <CODE>P</CODE> to <CODE>T</CODE> 
+      returns the path length <CODE>4</CODE> and a vertex from the path, in this 
+      case <CODE>U</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;allPairsShortestPaths&nbsp;vertices&nbsp;(edgesFrom&nbsp;&gt;&gt;&nbsp;set)&nbsp;P&nbsp;T;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:56.693,&nbsp;CPU:&nbsp;00:00:53.633,&nbsp;GC&nbsp;gen0:&nbsp;2568,&nbsp;gen1:&nbsp;6,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(int&nbsp;*&nbsp;vertex&nbsp;option)&nbsp;option&nbsp;=&nbsp;Some&nbsp;(4,&nbsp;Some&nbsp;U)</CODE></P>
+      <P>Note the enormous time taken given the simplicity of the graph. This is 
+      a consequence of naive dynamic programming: the three recursive calls in 
+      the <CODE>d</CODE> function are redundantly recomputing the same results 
+      over and over. In practice, the <CODE>d</CODE> function would be 
+      memoized.</P>
+      <P>Inspection of the example graph shows that there are two shortest 
+      routes from <CODE>P</CODE> to <CODE>T</CODE>. Specifically, 
+      <CODE>PSRUT</CODE> and <CODE>PORUT</CODE>.</P>
+      <P>The second pedagogical solution is written in the imperative style and 
+      uses three nested loops to perform the same work. In this case, we shall 
+      use hash tables to map pairs of vertices to the lengths of the shortest 
+      paths between them and the intermediate point on that path. We begin by 
+      augmenting the .NET <CODE>Dictionary</CODE> type with an F#-style 
+      <CODE>TryFind</CODE> member:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;System.Collections.Generic.Dictionary&lt;'a,&nbsp;'b&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;m.TryFind&nbsp;k&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;v&nbsp;=&nbsp;ref&nbsp;Unchecked.defaultof&lt;_&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;m.TryGetValue(k,&nbsp;v)&nbsp;then&nbsp;Some&nbsp;!v&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Dictionary&lt;'TKey,'TValue&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;TryFind&nbsp;:&nbsp;k:'TKey&nbsp;-&gt;&nbsp;'TValue&nbsp;option</CODE></P>
+      <P>The imperative solution may then be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;allPairsShortestPaths&nbsp;vs&nbsp;es&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;vs&nbsp;=&nbsp;Array.ofSeq&nbsp;vs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;l&nbsp;=&nbsp;System.Collections.Generic.Dictionary&lt;'a&nbsp;*&nbsp;'a,&nbsp;int&gt;(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mid&nbsp;=&nbsp;System.Collections.Generic.Dictionary&lt;'a&nbsp;*&nbsp;'a,&nbsp;'a&gt;(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;vs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;es&nbsp;i&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;l.[(i,j)]&nbsp;&lt;-&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k&nbsp;in&nbsp;vs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;vs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;vs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;update&nbsp;lij&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;l.[(i,j)]&nbsp;&lt;-&nbsp;lij<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mid.[(i,j)]&nbsp;&lt;-&nbsp;k<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;tryFind&nbsp;(i,j)&nbsp;l,&nbsp;tryFind&nbsp;(i,k)&nbsp;l,&nbsp;tryFind&nbsp;(k,j)&nbsp;l&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;lij,&nbsp;Some&nbsp;lik,&nbsp;Some&nbsp;lkj&nbsp;when&nbsp;lik&nbsp;+&nbsp;lkj&nbsp;&lt;&nbsp;lij&nbsp;-&gt;&nbsp;update&nbsp;(lik&nbsp;+&nbsp;lkj)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None,&nbsp;Some&nbsp;lik,&nbsp;Some&nbsp;lkj&nbsp;-&gt;&nbsp;update&nbsp;(lik&nbsp;+&nbsp;lkj)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;i&nbsp;k&nbsp;-&gt;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;tryFind&nbsp;(i,k)&nbsp;l,&nbsp;tryFind&nbsp;(i,k)&nbsp;mid&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;length,&nbsp;Some&nbsp;mid&nbsp;-&gt;&nbsp;Some(length,&nbsp;mid)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;allPairsShortestPaths&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&lt;'a&gt;&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'a&gt;)&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;(int&nbsp;*&nbsp;'a)&nbsp;option)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The example shortest path may also be examined using this imperative 
+      solution:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;allPairsShortestPaths&nbsp;vertices&nbsp;(edgesFrom&nbsp;&gt;&gt;&nbsp;set)&nbsp;P&nbsp;T;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.020,&nbsp;CPU:&nbsp;00:00:00.015,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(int&nbsp;*&nbsp;vertex)&nbsp;option&nbsp;=&nbsp;Some&nbsp;(4,&nbsp;U)</CODE></P>
+      <P>Note that the time taken is greatly reduced.</P>
+      <P>Contrary to the claims in many text books, it is often very useful to 
+      be able to find not only the length of the shortest paths but actually the 
+      paths themselves. For example, the computation of implied prices in 
+      finance requires a very similar procedure and knowing the path length but 
+      not the path itself means knowing how much money can be made but not 
+      knowing how to make it!</P>
+      <P>Thus we conclude with a complete solution that includes a final 
+      <CODE>search</CODE> function that traverses the intermediate points 
+      recursively in order to build up the entire path as an 
+      <CODE>IEnumerable</CODE>.</P>
+      <P>We shall memoize the purely functional solution using the following 
+      <CODE>memoize</CODE> combinator:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;memoize&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m&nbsp;=&nbsp;System.Collections.Generic.Dictionary()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;f'&nbsp;k&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;v&nbsp;=&nbsp;ref&nbsp;Unchecked.defaultof&lt;_&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;m.TryGetValue(k,&nbsp;v)&nbsp;then&nbsp;!v&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;v&nbsp;=&nbsp;f&nbsp;f'&nbsp;k<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;m.[k]&nbsp;&lt;-&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f';;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;memoize&nbsp;:&nbsp;(('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The final solution may then be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;allPairsShortestPaths&nbsp;vs&nbsp;es&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;vs&nbsp;=&nbsp;Array.ofSeq&nbsp;vs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;d&nbsp;d&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j,&nbsp;_&nbsp;when&nbsp;i=j&nbsp;-&gt;&nbsp;Some(0,&nbsp;None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j,&nbsp;-1&nbsp;-&gt;&nbsp;if&nbsp;es&nbsp;i&nbsp;|&gt;&nbsp;Set.contains&nbsp;j&nbsp;then&nbsp;Some(1,&nbsp;None)&nbsp;else&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;i,&nbsp;j,&nbsp;k&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;d(i,&nbsp;j,&nbsp;k-1),&nbsp;d(i,&nbsp;vs.[k],&nbsp;k-1),&nbsp;d(vs.[k],&nbsp;j,&nbsp;k-1)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(lij,&nbsp;_)&nbsp;as&nbsp;l,&nbsp;Some(lik,&nbsp;_),&nbsp;Some(lkj,&nbsp;_)&nbsp;when&nbsp;lij&nbsp;&lt;&nbsp;lik&nbsp;+&nbsp;lkj&nbsp;-&gt;&nbsp;l<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(lij,&nbsp;_)&nbsp;as&nbsp;l,&nbsp;_,&nbsp;_&nbsp;-&gt;&nbsp;l<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_,&nbsp;Some(lik,&nbsp;_),&nbsp;Some(lkj,&nbsp;_)&nbsp;-&gt;&nbsp;Some(lik&nbsp;+&nbsp;lkj,&nbsp;Some&nbsp;vs.[k])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;d&nbsp;=&nbsp;memoize&nbsp;d<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;i&nbsp;k&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;search&nbsp;i&nbsp;k&nbsp;=&nbsp;seq&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;d(i,&nbsp;k,&nbsp;vs.Length-1)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(_,&nbsp;Some&nbsp;j)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;search&nbsp;i&nbsp;j<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;j<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;search&nbsp;j&nbsp;k<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;d(i,&nbsp;k,&nbsp;vs.Length-1)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some(length,&nbsp;_)&nbsp;-&gt;&nbsp;Some(length,&nbsp;Seq.concat[seq[i];&nbsp;search&nbsp;i&nbsp;k;&nbsp;seq[k]]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;allPairsShortestPaths&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&lt;'a&gt;&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;Set&lt;'a&gt;)&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;(int&nbsp;*&nbsp;seq&lt;'a&gt;)&nbsp;option)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>For example:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;search&nbsp;=&nbsp;allPairsShortestPaths&nbsp;ExampleGraph.vertices&nbsp;(ExampleGraph.edgesFrom&nbsp;&gt;&gt;&nbsp;set);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;search&nbsp;:&nbsp;(vertex&nbsp;-&gt;&nbsp;vertex&nbsp;-&gt;&nbsp;(int&nbsp;*&nbsp;vertex&nbsp;list)&nbsp;option)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;search&nbsp;P&nbsp;T;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.097,&nbsp;CPU:&nbsp;00:00:00.078,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(int&nbsp;*&nbsp;seq&lt;vertex&gt;)&nbsp;option&nbsp;=&nbsp;Some&nbsp;(4,&nbsp;seq&nbsp;[P;&nbsp;O;&nbsp;R;&nbsp;U;&nbsp;...])</CODE></P>
+      <P>Note that the use of memoization to avoid the unnecessary recomputation 
+      of intermediate results has dramatically improved the performance.</P>
+      <H2>Summary</H2>
+      <P>This article has examined both imperative and purely functional 
+      implementations of the topological sort and all-pairs shortest paths 
+      algorithms.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of graph 
+      algorithms.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20graph%20algorithms_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

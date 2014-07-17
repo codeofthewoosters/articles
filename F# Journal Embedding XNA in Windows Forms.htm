@@ -1,0 +1,406 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0081)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/xna_control.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Embedding XNA in Windows Forms</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Embedding XNA in Windows Forms</TITLE>     <LINK 
+href="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Embedding XNA in Windows Forms</H1>
+      <P>Microsoft's XNA library is conventionally used for whole-screen games 
+      programming but related GUI applications such as level editors can often 
+      benefit from the ability to reuse the same XNA-based rendering code in a 
+      Windows Forms application. This article describes how an XNA-based Windows 
+      Forms control can be written in F#, allowing XNA to be used in an ordinary 
+      Windows application.</P>
+      <H2>XNA</H2>
+      <P>Microsoft's XNA tool set was first introduced in 2004 and is a 
+      high-level managed interface built upon the Common Language Runtime that 
+      is designed specifically for computer game development. XNA runs on 
+      Windows XP, Windows Vista and the Xbox 360.</P>
+      <P>Although XNA was designed specifically for games programming, it is 
+      also the most appropriate graphics API available under Windows for any 
+      applications requiring any advanced graphical features such a per-pixel 
+      lighting and shadows. Windows Presentation Foundation is an alternative 
+      graphics API, providing an extensive GUI toolkit but lacking advanced 
+      features such as per-pixel lighting and hardware support for shadows. 
+      Managed DirectX was the predecessor of XNA and WPF and is no longer being 
+      maintained by Microsoft. OpenGL is another possibility and, although it is 
+      not supported by Microsoft, OpenGL is still heavily used under Windows. A 
+      future F#.NET Journal article will cover the use of OpenGL from F# in 
+      detail.</P>
+      <P>As XNA was designed specifically for games programming, its default 
+      mode of use is to take over the whole screen or window in order to provide 
+      an immersive gaming experience. However, as XNA is now the only 
+      actively-maintained graphics library able to exploit the full capabilities 
+      of the graphics hardware, it is often desirable to be able to embed 
+      XNA-based renderings into Windows Forms applications. This can be achieved 
+      using a little-known technique to create an XNA Windows Forms control.</P>
+      <P>This article describes how an XNA Windows Forms control can be 
+      implemented in F#. For a linguistic perspective, this is particularly 
+      interesting because it leverages F#'s object-oriented capabilities and 
+      requires interperability with native .NET events.</P>
+      <H2>XNA Control</H2>
+      <P>This program is written entirely in the              
+      <CODE>#light</CODE> syntax option:           </P>
+<PRE>#light</PRE>
+      <P>The              <CODE>Microsoft.Xna.Framework.dll</CODE> and           
+         <CODE>Microsoft.Xna.Framework.Game.dll</CODE> DLLs are required:        
+         </P>
+<PRE>&gt; #I @"C:\Program Files\Microsoft XNA\XNA Game Studio Express\v1.0\References\Windows\x86";;
+//--&gt; Added 'C:\Program Files\Microsoft XNA\XNA Game Studio Express\v1.0\References\Windows\x86' to library
+include path
+&gt; #r "Microsoft.Xna.Framework.dll";;
+//--&gt; Referenced 'C:\Program Files\Microsoft XNA\XNA Game Studio
+Express\v1.0\References\Windows\x86\Microsoft.Xna.Framework.dll'
+&gt; #r "Microsoft.Xna.Framework.Game.dll";;
+--&gt; Referenced 'C:\Program Files\Microsoft XNA\XNA Game Studio
+Express\v1.0\References\Windows\x86\Microsoft.Xna.Framework.Game.dll'</PRE>
+      <P>In the interests of clarity, the following namespaces are opened:</P>
+<PRE>&gt; open System;;
+&gt; open System.Windows.Forms;;
+&gt; open Microsoft.Xna.Framework;;</PRE>
+      <P>The presentation parameters are required when creating and resetting 
+      the display device so we factor them out into a separate function:</P>
+<PRE>&gt; let presentation_parameters width height =
+    let pp = new Graphics.PresentationParameters()
+    pp.IsFullScreen &lt;- false
+    pp.BackBufferCount &lt;- 1
+    pp.BackBufferHeight &lt;- height
+    pp.BackBufferWidth &lt;- width
+    pp;;
+val presentation_parameters : int -&gt; int -&gt; Graphics.PresentationParameters</PRE>
+      <P>These are equivalent to              <CODE>PresentParameters</CODE> in 
+      DirectX.           </P>
+      <H2>The graphics device service and graphics device manager</H2>
+      <P>Using Xna in a Windows Forms control requires a graphics device service 
+      implementing the              <CODE>IGraphicsDeviceService</CODE> and      
+              <CODE>IGraphicsDeviceManager</CODE> interfaces. The former 
+      interface requires several .NET-compatible events to be provided. In C#, 
+      each event can be created using a single line of code but in F# this 
+      currently requires slightly more work.           </P>
+      <P>The following              <CODE>GraphicsDeviceService</CODE> class 
+      implements both of these interfaces:           </P>
+<PRE>&gt; type GraphicsDeviceService(control : Control) as this =
+    let mutable device : Graphics.GraphicsDevice = null
+  
+    let _, deviceDisposing = IEvent.create_DelegateEvent()
+    let _, deviceReset = IEvent.create_DelegateEvent()
+    let _, deviceResetting = IEvent.create_DelegateEvent()
+    let _, deviceCreated = IEvent.create_DelegateEvent()
+  
+    do this.CreateDevice()
+  
+    member this.GraphicsDevice = device
+  
+    interface Graphics.IGraphicsDeviceService with
+      member this.GraphicsDevice
+	with get() = this.GraphicsDevice
+  
+      member this.remove_DeviceDisposing(f) = deviceDisposing.RemoveHandler(f)
+      member this.add_DeviceDisposing(f) = deviceDisposing.AddHandler(f)
+  
+      member this.remove_DeviceReset(f) = deviceReset.RemoveHandler(f)
+      member this.add_DeviceReset(f) = deviceReset.AddHandler(f)
+  
+      member this.remove_DeviceResetting(f) = deviceResetting.RemoveHandler(f)
+      member this.add_DeviceResetting(f) = deviceResetting.AddHandler(f)
+  
+      member this.remove_DeviceCreated(f) = deviceCreated.RemoveHandler(f)
+      member this.add_DeviceCreated(f) = deviceCreated.AddHandler(f)
+  
+    interface IGraphicsDeviceManager with
+      member this.BeginDraw() = false
+      member this.CreateDevice() = this.CreateDevice()
+      member this.EndDraw() = ()
+  
+    member this.CreateDevice() =
+      device &lt;-
+	new Graphics.GraphicsDevice(Graphics.GraphicsAdapter.Adapters.[0],
+				    Graphics.DeviceType.Hardware,
+				    control.Handle,
+				    Graphics.CreateOptions.SoftwareVertexProcessing,
+				    presentation_parameters control.Width control.Height);;
+type GraphicsDeviceService = class
+                             end
+                             with
+                               interface IGraphicsDeviceManager
+                               interface Graphics.IGraphicsDeviceService
+                               new : control:Control -&gt; GraphicsDeviceService
+                               member CreateDevice : unit -&gt; unit
+                               member GraphicsDevice : Graphics.GraphicsDevice
+                             end</PRE>
+      <P>This class definition has been given using an implicit constructor that 
+      accepts a Windows Forms control called              <CODE>control</CODE> . 
+      The four calls to              <CODE>IEvent.create_DelegateEvent()</CODE> 
+      create four separate .NET-compatible events. The functions for adding and 
+      removing event handlers for each of the four events are given in the 
+      implementation of the              <CODE>IGraphicsDeviceService</CODE> 
+      interface within this function.           </P>
+      <P>Members implemented inside interfaces in class definitions are private, 
+      so the call to the              <CODE>this.GraphicsDevice</CODE> property 
+      inside the definition of the              <CODE>GraphicsDevice</CODE> 
+      property of the              <CODE>IGraphicsDeviceService</CODE> interface 
+      implementation is calling the public              
+      <CODE>GraphicsDevice</CODE> property of the              
+      <CODE>GraphicsDeviceService</CODE> class.           </P>
+      <P>This              <CODE>GraphicsDeviceService</CODE> class also 
+      implements the              <CODE>IGraphicsDeviceManager</CODE> interface 
+      to provide device creation. Again, this calls out from the interface 
+      implementation of the              <CODE>CreateDevice</CODE> member to the 
+      public member of the same name.           </P>
+      <H2>The Xna Control</H2>
+      <P>The              <CODE>GraphicsDeviceService</CODE> class is used to 
+      implement the following              <CODE>XnaControl</CODE> class that 
+      represents a Windows Forms control that renders its contents using XNA:    
+             </P>
+<PRE>&gt; type XnaControl(draw) as this =
+    inherit Control(Dock=DockStyle.Fill) as base
+    
+    let mutable graphicsDeviceService = lazy(new GraphicsDeviceService(this))
+    
+    override this.OnPaintBackground(e) = ()
+    
+    override this.OnPaint(e) =
+      base.OnPaint e
+      if this.Visible then
+	let gds = Lazy.force graphicsDeviceService
+	try
+	  let device = gds.GraphicsDevice
+	  match device.GraphicsDeviceStatus with
+	  | Graphics.GraphicsDeviceStatus.Normal -&gt;
+	      device.Clear(Graphics.Color.White)
+	      draw this.Width this.Height device
+	      device.Present()
+	      this.Invalidate()
+	  | Graphics.GraphicsDeviceStatus.NotReset -&gt;
+	      device.Reset(presentation_parameters this.Width this.Height)
+	  | _ -&gt; ()
+	with _ -&gt;
+	  gds.CreateDevice()
+	  this.Invalidate()
+  
+    override this.OnResize(e) =
+      base.OnResize e
+      let device = (Lazy.force graphicsDeviceService).GraphicsDevice
+      try
+	device.Reset(presentation_parameters this.Width this.Height)
+	this.Invalidate()
+      with _ -&gt; ()
+type XnaControl =
+  class
+    inherit Control
+  end
+  with
+    new : draw:(int -&gt; int -&gt; Graphics.GraphicsDevice -&gt; unit) -&gt; XnaControl
+  end</PRE>
+      <P>This class uses a lazily constructed              
+      <CODE>GraphicsDeviceService</CODE> object. This is a simpler and more 
+      robust alternative to trying to ensure that all objects are created after 
+      class construction but before use, e.g. via the              
+      <CODE>OnLoad</CODE> member.           </P>
+      <P>The              <CODE>OnPaint</CODE> member is overridden to check 
+      that the control is visible (e.g. not minimized), force the lazy           
+         <CODE>graphicsDeviceService</CODE> value (creating it or fetching the 
+      previously created value) and either render the scene or reset the 
+      graphics device depending upon its state. The scene is rendered 
+      programmatically by the              <CODE>draw</CODE> function that was 
+      passed to the              <CODE>XnaControl</CODE> constructor.           
+      </P>
+      <P>The              <CODE>OnResize</CODE> member is overridden to reset 
+      the device (updating its resolution) and redraw the control whenever the 
+      window is resized (rather than just when it grows, which is the default).  
+               </P>
+      <H2>Using the XNA Control</H2>
+      <P>To demonstrate the functionality offered by the above code, here is a 
+      simple example program that renders a spinning triangle in 3D.</P>
+      <H3>Vertices</H3>
+      <P>The triangle is defined by three vertices:</P>
+<PRE>let triangle =
+  let vertex c r = new Graphics.VertexPositionColor(r, c)
+  [|
+    vertex Graphics.Color.Red (Vector3(-1.f, -1.f, 0.f));
+    vertex Graphics.Color.Green (Vector3(0.f, 1.f, 0.f));
+    vertex Graphics.Color.Blue (Vector3(1.f, -1.f, 0.f));
+  |];;
+val triangle : Graphics.VertexPositionColor array</PRE>
+      <P>Note the use of a nested              <CODE>vertex</CODE> function to 
+      simplify the subsequent code and the absence of the              
+      <CODE>new</CODE> keyword when constructing objects of the              
+      <CODE>Vector3</CODE> class.           </P>
+      <H3>An XNA Effect</H3>
+      <P>XNA requires vertex and pixel shaders to be defined in a language 
+      called              <I>HLSL</I> in order to define an              
+      <I>effect</I> for rendering. The following defines the source code for a 
+      vertex and pixel shader in HLSL as a string:           </P>
+<PRE>&gt; let source = "
+  uniform extern float4x4 WorldViewProj : WORLDVIEWPROJECTION;
+  
+  struct VS_INPUT {
+    float4 Position : POSITION0;
+	  float4 Color    : COLOR0;
+  };
+  
+  struct VS_OUTPUT {
+    float4 Position       : POSITION0;
+    float4 Color          : COLOR0;
+  };
+  
+  VS_OUTPUT Transform(VS_INPUT Input) {
+    VS_OUTPUT Output;
+  
+    Output.Position       = mul(Input.Position, WorldViewProj);
+    Output.Color          = Input.Color;
+  
+    return Output;
+  }
+  
+  struct PS_INPUT {
+    float4 Color          : COLOR0;
+  };
+  
+  float4 Lighting(PS_INPUT Input) : COLOR0 {
+    return Input.Color;
+  }
+  
+  technique TransformTechnique
+  {
+      pass P0
+      {
+	  vertexShader = compile vs_2_0 Transform();
+	  pixelShader = compile ps_2_0 Lighting();
+      }
+  }
+  ";;
+val source : string</PRE>
+      <P>Note that these shaders are extremely simple: they only support 
+      interpolated flat colors and do not support lighting of any kind.</P>
+      <P>The shader source code can be compiled into a working effect using the  
+                  <CODE>CompileEffectFromSource</CODE> function:           </P>
+<PRE>&gt; let compiledEffect =
+    let shaderCompilerFlags = Enum.combine [ Graphics.CompilerOptions.Debug ]
+    Graphics.Effect.CompileEffectFromSource(source, null, null,  shaderCompilerFlags, TargetPlatform.Windows);;
+val compiledEffect : Graphics.CompiledEffect</PRE>
+      <H3>A timer</H3>
+      <P>In order to rotate the scene in real time, we create and start the 
+      following timer:</P>
+<PRE>&gt; let timer = new Diagnostics.Stopwatch();;
+val timer : Diagnostics.Stopwatch
+&gt; timer.Start();;
+val it : unit = ()</PRE>
+      <H3>Programmatic renderer</H3>
+      <P>The              <CODE>XnaControl</CODE> class requires a              
+      <CODE>draw</CODE> function to programmatically render the scene. The 
+      following              <CODE>draw</CODE> function does exactly this by 
+      rendering our vertex data with a rotating world matrix and a perspective 
+      projection matrix:           </P>
+<PRE>&gt; let draw width height (device : Graphics.GraphicsDevice) =
+    let vertexType = new Graphics.VertexDeclaration(device, Graphics.VertexPositionColor.VertexElements)
+    let effect = new Graphics.Effect(device, compiledEffect.GetEffectCode(), Graphics.CompilerOptions.None, null)
+    let transform_matrix = effect.Parameters.Item("WorldViewProj")
+    effect.CurrentTechnique &lt;- effect.Techniques.Item(0)
+    effect.Begin()
+    for pass in effect.CurrentTechnique.Passes do
+      pass.Begin()
+      device.VertexDeclaration &lt;- vertexType
+      device.RenderState.CullMode &lt;- Graphics.CullMode.None
+      let projMatrix = Matrix.CreatePerspectiveFieldOfView(0.8f, float32 width / float32 height, 0.01f, 100.f)
+      let viewMatrix = Matrix.CreateLookAt(Vector3(0.f, 0.f, -4.f), Vector3(0.f, 0.f, 0.f), Vector3(0.f, 1.f, 0.f))
+      let worldMatrix = Matrix.CreateRotationY(float32 timer.ElapsedMilliseconds / 1e3f)
+      transform_matrix.SetValue(worldMatrix * viewMatrix * projMatrix)
+      effect.CommitChanges()
+      device.DrawUserPrimitives(Graphics.PrimitiveType.TriangleList, triangle, 0, 1)
+      pass.End();;
+val draw : int -&gt; int -&gt; Graphics.GraphicsDevice -&gt; unit</PRE>
+      <P>The vertex type is set to contain position and color information for 
+      each vertex. The effect is created for the current device. A              
+      <CODE>transform_matrix</CODE> handle to the              
+      <CODE>WorldViewProj</CODE> argument to the vertex shader is created. The 
+      effect is initialized and committed before the vertex array is rendered as 
+      a list of triangles.           </P>
+      <P>A more sophisticated              <CODE>draw</CODE> function might 
+      perform several rendering passes in order to decorate the scene with extra 
+      effects, such as bloom.           </P>
+      <H3>Windows Form</H3>
+      <P>The following creates a suitable Windows Form:</P>
+<PRE>&gt; let form = new Form(TopMost=true, Text="XNA Control");;
+val form : Form
+&gt; form.MinimumSize &lt;- form.Size;;
+val it : unit = ()</PRE>
+      <P>To illustrate that this is a XNA Control embedded in a Windows Form we 
+      can add a menu bar to the top of the window:</P>
+<PRE>&gt; let menu = new MainMenu();;
+val menu : MainMenu
+&gt; let file = menu.MenuItems.Add("File");;
+val file : MenuItem
+&gt; let exit = file.MenuItems.Add "Exit";;
+val exit : MenuItem
+&gt; exit.Click.Add(fun _ -&gt; form.Close());;
+val it : unit = ()
+&gt; form.Menu &lt;- menu;;
+val it : unit = ()</PRE>
+      <P>The XNA control is easily created and added to the form:</P>
+<PRE>&gt; let xna = new XnaControl(draw);;
+val xna : XnaControl
+&gt; form.Controls.Add xna;;
+val it : unit = ()</PRE>
+      <P>Finally, we can use the              <CODE>Show</CODE> member of the 
+      form to display it:           </P>
+      <P>This gives the following result:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/xna_control.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has introduced the basic rendering functionality of the 
+      XNA library from Microsoft and has demonstrated how XNA may be used to 
+      embed high-performance graphics in Windows Forms applications. There are 
+      several alternatives but XNA is currently the only managed interface to 
+      all of the features of the graphics hardware that will be maintained by 
+      Microsoft from now on.</P>
+      <P>In the process of developing this program, several unusual aspects of 
+      the F# language have been covered. Most notably the creation of native 
+      .NET events in order to satisfy existing interfaces that require them.</P>
+      <P>Future F#.NET Journal articles will revisit XNA, particularly in the 
+      context of games programming.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Embedding%20XNA%20in%20Windows%20Forms_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

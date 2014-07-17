@@ -1,0 +1,454 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0078)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/salesman.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Solving the Traveling Salesman problem using Simulated 
+Annealing</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Solving the Traveling Salesman problem using 
+Simulated Annealing</TITLE>     <LINK href="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Solving the Traveling Salesman problem using Simulated Annealing</H1>
+      <P>Finding global minima of an arbitrary function is a significantly more 
+      challenging problem than local function minimization and has many 
+      practical applications from the simulation of molecules to the design of 
+      printed circuit board layouts. Several different global function 
+      minimization algorithms exist, many of which make repeated use of local 
+      function-minimization algorithms. This article describes a simple and 
+      elegant solution to the traveling salesman problem that uses the simulated 
+      annealing approach to global function minimization. The results are 
+      visualized in real time using Windows Presentation Foundation. In 
+      particular, we show how the purely functional use of data structures 
+      facilitates an efficient lock-free way to obtain recent results for 
+      visualization.</P>
+      <H2>Introduction</H2>
+      <P>The traveling salesman problem is a combinatorial optimization problem: 
+      given a network of vertices and weighted edges between them, find the path 
+      that minimizes the sum of the weights along the edges on the path. The 
+      weights are usually some form of distance, such as the Euclidean distance 
+      between a pair of points in two or three dimensions or the great-circle 
+      distance between two points on the surface of a sphere.</P>
+      <P>For a handful of vertices, this problem can be solved directly by 
+      evaluating the lengths of all possible path permutations. However, this 
+      quickly becomes intractable and, for large numbers of vertices, no known 
+      method is able to identify the shortest path conclusively. Fortunately, 
+      there are a variety of randomized algorithms for global function 
+      minimization that can provide an arbitrarily accurate approximation to the 
+      shortest path.</P>
+      <P>Simulated annealing is a simple approach to global function 
+      minimization that, as the name implies, draws upon the natural process of 
+      annealing where particles jostle randomly at high temperatures but begin 
+      to favor positions that lower energy as the temperature is reduced. This 
+      article describes a simple program that uses simulated annealing to find a 
+      short path around a large number of vertices.</P>
+      <H2>Simulated annealing</H2>
+      <P>As always we begin by turning on the #light syntax option:</P>
+<PRE>&gt; #light;;</PRE>
+      <P>The following references are required when entering the program from an 
+      interactive session:</P>
+<PRE>&gt; #r "FSharp.PowerPack.dll";;
+&gt; #I "C:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0";;
+&gt; #r "WindowsBase.dll";;
+&gt; #r "PresentationCore.dll";;
+&gt; #r "PresentationFramework.dll";;</PRE>
+      <P>Otherwise, the same assemblies must be referenced using the solution 
+      explorer pane when building a Visual Studio project for batch 
+      compilation.</P>
+      <P>We shall make extensive use of definitions from the following 
+      namespaces:</P>
+<PRE>&gt; open System;;
+&gt; open System.Windows;;
+&gt; open System.Windows.Media;;
+&gt; open System.Windows.Threading;;
+&gt; open System.Threading;;
+&gt; open Microsoft.FSharp.Math;;</PRE>
+      <P>This program will use one simulation thread and one visualization 
+      thread. The simulation thread requires a random number generator so we 
+      shall use a single global one in this case:</P>
+<PRE>&gt; let random = new System.Random();;
+val random : System.Random</PRE>
+      <P>The following              <CODE>rand</CODE> function generates a 
+      number randomly distributed across the range 0..n-1 and always returns 0 
+      if n=0:           </P>
+<PRE>&gt; let rand = function 0 -&gt; 0 | n -&gt; random.Next(n);;
+val rand : int -&gt; int</PRE>
+      <P>The              <CODE>except</CODE>  function ensures that a random 
+      number              <CODE>j</CODE> is not equal to              
+      <CODE>i</CODE> by returning the successive integer if j &gt;= i:           
+      </P>
+<PRE>&gt; let except i j = if j &gt;= i then j+1 else j;;
+val except : int -&gt; int -&gt; int</PRE>
+      <P>The              <CODE>rand_except</CODE> function uses the             
+       <CODE>rand</CODE> and              <CODE>except</CODE> functions to 
+      generate a random number in the range 0..n-1 that is not              
+      <CODE>i</CODE> :           </P>
+<PRE>&gt; let rand_except i n = except i (rand(n-1));;
+val rand_except : int -&gt; int -&gt; int</PRE>
+      <P>The              <CODE>vertex</CODE> array is initialized to an 
+      interesting randomized distribution of points for our salesman to 
+      circumnavigate:           </P>
+<PRE>&gt; let vertex =
+    let f _ =
+      let z = 2. * random.NextDouble() - 1.
+      let t = 2. * System.Math.PI * random.NextDouble()
+      let r = sqrt(1. - z*z) |&gt; sqrt
+      0.5 * vector [1. + r * sin t; 1. + r * cos t]
+    Array.init 1024 f;;
+val vertex : Vector&lt;float&gt; []</PRE>
+      <P>In this case, we derive the number of vertices from the vertex array 
+      because a more general program would read an arbitrary number of vertices 
+      in from elsewhere:</P>
+<PRE>&gt; let n = Array.length vertex;;
+val n : int</PRE>
+      <P>The data structure at the core of this program is represented by the 
+      following              <CODE>Path</CODE> class:           </P>
+<PRE>&gt; type Path(n, ?Index, ?Length) as this =
+    let index = defaultArg Index (fun i -&gt; i)
+ 
+    let length =
+      match Length with
+      | Some length -&gt; length
+      | None -&gt;
+          Seq.pairwise vertex
+          |&gt; Seq.map (fun (p, q) -&gt; Vector.norm(p - q))
+          |&gt; Seq.reduce ( + )
+    
+    member this.Item i =
+      index i
+    
+    member this.Vertex i =
+      vertex.[this.[i]]
+    
+    member this.Edge(i, j) =
+      if i&lt;0 || i&gt;=n || j&lt;0 || j&gt;=n then 0. else
+        Vector.norm(this.Vertex j - this.Vertex i)
+    
+    member this.Alter(dl, f) =
+      let g = index
+      Path(n, Index=(g &lt;&lt; f), Length=length + dl)
+    
+    member this.Flatten() =
+      let array = Array.init n this.Item
+      Path(n, Index=(fun i -&gt; array.[i]), Length=length)
+    
+    member this.Vertices =
+      Array.init n this.Vertex;;
+type Path =
+  class
+    new : n:int * ?Index:(int -&gt; int) * ?Length:float -&gt; Path
+    member Alter : dl:float * f:(int -&gt; int) -&gt; Path
+    member Edge : i:int * j:int -&gt; float
+    member Flatten : unit -&gt; Path
+    member Item : i:int -&gt; int
+    member Vertex : i:int -&gt; Vector&lt;float&gt;
+    member Vertices : Vector&lt;float&gt; []
+  end</PRE>
+      <P>This              <CODE>Path</CODE> class uses a single implicit        
+            <CODE>Path</CODE> constructor that accepts the number of vertices    
+                <CODE>n</CODE> and optionally an              <CODE>Index</CODE> 
+      function that converts an index into the path to an index into the         
+           <CODE>vertex</CODE> array and a              <CODE>Length</CODE> 
+      number that is the current length of the path.           </P>
+      <P>Although the              <CODE>Path</CODE> class uses mutable arrays 
+      they are never mutated and, consequently, this representation of paths is 
+      a purely functional data structure. A trivial consequence of this is that 
+      all operations are thread safe and that safety is exploited later in this 
+      program to evade the use of costly locks when sharing data between 
+      threads.           </P>
+      <P>The local              <CODE>index</CODE> value is the function used to 
+      index the vertices along the path and defaults to the identity function if 
+      a function is not specified via the              <CODE>Index</CODE> 
+      optional argument to the constructor.           </P>
+      <P>The local              <CODE>length</CODE> value is the length of the 
+      path and is computed explicitly if the optional              
+      <CODE>Length</CODE> argument was not specified.           </P>
+      <P>The              <CODE>Item</CODE> member is used to let the notation   
+                 <CODE>path.[i]</CODE> be used to obtain the index of the vertex 
+      at position              <CODE>i</CODE> on the path.           </P>
+      <P>The              <CODE>Vertex</CODE> member uses the              
+      <CODE>Item</CODE> member to look the actual vertex position up in the      
+              <CODE>vertex</CODE> array.           </P>
+      <P>The              <CODE>Edge</CODE> member gives the distance between 
+      two vertices on the path, defaulting to zero if either argument is out of 
+      range.           </P>
+      <P>The              <CODE>Alter</CODE> member returns a new path with an 
+      additional indirection of the indices and an updated length.           
+</P>
+      <P>The              <CODE>Flatten</CODE> member returns a new path that 
+      represents the same path as the current path but the current sequence of 
+      indirections to obtain an index into the              <CODE>vertex</CODE> 
+      array is replaced with a direct O(1) array lookup. This is used to keep 
+      the number of indirections and, consequently, the performance of index 
+      lookup under control.           </P>
+      <P>The              <CODE>Vertices</CODE> member returns an array of the 
+      vertices in order along the path.           </P>
+      <P>The following              <CODE>Rotate</CODE> module represents 
+      rotations of the path that have the effect of moving the "open" path 
+      segment between the last and first vertices on the path:           </P>
+<PRE>&gt; module Rotate =
+    let private rotate_cost (path: Path) i =
+      path.Edge(n - 1, 0) - path.Edge(i - 1, i)
+  
+    let private rotate i k =
+      (k + i) % n
+  
+    let at_random (path: Path) =
+      let i = 1 + rand(n - 1) in
+      rotate_cost path i, rotate i;;
+module Rotate = begin
+  val private rotate_cost : Path -&gt; int -&gt; float
+  val private rotate : int -&gt; int -&gt; int
+  val at_random : Path -&gt; float * (int -&gt; int)
+end</PRE>
+      <P>The internal              <CODE>rotate_cost</CODE> function determines 
+      how much a rotation by              <CODE>i</CODE> would increase the path 
+      length.           </P>
+      <P>The internal              <CODE>rotate</CODE> function rotates the 
+      indices by              <CODE>i</CODE> .           </P>
+      <P>The              <CODE>at_random</CODE> function generates a random 
+      rotation by 1..n-1 indices, returning the cost and a function that would 
+      perform the rotation.           </P>
+      <P>Similarly, the              <CODE>Reverse</CODE> module encapsulates 
+      definitions related to reversing part of a path:           </P>
+<PRE>&gt; module Reverse =
+    let private reverse_cost (path: Path) i j =
+      path.Edge(i - 1, j) + path.Edge(i, j + 1) -
+        path.Edge(i - 1, i) - path.Edge(j, j + 1)
+  
+    let private reverse i j k =
+      if i &lt;= k &amp;&amp; k &lt;= j then j+i-k else k
+  
+    let at_random (path: Path) =
+      let i = rand n
+      let j = rand_except i n
+      let i = min i j
+      let j = max j i
+      reverse_cost path i j, reverse i j;;
+module Reverse = begin
+  val private reverse_cost : Path -&gt; int -&gt; int -&gt; float
+  val private reverse : int -&gt; int -&gt; int -&gt; int
+  val at_random : Path -&gt; float * (int -&gt; int)
+end</PRE>
+      <P>The functions serve the same roles as those in the              
+      <CODE>Rotate</CODE> module but, in this case, the two parameters           
+         <CODE>i</CODE> and              <CODE>j</CODE> represent reversal of 
+      the indices [i..j] in the path.           </P>
+      <P>The third and final form of mutation handled by this program is the 
+      splicing of a run of indices from [i, j) into k to form new vertices 
+      [k..k-i+j) as implemented by the following              
+      <CODE>Splice</CODE> module:           </P>
+<PRE>&gt; module Splice =
+    let private f i j n =
+      if n &lt; i then n else n + j - i
+  
+    let private splice_cost (path: Path) i j k =
+      let k = f i j k in
+      path.Edge(k-1, i) + path.Edge(j-1, k) + path.Edge(i-1, j) -
+        path.Edge(i-1, i) - path.Edge(j-1, j) - path.Edge(k-1, k)
+  
+    let private splice i j k n =
+      if n &lt; k then f i j n else
+        if n &lt; k + j - i then n - k + i else
+          f i j (n - j + i)
+  
+    let at_random (path: Path) =
+      let i = rand n
+      let j = rand_except i n
+      let i = min i j
+      let j = max i j
+      let k = rand_except i (n+i-j+1)
+      splice_cost path i j k, splice i j k;;
+module Splice = begin
+  val private f : int -&gt; int -&gt; int -&gt; int
+  val private splice_cost : Path -&gt; int -&gt; int -&gt; int -&gt; float
+  val private splice : int -&gt; int -&gt; int -&gt; int -&gt; int
+  val at_random : Path -&gt; float * (int -&gt; int)
+end</PRE>
+      <P>The              <CODE>f</CODE> function removes the semi-inclusive 
+      range of indices [i, j). As before, the              
+      <CODE>splice_cost</CODE> function determines the increase in path length 
+      that a splice would incur, the              <CODE>splice</CODE> function 
+      performs an actual split and the              <CODE>at_random</CODE> 
+      function creates a random splice.           </P>
+      <P>Note how rotation involved two edges in its cost calculation, reversal 
+      involved four and splicing involved six edges, reflecting the complexity 
+      of the operation but still only affecting a small number of edges despite 
+      irrespective of the number of indices altered.</P>
+      <P>The following              <CODE>random_mutation</CODE> randomly 
+      generates a rotation, reversal or splice with 1/3 probability each:        
+         </P>
+<PRE>&gt; let random_mutation path =
+    match rand 3 with
+    | 0 -&gt; Rotate.at_random path
+    | 1 -&gt; Reverse.at_random path
+    | _ -&gt; Splice.at_random path;;
+val random_mutation : Path -&gt; float * (int -&gt; int)</PRE>
+      <P>The              <CODE>reject</CODE> function probabilistically accepts 
+      or rejects a given change in path length              <CODE>dl</CODE> 
+      using the current fictitious temperature              <CODE>temp</CODE> :  
+               </P>
+<PRE>&gt; let reject temp dl =
+    dl &gt;= 0. &amp;&amp; (temp = 0. || random.NextDouble() &gt; exp(-dl/temp));;
+val reject : float -&gt; float -&gt; bool</PRE>
+      <P>The following recursive              <CODE>mutate</CODE> function keeps 
+      randomly generating mutations until one of them is accepted and it returns 
+      the new path:           </P>
+<PRE>&gt; let rec mutate temp path =
+    let dl, f = random_mutation path
+    if reject temp dl then
+      mutate temp path
+    else
+      path.Alter(dl, f);;
+val mutate : float -&gt; Path -&gt; Path</PRE>
+      <P>This program uses a single global mutable path:</P>
+<PRE>&gt; let mutable path = Path(n);;
+val mutable path : Path</PRE>
+      <P>The horrors of shared state are not a problem in this program because 
+      the simulation thread will be the only thread writing to the shared state 
+      and the visualization thread can read the path without synchronization 
+      (i.e. locking) because reads and writes of reference types like the        
+            <CODE>Path</CODE> class are guaranteed to be atomic on the .NET 
+      platform.           </P>
+      <P>The              <CODE>simulate</CODE> function loops indefinitely 
+      performing mutations:           </P>
+<PRE>&gt; let simulate () =
+    let sqrt_n = int(sqrt(float n))
+    let mutable temp = 1e6
+    while true do
+      temp &lt;- temp / 2.
+      for i=0 to sqrt_n do
+        path &lt;- mutate temp path
+      path &lt;- path.Flatten();;
+val simulate : unit -&gt; unit</PRE>
+      <P>Note that the indirections in the path are flattened to an array lookup 
+      using the              <CODE>Flatten</CODE> member of the              
+      <CODE>path</CODE> when sqrt(n) mutations have been performed and, 
+      consequently, there are sqrt(n) indirections occurring for each index 
+      lookup.           </P>
+      <P>The simulation is run in a background thread so that it is quit when 
+      the visualization is closed by the user:</P>
+<PRE>&gt; let worker() =
+    let thread = new Thread(simulate)
+    thread.IsBackground &lt;- true
+    thread.Start();;
+val worker : unit -&gt; unit</PRE>
+      <P>The core of the visualization is encapsulated by the following          
+          <CODE>Viewport</CODE> class that implements a Windows Presentation 
+      Foundation control:           </P>
+<PRE>&gt; type Viewport() as this =
+    inherit FrameworkElement()
+  
+    override this.OnRender(dc : DrawingContext) =
+      let s = min this.ActualWidth this.ActualHeight
+      dc.PushTransform(TranslateTransform((this.ActualWidth - s)/2.,
+                                          (this.ActualHeight - s)/2.))
+      dc.PushTransform(ScaleTransform(s, s))
+      let vs = path.Vertices
+      let point (v : vector) =
+        Point(v.[0], v.[1])
+      let pen = Pen(Brushes.Red, 0.002)
+      for i=0 to n-2 do
+        dc.DrawLine(pen, point(vs.[i]), point(vs.[i+1]))
+      for i=0 to n-1 do
+        dc.DrawEllipse(Brushes.Black, null, point vs.[i], 0.005, 0.005)
+      dc.Pop()
+      dc.Pop();;
+type Viewport =
+  class
+    inherit FrameworkElement
+    new : unit -&gt; Viewport
+    override OnRender : dc:DrawingContext -&gt; unit
+  end</PRE>
+      <P>The              <CODE>OnRender</CODE> method simply obtains an array 
+      of the vertices along the path and renders red lines between the black 
+      dots at each vertex.           </P>
+      <P>Finally, the main program creates a window containing an object of our  
+                  <CODE>Viewport</CODE> class, registers a callback that causes 
+      the visualization to be redrawn aggressively, spawns the              
+      <CODE>simulate</CODE> function on a background thread and begins the GUI 
+      application:           </P>
+<PRE>&gt; do
+    let viewport = Viewport(Margin=Thickness 11.)
+    let window = Window(Title="Traveling Salesman", Content=viewport)
+    let rendering_handler o e =
+      viewport.InvalidateVisual()
+    CompositionTarget.add_Rendering(new EventHandler(rendering_handler))
+    worker()
+    Application().Run(window) |&gt; ignore;;</PRE>
+      <P>When compiled, this definition can be preceded with              
+      <CODE>[&lt;STAThread&gt;]</CODE> to ensure that the main program thread is 
+      in single-threaded apartment mode.           </P>
+      <H2>Results</H2>
+      <P>The vertices are laid out randomly within a circle with a bias towards 
+      the edges of the circle. An initially random path is mutated and shorter 
+      paths gradually become more likely to be chosen until the path length is 
+      minimized and a more ordered and efficient path appears:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/shortest_path.gif"> 
+                  </P>
+      <P></P>
+      <H2>Low-level interpretation</H2>
+      <P>Readers not yet familiar with functional programming will benefit from 
+      a more low-level interpretation of how this program operates. 
+      Specifically, what are the implications of composing              
+      <CODE>index</CODE> functions?           </P>
+      <P>The answer is that repeatedly replacing the              
+      <CODE>index</CODE> function with a composition of an old              
+      <CODE>index</CODE> function and a new              <CODE>index</CODE> 
+      function has the effect of building a sequence of closures that are 
+      represented internally as a linked list, with one closure's environment 
+      pointing to the next closure. When the current              
+      <CODE>index</CODE> function is invoked it invokes the next closure in the 
+      list and adjusts the returned value to represent the operation that it 
+      performs (e.g. rotating the path by applying modulo arithmetic to the 
+      index). The base case is the default provided by the              
+      <CODE>Path</CODE> class that is the identity function that simply returns 
+      the path 0..n-1.           </P>
+      <H2>Summary</H2>
+      <P>This article has described an elegant and yet efficient implementation 
+      of the simulated annealing method that is designed to solve the traveling 
+      salesman problem. In particular, the use of a purely functional 
+      representation of the path (that made internal use of an array without 
+      mutating it) allowed a real-time visualization to obtain self-consistent 
+      paths from the concurrently-running solver without the need for 
+    locks.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Solving%20the%20Traveling%20Salesman%20problem%20using%20Simulated%20Annealing_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

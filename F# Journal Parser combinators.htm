@@ -1,0 +1,435 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0088)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/parser_combinators.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Parser combinators</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Parser%20combinators_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Parser%20combinators_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Parser%20combinators_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Parser combinators</TITLE>     <LINK href="F%23%20Journal%20Parser%20combinators_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Parser%20combinators_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Parser%20combinators_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Parser%20combinators_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Parser%20combinators_files/left.gif">       
+        </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Parser combinators</H1>
+      <P>Certain applications are extremely well suited to functional 
+      programming and parsing is one of them. Specifically, the ability to write 
+      functional combinators that allow parsers for everything from integers up 
+      to symbolic expressions to be composed is more general and provides more 
+      opportunity for code reuse than the use of conventional parser generators 
+      such as fslex and fsyacc. This article explains how parser combinators may 
+      be designed and implemented in F#, using the standard example of a 
+      calculator.</P>
+      <H2>Introduction</H2>
+      <P>Previous F#.NET Journal articles have explained how combinators are an 
+      essential concept in functional programming and how the fslex and fsyacc 
+      lexer and parser generators may be used to construct specialized 
+      high-performance lexers and parsers. This article describes a simple 
+      approach that uses only self-contained F# functions to compose lexers and 
+      parsers of arbitrary complexity. The ability to factor out higher-order 
+      functions makes functional programming an excellent way to reuse code in 
+      the context of parsing.</P>
+      <H2>Higher-order parser combinators</H2>
+      <P>We begin by introducing several higher-order parser combinators that 
+      may be used as operators to compose other parsers. This ability to compose 
+      parsers is the essence of parser combinators.</P>
+      <P>Our first higher-order parser combinator accepts parsers              
+      <CODE>p1</CODE> and              <CODE>p2</CODE> and an input              
+      <CODE>s</CODE> :           </P>
+<PRE>&gt; let ( ||| ) p1 p2 s =
+    match p1 s with
+    | Some _ as v -&gt; v
+    | None -&gt; p2 s
+val ( ||| ) : ('a -&gt; 'b option) -&gt; ('a -&gt; 'b option) -&gt; 'a -&gt; 'b option</PRE>
+      <P>This combinator attempts to parse from the input using the              
+      <CODE>p1</CODE> parser combinator. If this succeeds then              
+      <CODE>p1</CODE> returns a value of the form              
+      <CODE>Some(result, s)</CODE> where              <CODE>result</CODE> is the 
+      value (that may be of any type) that resulted from parsing and             
+       <CODE>s</CODE> is the remaining input. If              <CODE>p1</CODE> 
+      fails to parse then              <CODE>p1</CODE> returns              
+      <CODE>None</CODE> and the parser combinator              <CODE>p2</CODE> 
+      is used to try to parse from the input.           </P>
+      <P>Thus, this higher-order parser combinator matches either              
+      <CODE>p1</CODE> or              <CODE>p2</CODE> and, consequently, we bind 
+      it to the infix              <CODE>|||</CODE> operator.           </P>
+      <P>Note that this function requires no specific knowledge of its input. 
+      Consequently, this higher-order parser combinator can be used to compose 
+      parsers that act upon any kind of input, such as lexing tokens from a lazy 
+      stream of characters or deconstructing XML-RPC requests from an XML DOM 
+      tree. This generality is a vitally important property of these 
+      higher-order parser generators and sets them apart from more specialized 
+      constructs such as the              <CODE>|</CODE> used to denote 
+      alternative regular expressions in an fslex lexer.           </P>
+      <P>The following higher-order parser combinator also accepts parsers       
+             <CODE>p1</CODE> and              <CODE>p2</CODE> and an input       
+             <CODE>s</CODE> :           </P>
+<PRE>&gt; let ( ++ ) p1 p2 s =
+    match p1 s with
+    | None -&gt; None
+    | Some(e1, s) -&gt;
+        match p2 s with
+        | None -&gt; None
+        | Some(e2, s) -&gt; Some((e1, e2), s);;
+val ( ++ ) :
+('a -&gt; ('b * 'c) option) -&gt; ('c -&gt; ('d * 'e) option) -&gt; 'a -&gt;
+(('b * 'd) * 'e) option</PRE>
+      <P>This time the input is parsed first with              <CODE>p1</CODE> 
+      and then, if that succeeded, the remaining input is parsed with            
+        <CODE>p2</CODE> and a result of the form              
+      <CODE>Some((result1, result2), s)</CODE> is returned.           </P>
+      <P>Note that the associativity and precedence of user-defined infix 
+      operators is determined by the precedence of the prefix that is a built-in 
+      operator in F#. So our              <CODE>|||</CODE> operator inherits the 
+      low precedence and left-associativity of the built-in              
+      <CODE>||</CODE> operator and our              <CODE>++</CODE> operator 
+      inherits the higher precedence of the              <CODE>+</CODE> 
+      operator.           </P>
+      <P>The following higher-order parser combinator              
+      <CODE>many</CODE> accepts a parser              <CODE>p</CODE> and an 
+      input              <CODE>s</CODE> :           </P>
+<PRE>&gt; let rec many' p s =
+    match p s with
+    | None -&gt; [], s
+    | Some(e, s) -&gt;
+        let es, s = many' p s
+        e::es, s;;
+val many' : ('a -&gt; ('b * 'a) option) -&gt; 'a -&gt; 'b list * 'a</PRE>
+<PRE>&gt; let many p s = Some(many' p s);;
+val many : ('a -&gt; ('b * 'a) option) -&gt; 'a -&gt; ('b list * 'a) option</PRE>
+      <P>This applies the parser              <CODE>p</CODE> to the input. If 
+      there was no match then              <CODE>p s</CODE> returns              
+      <CODE>None</CODE> and the              <CODE>many'</CODE> combinator 
+      returns              <CODE>[], s</CODE> . If there was a match then        
+            <CODE>p</CODE> returns its result and              
+      <CODE>many'</CODE> accumulates each result onto the result of calling 
+      itself recursively. Thus, this parser combinator matches zero or more 
+      repetitions of              <CODE>p</CODE> .           </P>
+      <P>The              <CODE>many'</CODE> combinator will also successfully 
+      match something, even if that is zero repetitions. Consequently, to keep 
+      the higher-order parser combinators compatible, a              
+      <CODE>many</CODE> function is used to always box the result of the         
+           <CODE>many'</CODE> parser combinator in the              
+      <CODE>Some</CODE> constructor.           </P>
+      <P>The following combinator is used to treat the value returned by a 
+      parser combinator:</P>
+<PRE>&gt; let ( &gt;| ) p k i =
+    match p i with
+    | Some(e, s) -&gt; Some(k e, s)
+    | None -&gt; None;;
+val ( &gt;| ) : ('a -&gt; ('b * 'c) option) -&gt; ('b -&gt; 'd) -&gt; 'a -&gt; ('d * 'c) option</PRE>
+      <P>For example, this functionality is used to convert the sequence of 
+      characters matched by the parser combinator              <CODE>p</CODE> in 
+      a string into the lexical token that they correspond to. Again, this 
+      function is written in a very general form and the translation is 
+      performed by the given function              <CODE>k</CODE> .           
+      </P>
+      <H2>Parsing lists</H2>
+      <P>Our lexer will input a list of characters and our parser will input a 
+      list of tokens. Consequently, both the lexer and parser can benefit from 
+      some more generic functions that search lists.</P>
+      <P>The following function              <CODE>some</CODE> matches the front 
+      of the input list when it satisfies the given predicate function           
+         <CODE>p</CODE> :           </P>
+<PRE>&gt; let some p = function
+    | h::t when p h -&gt; Some(h, t)
+    | _ -&gt; None;;
+val some : ('a -&gt; bool) -&gt; 'a list -&gt; ('a * 'a list) option</PRE>
+      <P>The following function              <CODE>a</CODE> matches the front of 
+      the input list when it is equal to the given value              
+      <CODE>x</CODE> :           </P>
+<PRE>&gt; let a x = some (( = ) x);;
+val a : 'a -&gt; ('a list -&gt; ('a * 'a list) option)</PRE>
+      <P>The following function              <CODE>fin</CODE> matches the end of 
+      the input and returns              <CODE>0</CODE> as a dummy value:        
+         </P>
+<PRE>&gt; let fin = function
+    | [] as t -&gt; Some(0, t)
+    | _ -&gt; None;;
+val fin : 'a list -&gt; (int * 'a list) option</PRE>
+      <P>Although these functions are more specialized that the higher-order 
+      parser combinators described previously, they will still be used in both 
+      the lexer and parser below.</P>
+      <H2>Lexing</H2>
+      <P>The definitions described above can be used to build a lexer by 
+      composing parser combinators. In this case, the parser combinators 
+      represent regular expressions that are matched against an input sequences 
+      of characters. In the interests of simplicity, we choose to lex from a     
+               <CODE>char list</CODE> .           </P>
+      <P>We begin by defining a variant type of the tokens that may be emitted 
+      by the lexer:</P>
+<PRE>&gt; type token =
+    | IDENT of string
+    | KWD of string
+    | INT of string;;
+type token =
+| IDENT of string
+| KWD of string
+| INT of string</PRE>
+      <P>The following function lexes a sequence of zero or more characters 
+      matching the predicate              <CODE>p</CODE> :           </P>
+<PRE>&gt; let several p = many (some p)
+val several : ('a -&gt; bool) -&gt; ('a list -&gt; ('a list * 'a list) option)</PRE>
+      <P>The following predicates will be used to lex digits, letters and 
+      whitespace:</P>
+<PRE>&gt; let digit c = '0' &lt;= c &amp;&amp; c &lt;= '9';;
+val digit : char -&gt; bool</PRE>
+<PRE>&gt; let alpha c = 'a' &lt;= c &amp;&amp; c &lt;= 'z' || 'A' &lt;= c &amp;&amp; c &lt;= 'Z';;
+val alpha : char -&gt; bool</PRE>
+<PRE>&gt; let alphanum c = digit c || alpha c;;
+val alphanum : char -&gt; bool</PRE>
+<PRE>&gt; let space = function ' ' | '\t' | '\n' -&gt; true | _ -&gt; false;;
+val space : char -&gt; bool</PRE>
+      <P>The following function will be used in the action corresponding to a 
+      lexer rule in order to collect the matched list of characters into a 
+      string:</P>
+<PRE>&gt; let collect(h, t) = String.concat "" (List.map (String.make 1) (h::t))
+val collect : char * char list -&gt; string</PRE>
+      <P>Now we can write our first working parser using our parser combinators. 
+      The following function matches some alphabetic character (i.e. a letter) 
+      followed by zero or more alphanumeric characters (i.e. letters or digits), 
+      collects the results and returns the              <CODE>IDENT</CODE> token 
+      conveying the identifier that was found in the input:           </P>
+<PRE>&gt; let rawident =
+    some alpha ++ several alphanum &gt;| (IDENT &lt;&lt; collect)
+val rawident : (char list -&gt; (token * char list) option)</PRE>
+      <P>Note how the infix operators              <CODE>++</CODE> ,             
+       <CODE>&gt;|</CODE> and              <CODE>&lt;&lt;</CODE> are used to 
+      improve clarity. In particular, few brackets are required.           </P>
+      <P>Similarly, the following matches some digit followed by several (zero 
+      or more) digits and returns an              <CODE>INT</CODE> token:        
+         </P>
+<PRE>&gt; let rawnumber =
+    some digit ++ several digit &gt;| (INT &lt;&lt; collect)
+val rawnumber : (char list -&gt; (token * char list) option)</PRE>
+      <P>The following lexes any non-whitespace and calls it a keyword, 
+      returning the              <CODE>KWD</CODE> token:           </P>
+<PRE>&gt; let rawkeyword =
+    let p c = not(space c) &amp;&amp; not(digit c)
+    some p ++ several p &gt;| (KWD &lt;&lt; collect)
+val rawkeyword : (char list -&gt; (token * char list) option)</PRE>
+      <P>This catchall approach is rather vague and would not be suitable for a 
+      production lexer but satisfies the requirements of this tutorial.</P>
+      <P>The following parser combinator matches either an identifier or a 
+      number or a keyword, followed by whitespace:</P>
+<PRE>&gt; let token =
+    (rawident ||| rawnumber ||| rawkeyword) ++ several space &gt;| fst;;
+val token : (char list -&gt; (token * char list) option)</PRE>
+      <P>Note that the value handled by the action is a 2-tuple composed of the 
+      token and the whitespace. In this case, we ignore the exact whitespace 
+      string that was found and return only the token (the first element of the 
+      tuple).</P>
+      <P>The following parser combinator matches whitespace followed by a 
+      sequence of tokens:</P>
+<PRE>&gt; let tokens =
+    (several space ++ many token) &gt;| snd;;
+val tokens : (char list -&gt; (token list * char list) option)</PRE>
+      <P>As the previous function matched trailing whitespace after each token 
+      and this function matches prefix whitespace, the tokens may have arbitrary 
+      amount of whitespace around them.</P>
+      <P>Whereas the value of interest (the token) was in the first element of 
+      the returned tuple in the previous case, the first element contains the 
+      matched whitespace and the second element contains the list of matched 
+      tokens in this case. So the              <CODE>snd</CODE> function is used 
+      in the corresponding action to extract the list of tokens.           </P>
+      <P>The following parser combinator matches a sequence of tokens followed 
+      by the end of the input (the empty list):</P>
+<PRE>&gt; let alltokens =
+    (tokens ++ fin) &gt;| fst;;
+val alltokens : (char list -&gt; (token list * char list) option)</PRE>
+      <P>Again, the list of tokens is extracted as the first element of the 
+      2-tuple returned and the dummy value              <CODE>0</CODE> returned 
+      by the              <CODE>fin</CODE> combinator is ignored.           </P>
+      <P>This parser combinator is used by the following              
+      <CODE>lex</CODE> function to implement a simple lexer:           </P>
+<PRE>&gt; let lex (string : string) =
+    List.of_seq string
+    |&gt; alltokens
+    |&gt; Option.map fst;;
+val lex : string -&gt; token list option</PRE>
+      <P>For example, lexing the string              <CODE>"a x^2 + b x + 
+      c"</CODE> gives the list of tokens:           </P>
+<PRE>&gt; lex "a x^2 + b x + c";;
+val it : token list option
+= Some
+   [IDENT "a"; IDENT "x"; KWD "^"; INT "2"; KWD "+"; IDENT "b"; IDENT "x";
+    KWD "+"; IDENT "c"]</PRE>
+      <P>This lexer might be used as the basis of a variety of different 
+      parsers, including the example parser the follows.</P>
+      <H2>Parsing symbolic expressions</H2>
+      <P>The parser combinators may also be used to parse the token stream that 
+      results from lexing. Before writing the parser, we must define the type of 
+      the abstract syntax tree              <CODE>expr</CODE> :           </P>
+<PRE>&gt; type expr =
+    | Int of int
+    | Var of string
+    | Add of expr * expr
+    | Mul of expr * expr with
+  
+    static member ( + ) (f, g) =
+      match f, g with
+      | Int n, Int m -&gt; Int(n + m)
+      | Int 0, e | e, Int 0 -&gt; e
+      | f, g -&gt; Add(f, g)
+  
+    static member ( * ) (f, g) =
+      match f, g with
+      | Int n, Int m -&gt; Int(n * m)
+      | Int 0, e | e, Int 0 -&gt; Int 0
+      | Int 1, e | e, Int 1 -&gt; e
+      | f, g -&gt; Mul(f, g);;
+type expr =
+  | Int of int
+  | Var of string
+  | Add of expr * expr
+  | Mul of expr * expr
+  with
+    static member ( + ) : f:expr * g:expr -&gt; expr
+    static member ( * ) : f:expr * g:expr -&gt; expr
+  end</PRE>
+      <P>Note that we have taken the liberty of introducing some simple 
+      simplification rules that reduce trivial expressions as they are 
+built.</P>
+      <P>Rather than trying to comprehend the rather obfuscated prefix notation 
+      of              <CODE>expr</CODE> values we shall use the following pretty 
+      printer to visualize symbolic expressions:           </P>
+<PRE>&gt; let rec string_of_expr () = function
+    | Int n -&gt; sprintf "%d" n
+    | Var x -&gt; x
+    | Add(f, g) -&gt;
+	sprintf "%a + %a" string_of_expr f string_of_expr g
+    | Mul(f, g) -&gt;
+	sprintf "%a %a" string_of_mul f string_of_mul g
+  and string_of_mul () = function
+    | Add _ as e -&gt; sprintf "(%a)" string_of_expr e
+    | e -&gt; sprintf "%a" string_of_expr e;;
+val string_of_expr : unit -&gt; expr -&gt; string
+val string_of_mul : unit -&gt; expr -&gt; string</PRE>
+      <P>This printer can be installed into a running F# interactive session 
+      using the              <CODE>fsi.AddPrinter</CODE> function and that can 
+      be wrapped in a preprocessor              <CODE>#if</CODE> to handle batch 
+      compilation as well:           </P>
+<PRE>#if INTERACTIVE
+fsi.AddPrinter(string_of_expr ())
+#endif</PRE>
+      <P>Values of the type              <CODE>expr</CODE> will now be pretty 
+      printed by the F# interactive mode.           </P>
+      <P>The following functions match identifiers and integers in the input 
+      token list:</P>
+<PRE>&gt; let ident = function
+    | IDENT x :: t -&gt; Some(x, t)
+    | _ -&gt; None;;
+val ident : token list -&gt; (string * token list) option</PRE>
+<PRE>&gt; let int = function
+    | INT n :: t -&gt; Some(n, t)
+    | _ -&gt; None;;
+val int : token list -&gt; (string * token list) option</PRE>
+      <P>The parser itself is written as a simple set of three mutually 
+      recursive functions that handle the three different precedence levels of 
+      our grammar:</P>
+<PRE>&gt; let rec atom s =
+    ((int &gt;| fun n -&gt; Int(int_of_string n)) |||
+    (ident &gt;| fun x -&gt; Var x) |||
+    (a (KWD "(") ++ term ++ a (KWD ")") &gt;| fun ((_, e), _) -&gt; e)) s
+  and factor s =
+    ((atom ++ factor &gt;| fun (f, g) -&gt; Mul(f, g)) |||
+    (atom &gt;| fun e -&gt; e)) s
+  and term s =
+    ((factor ++ a (KWD "+") ++ term &gt;| fun ((f, _), g) -&gt; Add(f, g)) |||
+    (factor |&gt; fun e -&gt; e)) s;;
+val atom : token list -&gt; (expr * token list) option
+val factor : token list -&gt; (expr * token list) option
+val term : token list -&gt; (expr * token list) option</PRE>
+      <P>The              <CODE>atom</CODE> parser handles atomic expressions 
+      including integers, identifiers and bracketed expressions. The             
+       <CODE>factor</CODE> parser handles sequences of expressions such as       
+             <CODE>a b</CODE> in the conventional mathematical sense, treating 
+      them as multiplications. Finally, the              <CODE>term</CODE> 
+      parser handles sequences of factors separated by the              
+      <CODE>+</CODE> symbol, treating them as sums.           </P>
+      <P>Note that we explicitly include the input              <CODE>s</CODE> 
+      to each of these functions. This is required by the F# type system when 
+      parsers are mutually recursive.           </P>
+      <P>This style of parsing, known as              <I>recursive descent 
+      parsing</I> , has one important caveat. If a rule tries to match itself 
+      immediately, even if that is succeeded by other parsers, then the 
+      resulting program will go into an infinite loops with the parser for that 
+      rule calling itself indefinitely until a stack overflow occurs. 
+      Consequently, our implementation of the              <CODE>factor</CODE> 
+      parser is careful to parse an              <CODE>atom</CODE> first to 
+      avoid this problem.           </P>
+      <P>The following function matches a term followed by the end of the input, 
+      returning the matched term:</P>
+<PRE>&gt; let expr =
+    term ++ fin &gt;| fst;;
+val expr : token list -&gt; (expr * token list) option</PRE>
+      <P>The following function lexes a string, extracts the token stream, 
+      applies the given parser              <CODE>p</CODE> and extracts the 
+      resulting value:           </P>
+<PRE>&gt; let parse p string =
+    lex string
+    |&gt; Option.get
+    |&gt; p
+    |&gt; Option.get
+    |&gt; fst
+val parse : (token list -&gt; ('a * 'b) option) -&gt; string -&gt; 'a</PRE>
+      <P>This can be used to parse a string with any given parser, such as using 
+      our              <CODE>expr</CODE> parser to parse a string into a 
+      symbolic expression that is then pretty printed in the same form:          
+       </P>
+<PRE>&gt; parse expr "a x x + b x + c"
+val it : expr = a x x + b x + c</PRE>
+      <P>The lexer and parser presented here amount to little over 100 lines of 
+      code and are already capable of handling a variety of useful inputs.</P>
+      <H2>Summary</H2>
+      <P>Parser combinators can be used to write arbitrarily complicated parsers 
+      but, unlike conventional parser generator tools, the resulting code may be 
+      made much more generally applicable, e.g. all of the functions in the 
+      first two sections of this article have been reused in both the lexer and 
+      parser. </P>
+      <P>As the complexity of parser combinators grows, so the assurances 
+      provided by F#'s static type system become increasingly useful. This 
+      safety net makes it feasible to write remarkably sophisticated production 
+      parsers using these techniques and without the need for overwhelming 
+      amounts of testing.</P>
+      <P>However, the simplicity of the lexer and parser presented here make 
+      them unnecessarily inefficient. A lot can be done to improve this and 
+      future F#.NET Journal articles will introduce all of the relevant concepts 
+      (performance profiling, laziness and so on) before revisiting this subject 
+      to develop much more optimized lexers and parsers without losing their 
+      generality.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Parser%20combinators_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

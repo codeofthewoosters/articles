@@ -1,0 +1,376 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0086)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/pattern_matching.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: How to leverage pattern matching</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: How to leverage pattern matching</TITLE>     
+<LINK href="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>How to leverage pattern matching</H1>
+      <P>Most languages provide a construct that allows the flow of execution to 
+      take one of several different paths depending on the value that an 
+      expression evaluates to. This feature is often referred to as              
+      <I>dynamic dispatch</I> .           </P>
+      <P>Compared to conventional programming languages, F# takes dynamic 
+      dispatch to a whole new level using an approach called              
+      <I>pattern matching</I> . This article guides the reader through the 
+      fundamental concepts that underpin pattern matching before providing some 
+      examples demonstrating the power of pattern matching in general 
+      programming.           </P>
+      <H2>Introduction</H2>
+      <P>Pattern matching is powerful for two main reasons:</P>
+      <P>
+      <UL>
+        <LI>Patterns can detect the structure of a value, e.g. the shape of a 
+        tree.</LI>
+        <LI>Patterns can bind variables to parts of a value.</LI></UL>
+      <P></P>
+      <P>When used in combination, these two properties allow data structures to 
+      be dissected using pattern matching. Consequently, F# code that dissects 
+      data structures is typically both concise and comprehensible.</P>
+      <P>In F#, a pattern match is described explicitly using either the         
+           <CODE>match ... with</CODE> construct or the              
+      <CODE>function ...</CODE> construct. The latter is shorthand for an 
+      anonymous function that pattern matches over its argument              
+      <CODE>x</CODE> :           </P>
+<PRE>&gt; fun x -&gt;
+    match x with
+    | pattern -&gt; expression
+    | pattern -&gt; expression
+    | pattern -&gt; expression
+    | ...</PRE>
+      <P>We shall use both the              <CODE>match ... with</CODE> and      
+              <CODE>function ...</CODE> constructs in the remainder of this 
+      article.           </P>
+      <H2>Binding variables</H2>
+      <P>Data structures are dissected using pattern matching by binding 
+      variables to parts of the data structure. Bound variables can then be used 
+      in the right-hand side of the pattern matching construct.</P>
+      <P>The following function sums the integers in a list by adding the head 
+      of the list (the first element) to the sum of the tail (the remaining 
+      elements) until the base case of the empty list is reached, whose sum is 
+      zero:</P>
+<PRE>&gt; let rec sum = function
+    | [] -&gt; 0
+    | head :: tail -&gt; head + sum tail;;
+sum : int list -&gt; int</PRE>
+      <P>For example,              <I>1+2+3 = 6</I> :           </P>
+<PRE>&gt; sum [1; 2; 3];;
+val it : int = 6</PRE>
+      <P>The second pattern in the              <CODE>sum</CODE> function 
+      matches any list with at least one element, binding the variables          
+          <CODE>head</CODE> to the first element of the list and              
+      <CODE>tail</CODE> to the list containing the remaining elements. The       
+             <CODE>head</CODE> and              <CODE>tail</CODE> variables may 
+      then be used in the corresponding expression.           </P>
+      <P>By applying itself to the tail list, this              <CODE>sum</CODE> 
+      function recursively decomposes the list one element at a time. Dissecting 
+      data structures using recursion is a very common style in F# programming.  
+               </P>
+      <H2>Or patterns</H2>
+      <P>In many cases, several alternative patterns can lead to the same 
+      expression. Such cases are handled using "or patterns". When any of a 
+      sequence of subpatterns is allowed to match, the pattern              
+      <CODE>A | B | ...</CODE> may be used.           </P>
+      <P>Consider the factorial function. We have both              <I>0! = 
+      1</I> and              <I>1! = 1</I> . This may be implemented in F# using 
+      an or-pattern:           </P>
+<PRE>&gt; let rec factorial = function
+    | 0 | 1 -&gt; 1
+    | n -&gt; n * factorial(n - 1);;
+val factorial : int -&gt; int</PRE>
+      <P>For example, the factorials of              <I>0 .. 5</I> are:          
+       </P>
+<PRE>&gt; Seq.map factorial {0 .. 5};;
+val it : int seq = {1; 1; 2; 6; 24; 120}</PRE>
+      <P>Note the use of the or-pattern              <CODE>0 | 1</CODE> in this 
+      code, matching either 0 or 1 and returning the result 1 in both cases.     
+            </P>
+      <P>Or patterns can often be used to simplify complicated pattern matches 
+      and, consequently, it is worth considering their use while designing F# 
+      programs.</P>
+      <H2>Named patterns</H2>
+      <P>As we have already seen, the branches of a data structure (such as the 
+      head and tail of a list) can be bound to variables by a pattern match. In 
+      some cases, a branch of a data structure must match a more specific 
+      pattern as well as being bound to a variable. Such cases as handled using  
+                  <I>named patterns</I> . The value matching a pattern           
+         <CODE>pat</CODE> can be bound to a variable              <CODE>x</CODE> 
+      using the syntax              <CODE>pat as x</CODE> .           </P>
+      <P>Consider the example or-pattern              <CODE>0 | 1</CODE> from 
+      the previous section. The              <CODE>factorial</CODE> function did 
+      not care whether the matched value was a zero or a one. However, a 
+      different function might need to know the value that matched. This is done 
+      by naming the pattern with              <CODE>0 | 1 as n</CODE> and using 
+      the variable              <CODE>n</CODE> in the corresponding expression.  
+               </P>
+      <P>A function              <CODE>fib</CODE> to compute the Fibonacci 
+      numbers can benefit from this feature. We can define base cases of         
+           <CODE>fib 0 = 0</CODE> and              <CODE>fib 1 = 1</CODE> . 
+      Thus, the Fibonacci function can be written as an initial pattern that 
+      matches these two base cases with the named or-pattern              
+      <CODE>0 | 1 as n</CODE> and returns the value              <CODE>n</CODE> 
+      that was matched, either a 0 or a 1:           </P>
+<PRE>&gt; let rec fib = function
+    | 0 | 1 as n -&gt; n
+    | n -&gt; fib(n - 1) + fib(n - 2);;
+val fib : int -&gt; int</PRE>
+      <P>For example, the first few Fibonacci numbers are:</P>
+<PRE>&gt; Seq.map fib {0 .. 5};;
+val it : int seq = {0; 1; 1; 2; 3; 5}</PRE>
+      <P>Named patterns are less common than or-patterns but offer significant 
+      benefits in many circumstances.</P>
+      <H2>Parallel pattern matching</H2>
+      <P>Several values can be dissected at once using pattern matching by 
+      analyzing the values in parallel. This is written as a simple pattern 
+      match over a tuple containing the values being dissected. Although this 
+      use-case requires no new fancy syntax or semantics, it is worth noting 
+      independently because it is both useful and efficient.</P>
+      <P>Consider a function that looks up the element in a list at the given 
+      index. This function can be written by pattern matching over the index and 
+      the list simultaneously:</P>
+<PRE>&gt; let rec nth n list =
+    match n, list with
+    | 0, head :: _ -&gt; head
+    | _, [] -&gt; raise Not_found
+    | n, _ :: tail -&gt; nth (n - 1) tail;;
+val nth : int -&gt; 'a list -&gt; 'a</PRE>
+      <P>For example, extracting the element at index 3:</P>
+<PRE>&gt; nth 3 [5 .. 10];;
+val it : int = 8</PRE>
+      <P>This function analyzes the index              <CODE>n</CODE> and the 
+      list              <CODE>list</CODE> in parallel, dispatching execution to 
+      one of three cases:           </P>
+      <P>
+      <UL>
+        <LI>Zero index and a list with at least one element: return the head 
+        element.</LI>
+        <LI>Any index and the empty list: index was out of bounds.</LI>
+        <LI>Non-zero index and non-empty list: search the tail list.</LI></UL>
+      <P></P>
+      <P>The ability to dissect multiple data structures simultaneously can be 
+      of great benefit.</P>
+      <H2>Static checking</H2>
+      <P>The F# compiler checks pattern matches at compile-time to ensure that 
+      they are exhaustive (all possible inputs match at least one pattern, i.e. 
+      no value can "escape" the pattern match) and contain no redundant patterns 
+      (patterns that can never be reached because a previous pattern matches a 
+      superset of values). Any inexhaustive or redundant patterns incur a 
+      warning and should be addressed by the programmer before the program is 
+      run.</P>
+      <H3>Exhaustiveness</H3>
+      <P>For example, the following function returns              
+      <CODE>true</CODE> if it is given the empty list              
+      <CODE>[]</CODE> but has no pattern to match the non-empty list. 
+      Consequently, the compiler issues a warning:           </P>
+<PRE>&gt; let is_empty list = match list with
+    | [] -&gt; true;;
+Warning: FS0025: Incomplete pattern match
+val is_empty : 'a list -&gt; bool</PRE>
+      <P>In this case, the pattern match is easily completed by adding the 
+      catch-all pattern              <CODE>_</CODE> , or the more specific       
+             <CODE>_::_</CODE> :           </P>
+<PRE>&gt; let is_empty list = match list with
+    | [] -&gt; true
+    | _::_ -&gt; false;;
+val is_empty : 'a list -&gt; bool</PRE>
+      <P>As this function pattern matches over its argument, it is an ideal 
+      candidate for the more succinct              <CODE>function</CODE> 
+      construct:           </P>
+<PRE>&gt; let is_empty = function
+    | [] -&gt; true
+    | _::_ -&gt; false;;
+val is_empty : 'a list -&gt; bool</PRE>
+      <P>Being warned about inexhaustive pattern matches is particularly useful 
+      when pattern matches grow to be very long and the sets of values matched 
+      are not obvious.</P>
+      <H3>Redundancy</H3>
+      <P>The last pattern in the following function is redundant because it can 
+      never be reached:</P>
+<PRE>&gt; let is_empty = function
+    | [] -&gt; true
+    | _::_ -&gt; false
+    | _ -&gt; false;;
+Warning: FS0026: This rule will never be matched.
+val is_empty : 'a list -&gt; bool</PRE>
+      <P>As the first two patterns match all possible lists, the third pattern 
+      is redundant. The compiler detects this and issues a warning 
+      automatically.</P>
+      <P>Checking for exhaustiveness and redundancy in pattern matches are just 
+      two of many approaches that the F# language takes to tracking down errors 
+      before a program is run. In many cases, the interpretation of a pattern 
+      match is so natural for a human that any such errors are due to the 
+      programmer incorrectly transcribing their design into code, e.g. a simple 
+      typographical error.</P>
+      <P>We have now covered all of the core features of pattern matching in F#. 
+      Whenever possible, pattern matches should be written in terms of 
+      constants, variables, or-patterns and named patterns. This maximizes the 
+      benefits of static checking and the performance that results. However, 
+      some situations warrant more sophisticated functionality in the pattern 
+      matcher at the expense of static checking and efficiency.</P>
+      <H2>Guarded patterns</H2>
+      <P>Sometimes, pattern matches can be written more elegantly by 
+      constraining specific patterns to only match under certain circumstances. 
+      This can be achieved by placing a boolean expression called a              
+      <I>guard</I> on the pattern. A guarded pattern is only allowed to match 
+      when the guard expression evaluates to              <CODE>true</CODE> .    
+             </P>
+      <P>Guarded patterns have several drawbacks that limit their use:</P>
+      <P>
+      <UL>
+        <LI>Guard expressions must be evaluated at run-time and, consequently, 
+        they prohibit certain compile-time pattern-matching optimizations.</LI>
+        <LI>Guards may be executed non-deterministically and, consequently, they 
+        should always be pure expressions (without side-effects).</LI>
+        <LI>Guards obviate some static checking, often requiring extra work to 
+        eliminate compiler warnings.</LI></UL>
+      <P></P>
+      <P>A boolean guard expression              <CODE>g</CODE> is added to a 
+      pattern using the syntax              <CODE>| pat when g -&gt; ...</CODE>
+       . Note that guards can only be added to top-most patterns and not to 
+      subpatterns.           </P>
+      <P>The most obvious use of guarded patterns is to circumvent the inability 
+      to duplicate pattern variables in F#. This restriction is imposed by the 
+      F# language because, without it, a single pattern match could take an 
+      arbitrary amount of time to compute.</P>
+      <P>The following function              <CODE>dups</CODE> returns the 
+      elements from the list              <CODE>l1</CODE> for which the 
+      corresponding element in the list              <CODE>l2</CODE> is not 
+      equal:           </P>
+<PRE>&gt; let rec dups l1 l2 =
+    match l1, l2 with
+    | [], [] -&gt; []
+    | h1::t1, h2::t2 when h1=h2 -&gt; dups t1 t2
+    | h::t1, _::t2 -&gt; h::dups t1 t2
+    | _ -&gt; invalid_arg "dups";;
+val dups : 'a list -&gt; 'a list -&gt; 'a list</PRE>
+      <P>For example, only the elements 2, 3 and 5 have different valued 
+      elements in the second list:</P>
+<PRE>&gt; dups [1; 2; 3; 4; 5] [1; 1; 4; 4; 4];;
+val it : int list = [2; 3; 5]</PRE>
+      <P>When performance is not critical, guarded patterns can be a useful way 
+      to simplify pattern matches.</P>
+      <H2>Performance</H2>
+      <P>Given the power of pattern matching, you might be forgiven for assuming 
+      that it is slow. In fact, pattern matching is very, very fast. In simple 
+      cases like the              <CODE>factorial</CODE> function, pattern 
+      matching is as fast as an              <CODE>if</CODE> expression. In more 
+      complicated cases, the static analysis performed by the F# compiler 
+      rearranges patterns into optimized decision trees and performance is 
+      typically much better than hand-coded sequences of              
+      <CODE>if</CODE> expressions.           </P>
+      <P>Pattern matching is one of the most useful features of F#. In addition 
+      to providing an elegant and efficient means to dispatch computation, 
+      pattern matches are subjected to static checks beyond static type 
+      checking. Thus, the use of pattern matching accelerates development and 
+      improves both reliability and performance.</P>
+      <H2>Active Patterns</H2>
+      <P>The F# language is derived from the              <A href="http://www.ffconsultancy.com/products/ocaml_for_scientists/">OCaml</A> 
+      language. We have now covered the whole of OCaml-style pattern matching. 
+      In addition to these features, F# also provides an exciting new feature 
+      called              <I>active patterns</I> .           </P>
+      <P>As we have seen, pattern matching allows the programmer to dissect 
+      concrete data structures by dispatching computation based upon the 
+      structure and contents of a value. This offers many advantages over more 
+      conventional approaches to dynamic dispatch, such as virtual functions, 
+      but has the disadvantage that over-use of pattern matching and the 
+      inappropriate factoring of code can lead to programs that are overly 
+      dependent upon a particular concrete data structure, such as lists.</P>
+      <P>A few academic papers have addressed this concern by proposing 
+      so-called "views". A view is a set of abstract patterns that give one 
+      concrete data structure the appearance of another.</P>
+      <P>The simplest example demonstrating the utility of active patterns is 
+      actually provided in the F# distribution itself, in the form of the active 
+      patterns              <CODE>Nil</CODE> and              <CODE>Cons</CODE> 
+      in the              <CODE>LazyList</CODE> module that allow lazy lists to 
+      be dissected as if they were eager lists.           </P>
+      <P>Active patterns particularly important in the context of 
+      interoperability, such as the .NET platform, where libraries implemented 
+      in other languages could be exposed much more elegantly in F#.</P>
+      <P>The .NET representation of XML data is an obfuscated mess of object 
+      oriented design that could be much more elegantly exposed in F# as a 
+      simple variant type containing element nodes and text leaves. Fortunately, 
+      active patterns allow us to bridge the gap, giving the .NET implementation 
+      of XML the look and feel of a native F# library.</P>
+      <P>The following function extracts the tag name and attribute- and 
+      child-lists from an XML element node, returning them as a 3-tuple:</P>
+<PRE>&gt; open System.Xml;;
+&gt; let element (elt : XmlElement) =
+    elt.LocalName,
+    [for i in 0 .. elt.Attributes.Count - 1 -&gt;
+       let a = elt.Attributes.Item(i)
+       a.Name, a.Value],
+    [for i in 0 .. elt.ChildNodes.Count - 1 -&gt;
+       elt.ChildNodes.Item(i)];;
+val element : XmlElement -&gt; string * (string * string) list * XmlNode list</PRE>
+      <P>This can be used to write an active pattern that makes an              
+      <CODE>XmlNode</CODE> object appear to be either an              
+      <CODE>Element</CODE> or              <CODE>Text</CODE> constructor:        
+         </P>
+<PRE>&gt; let (|Element|Text|) (n : XmlNode) =
+    match n.NodeType with
+    | XmlNodeType.Element -&gt; Element(element(n :?&gt; XmlElement))
+    | XmlNodeType.Text -&gt; Text n.InnerText
+    | _ -&gt; invalid_arg "node";;
+val (|Element|Text|) :
+  XmlNode -&gt; Choice&lt;(string * (string * string) list * XmlNode list), string&gt;</PRE>
+      <P>Functions that act upon XML data may now be written more elegantly 
+      using these active patterns. For example, a function to return the child 
+      nodes of the first element with the given tag name (analogous to the       
+             <CODE>List.assoc</CODE> function) may be written:           </P>
+<PRE>&gt; let rec assoc tag = function
+    | [] -&gt; raise Not_found
+    | Element(tag', _, nodes) :: _ when tag=tag' -&gt; nodes
+    | _ :: tail -&gt; assoc tag tail;;
+val assoc : string -&gt; XmlNode list -&gt; XmlNode list</PRE>
+      <P>This function may now be used to dissect XML data without having to 
+      translate the .NET representation into an F# representation and without 
+      forcing the .NET design onto the F# programmer.</P>
+      <P>This concludes our article on pattern matching in F#. Pattern matching 
+      will be used extensively in later journal articles, so watch out for the 
+      design decisions and properties that were covered in this article.</P>
+      <P>
+      <P style="text-align: center;"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">Back 
+      to The F#.NET Journal</A>             </P>
+      <P></P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20How%20to%20leverage%20pattern%20matching_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

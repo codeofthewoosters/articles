@@ -1,0 +1,175 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0091)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/histogramequalization.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20Histogram%20Equalization_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20Histogram%20Equalization_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20Histogram%20Equalization_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20Histogram%20Equalization_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20Histogram%20Equalization_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Histogram equalization</H1>
+      <P>Over- and under-exposed images have their intensity distributions 
+      skewed to the high or low end of the range. Histogram equilization is one 
+      technique to combat this effect digitally by spreading out the 
+      distribution of intensities in an image via the intensity histogram. This 
+      article describes a program for image enhancement using histogram 
+      equilization with an interactive WPF-based GUI using the new charting 
+      functionality in .NET 4 to visualize the intensity histograms in real 
+      time.</P>
+      <H2>References</H2>
+      <P>We begin by referencing the .NET assemblies for Windows Presentation 
+      Foundation, Windows Forms, Windows Forms Integration (to use a Windows 
+      Forms control in an WPF application) and the Data Visualization library 
+      derived from Dundas Charts that is new in .NET 4:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationCore.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'c:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\<BR>&nbsp;&nbsp;&nbsp;&nbsp;v3.0\PresentationCore.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationFramework.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'c:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\<BR>&nbsp;&nbsp;&nbsp;&nbsp;v3.0\PresentationFramework.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"WindowsBase.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'c:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\<BR>&nbsp;&nbsp;&nbsp;&nbsp;v3.0\WindowsBase.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Windows.Forms.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Windows\Microsoft.NET\Framework\v4.0.30319\System.Windows.Forms.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"WindowsFormsIntegration.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'c:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\<BR>&nbsp;&nbsp;&nbsp;&nbsp;v3.0\WindowsFormsIntegration.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Windows.Forms.DataVisualization.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Windows\Microsoft.NET\Framework\v4.0.30319<BR>&nbsp;&nbsp;&nbsp;&nbsp;\System.Windows.Forms.DataVisualization.dll'</CODE></P>
+      <H2>Processing</H2>
+      <P>We begin by defining the image transformation functions, starting with 
+      a helper function to flatten a 2D array into a 1D array:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Array2D&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;toArray&nbsp;(xss:&nbsp;_&nbsp;[,])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m,&nbsp;n&nbsp;=&nbsp;xss.GetLength&nbsp;0,&nbsp;xss.GetLength&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;a&nbsp;=&nbsp;Array.create&nbsp;(m*n)&nbsp;xss.[0,&nbsp;0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a.[i*n+j]&nbsp;&lt;-&nbsp;xss.[i,&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Array2D&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;toArray&nbsp;:&nbsp;'a&nbsp;[,]&nbsp;-&gt;&nbsp;'a&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following rescale function converts a 32-bit floating point 
+      (<CODE>float32</CODE>) number into an integer in the range [0..255]:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rescale&nbsp;x&nbsp;=&nbsp;255.f&nbsp;*&nbsp;x&nbsp;|&gt;&nbsp;round&nbsp;|&gt;&nbsp;int&nbsp;|&gt;&nbsp;min&nbsp;255&nbsp;|&gt;&nbsp;max&nbsp;0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;rescale&nbsp;:&nbsp;float32&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The <CODE>histogram</CODE> function creates a 256-element array of the 
+      number of pixels occuring at each intensity:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;histogram&nbsp;(xss:&nbsp;_&nbsp;[,])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p&nbsp;=&nbsp;Array.create&nbsp;256&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xss&nbsp;|&gt;&nbsp;Array2D.iter&nbsp;(fun&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;k&nbsp;=&nbsp;rescale&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.[k]&nbsp;&lt;-&nbsp;p.[k]&nbsp;+&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;histogram&nbsp;:&nbsp;float32&nbsp;[,]&nbsp;-&gt;&nbsp;int&nbsp;[]</CODE></P>
+      <P>The <CODE>histogram</CODE> function works by creating a zero array and 
+      iterating over each pixel in the image incrementing the count for that 
+      pixel.</P>
+      <P>Finally, the <CODE>equalize</CODE> function uses the 
+      <CODE>histogram</CODE> function to map the old pixel intensities onto new 
+      pixel intensities such that the new intensities are evenly spaced across 
+      the available range:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;equalize&nbsp;gamma&nbsp;(image:&nbsp;_&nbsp;[,])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p&nbsp;=&nbsp;histogram&nbsp;image&nbsp;|&gt;&nbsp;Array.scan&nbsp;(+)&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array2D.map&nbsp;(fun&nbsp;x&nbsp;-&gt;&nbsp;float32&nbsp;p.[rescale(x&nbsp;**&nbsp;gamma)]&nbsp;/&nbsp;float32&nbsp;p.[255])&nbsp;image;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;equalize&nbsp;:&nbsp;float32&nbsp;-&gt;&nbsp;float32&nbsp;[,]&nbsp;-&gt;&nbsp;float32&nbsp;[,]</CODE></P>
+      <P>The <CODE>equalize</CODE> function begins by computing the histogram of 
+      intensities from the image using the <CODE>histogram</CODE> function. The 
+      <CODE>Array.scan</CODE> function is then used to convert the histogram 
+      into a cumulative distribution. The higher-order <CODE>Array2D.map</CODE> 
+      function is then used to map each input pixel intensity onto an output 
+      intensity determined via lookup in the cumulative distribution. This has 
+      the effect of redistributing the intensities evenly across the available 
+      range.</P>
+      <P>The <CODE>Array.scan</CODE> function and its relatives for other data 
+      structures are a relatively new addition to F# so it is worth examining 
+      this function in a little more detail. Whereas the <CODE>fold</CODE> 
+      functions traverse a sequence of elements accumulating a single value, the 
+      <CODE>scan</CODE> function traverses a sequence of elements building a 
+      sequence composed of the intermediate values of the accumulator. So 
+      folding the <CODE>+</CODE> operator over a sequence computes the sum and 
+      using the <CODE>scan</CODE> function with the <CODE>+</CODE> operator 
+      computes the cumulative distribution, culminating with the total sum in 
+      the final element.</P>
+      <P>For example, applying <CODE>Array.scan&nbsp;(+)&nbsp;0</CODE> to a 
+      linear sequence accumulates a quadratic sequence:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Array.scan&nbsp;(+)&nbsp;0&nbsp;[|1..2..9|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;[]&nbsp;=&nbsp;[|0;&nbsp;1;&nbsp;4;&nbsp;9;&nbsp;16;&nbsp;25|]</CODE></P>
+      <P>Note that the output sequence has one more element than the input 
+      sequence because it includes both the initial value of the accumulator in 
+      the first element as well as the total sum in the last element.</P>
+      <P>Thus, the entire algorithmic process of histogram equalization has been 
+      implemented in just 9 lines of F# code!</P>
+      <H2>User interface</H2>
+      <P>We begin by opening the <CODE>System.Windows</CODE> namespace in order 
+      to refer to both WPF and WinForms definitions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>In this case, we shall load an image from disk but we can actually 
+      reference images anywhere here, including full URLs:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;file&nbsp;=&nbsp;@"lena.gif";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;file&nbsp;:&nbsp;string&nbsp;=&nbsp;"lena.gif"</CODE></P>
+      <H3>Handling images</H3>
+      <P>Once loaded, the image will be transformed into our preferred format, 
+      32-bit floating-point grayscale:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;fmt&nbsp;=&nbsp;Media.PixelFormats.Gray32Float;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fmt&nbsp;:&nbsp;System.Windows.Media.PixelFormat&nbsp;=&nbsp;Gray32Float</CODE></P>
+      <P>The number of bits per pixel in our preferred format it:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;bpp&nbsp;=&nbsp;fmt.BitsPerPixel&nbsp;/&nbsp;8;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;bpp&nbsp;:&nbsp;int&nbsp;=&nbsp;4</CODE></P>
+      <P>The number of array indices per pixel in our preferred format for an 
+      array of <CODE>float32</CODE> values is:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ipp&nbsp;=&nbsp;bpp&nbsp;/&nbsp;sizeof&lt;float32&gt;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ipp&nbsp;:&nbsp;int&nbsp;=&nbsp;1</CODE></P>
+      <P>The following <CODE>deconstruct</CODE> function takes an image that is 
+      expected to be in this format and extracts the pixel intensities as a 2D 
+      array:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;deconstruct&nbsp;(image:&nbsp;Media.Imaging.BitmapSource)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;w,&nbsp;h&nbsp;=&nbsp;image.PixelWidth,&nbsp;image.PixelHeight<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;data&nbsp;=&nbsp;Array.create&nbsp;(w&nbsp;*&nbsp;h&nbsp;*&nbsp;ipp)&nbsp;0.0f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image.CopyPixels(data,&nbsp;w&nbsp;*&nbsp;bpp,&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|for&nbsp;k&nbsp;in&nbsp;0..ipp-1&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array2D.init&nbsp;h&nbsp;w&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;data.[(i&nbsp;*&nbsp;w&nbsp;+&nbsp;j)*ipp&nbsp;+&nbsp;k])|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;deconstruct&nbsp;:&nbsp;System.Windows.Media.Imaging.BitmapSource&nbsp;-&gt;&nbsp;float32&nbsp;[,]&nbsp;[]</CODE></P>
+      <P>Conversely, the following <CODE>reconstruct</CODE> function converts a 
+      2D array of intensities back into an image that WPF can display:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;reconstruct&nbsp;(pixel:&nbsp;_&nbsp;[,]&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;h,&nbsp;w&nbsp;=&nbsp;pixel.[0].GetLength&nbsp;0,&nbsp;pixel.[0].GetLength&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;data&nbsp;=&nbsp;Array.create&nbsp;(h&nbsp;*&nbsp;w&nbsp;*&nbsp;ipp)&nbsp;0.0f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;h-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=0&nbsp;to&nbsp;w-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=0&nbsp;to&nbsp;ipp-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;data.[(i&nbsp;*&nbsp;w&nbsp;+&nbsp;j)*ipp&nbsp;+&nbsp;k]&nbsp;&lt;-&nbsp;pixel.[k].[i,&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.Imaging.BitmapSource.Create(w,&nbsp;h,&nbsp;1.0,&nbsp;1.0,&nbsp;fmt,&nbsp;null,&nbsp;data,&nbsp;w*bpp);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;reconstruct&nbsp;:&nbsp;float32&nbsp;[,]&nbsp;[]&nbsp;-&gt;&nbsp;System.Windows.Media.Imaging.BitmapSource</CODE></P>
+      <P>The following <CODE>ui</CODE> function provides a simply way to upcast 
+      any <CODE>UIElement</CODE> to its base type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ui&nbsp;x&nbsp;=&nbsp;(x&nbsp;:&gt;&nbsp;UIElement);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ui&nbsp;:&nbsp;System.Windows.UIElement&nbsp;-&gt;&nbsp;System.Windows.UIElement</CODE></P>
+      <P>Our <CODE>Grid</CODE> modules provides an easy way to create a grid of 
+      WPF controls:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Grid&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;create&nbsp;ctrlss&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid(Margin=Thickness&nbsp;5.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;ctrlss&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..Seq.reduce&nbsp;max&nbsp;(Seq.map&nbsp;Seq.length&nbsp;ctrlss)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ColumnDefinition()&nbsp;|&gt;&nbsp;grid.ColumnDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iteri&nbsp;(fun&nbsp;y&nbsp;ctrls&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iteri&nbsp;(fun&nbsp;x&nbsp;ctrl&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(ctrl,&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(ctrl,&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;ctrl&nbsp;|&gt;&nbsp;ignore)&nbsp;ctrls)&nbsp;ctrlss<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ui&nbsp;grid;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Grid&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;create&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&lt;#seq&lt;'b&gt;&gt;&nbsp;-&gt;&nbsp;System.Windows.UIElement<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'b&nbsp;:&gt;&nbsp;System.Windows.UIElement<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <H3>Charting</H3>
+      <P>The new definitions in .NET 4 related to charting and graphing are 
+      provided in the following namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows.Forms.DataVisualization.Charting;;</CODE></P>
+      <P>The following <CODE>mkChart</CODE> function creates a line chart, chart 
+      area and a single series in it, returning both the series and the chart 
+      control (wrapped in a <CODE>WindowsFormsHost</CODE> to allow the WinForms 
+      control to be used inside a WPF application):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mkChart()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;series&nbsp;=&nbsp;new&nbsp;Series(ChartType=SeriesChartType.Line)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;area&nbsp;=&nbsp;new&nbsp;ChartArea()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;chart&nbsp;=&nbsp;new&nbsp;Chart(Dock=Forms.DockStyle.Fill)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chart.ChartAreas.Add&nbsp;area<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;chart.Series.Add&nbsp;series<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;series,&nbsp;new&nbsp;Forms.Integration.WindowsFormsHost(Child=chart);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mkChart&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;unit&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Windows.Forms.DataVisualization.Charting.Series&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Windows.Forms.Integration.WindowsFormsHost</CODE></P>
+      <P>The following <CODE>plot</CODE> function clears the given series and 
+      fills it with the histogram of pixel intensities of the <CODE>plane</CODE> 
+      2D array:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;plot&nbsp;plane&nbsp;(series:&nbsp;Series)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p&nbsp;=&nbsp;histogram&nbsp;plane<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;series.Points.Clear()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x&nbsp;in&nbsp;0..255&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;series.Points.AddXY(float&nbsp;x,&nbsp;p.[x])&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;plot&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float32&nbsp;[,]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Windows.Forms.DataVisualization.Charting.Series&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Finally, the main program constructs the components of the GUI and 
+      composes them before running the application:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;image&nbsp;=&nbsp;Media.Imaging.BitmapImage(System.Uri&nbsp;file)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;image&nbsp;=&nbsp;Media.Imaging.FormatConvertedBitmap(image,&nbsp;fmt,&nbsp;null,&nbsp;1.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;input&nbsp;=&nbsp;Controls.Image(Stretch=Media.Stretch.Uniform,&nbsp;Source=image)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;output&nbsp;=&nbsp;Controls.Image(Stretch=Media.Stretch.Uniform)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;series1,&nbsp;chart1&nbsp;=&nbsp;mkChart()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;series2,&nbsp;chart2&nbsp;=&nbsp;mkChart()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;original&nbsp;=&nbsp;deconstruct&nbsp;image<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;plot&nbsp;original.[0]&nbsp;series1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;update&nbsp;gamma&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;equalized&nbsp;=&nbsp;Array.map&nbsp;(equalize&nbsp;(float32&nbsp;gamma))&nbsp;original<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;output.Source&nbsp;&lt;-&nbsp;reconstruct&nbsp;equalized<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;plot&nbsp;equalized.[0]&nbsp;series2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;slider&nbsp;=&nbsp;Controls.Slider(Minimum=0.1,&nbsp;Value=1.3,&nbsp;Maximum=2.2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;image.IsDownloading&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;image.DownloadCompleted.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;update&nbsp;slider.Value)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;update&nbsp;slider.Value<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;slider.ValueChanged.Add(fun&nbsp;x&nbsp;-&gt;&nbsp;update&nbsp;x.NewValue)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Grid.create[[ui&nbsp;input;&nbsp;ui&nbsp;output];&nbsp;[ui&nbsp;chart1;&nbsp;ui&nbsp;chart2]]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;panel&nbsp;=&nbsp;Controls.DockPanel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(slider,&nbsp;Controls.Dock.Top)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;panel.Children.Add&nbsp;slider&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(grid,&nbsp;Controls.Dock.Bottom)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;panel.Children.Add&nbsp;grid&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=panel,&nbsp;Title="Histogram&nbsp;equalization"))&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <P>The image is converted into our preferred format using the 
+      <CODE>FormatConvertedBitmap</CODE> class. The deconstructed image is 
+      called <CODE>original</CODE> and is displayed in the <CODE>input</CODE> 
+      control before having <CODE>series1</CODE> filled in using the 
+      <CODE>plot</CODE> function to display the histogram for the original 
+      image.</P>
+      <P>The nested <CODE>update</CODE> function computes the histogram 
+      <CODE>equalized</CODE> image using the current <CODE>gamma</CODE> and sets 
+      the <CODE>output</CODE> control to display the reconstructed image before 
+      filling in <CODE>series2</CODE> to display the histogram of the equalized 
+      image.</P>
+      <P>A <CODE>Slider</CODE> control allows the user to control the 
+      <CODE>gamma</CODE> value that introduces a form of gamma correction. This 
+      is useful because the resulting images otherwise have an exactly middle 
+      average intensity which is often inappropriate. Whenever the slider value 
+      changes, the <CODE>update</CODE> function is used to compute the new image 
+      with the updated <CODE>gamma</CODE> value.</P>
+      <H2>Results</H2>
+      <P>When run, this program produces the following interactive GUI:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20Histogram%20Equalization_files/lena.png"></P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a program 
+      that introduces two new constructs (image formats and .NET 4 charting) as 
+      well as an interesting algorithmic problem.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of image 
+      manipulating and charting.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20Histogram%20Equalization_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

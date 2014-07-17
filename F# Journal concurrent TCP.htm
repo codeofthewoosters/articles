@@ -1,0 +1,181 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0075)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/relay.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20concurrent%20TCP_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20concurrent%20TCP_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20concurrent%20TCP_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20concurrent%20TCP_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20concurrent%20TCP_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Concurrent programming: TCP relay server</H1>
+      <P>Asynchronous workflows are an incredibly useful feature of the F# 
+      programming language in the context of concurrent programming. This 
+      article describes a simple concurrent program that provides a relay server 
+      that can be instructed to connect to a TCP server and forward messages to 
+      it.</P>
+      <P>We begin by opening the <CODE>System.Net</CODE> namespace that contains 
+      many useful definitions in this context:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Net;;</CODE></P>
+      <P>The following type augmentation adds F#-friendly 
+      <CODE>AsyncConnect</CODE>, <CODE>AsyncSend</CODE> and 
+      <CODE>AsyncReceive</CODE> members to the existing <CODE>Socket</CODE> 
+      class:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Sockets.Socket&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.AsyncConnect&nbsp;endPoint&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;callback&nbsp;(endPoint,&nbsp;callback,&nbsp;state)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.BeginConnect(endPoint,&nbsp;callback,&nbsp;state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async.FromBeginEnd(endPoint,&nbsp;callback,&nbsp;this.EndConnect)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.AsyncSend(buf:&nbsp;byte&nbsp;[],&nbsp;offset,&nbsp;size,&nbsp;flags:&nbsp;Sockets.SocketFlags)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;callback&nbsp;(flags:&nbsp;Sockets.SocketFlags,&nbsp;callback,&nbsp;state)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.BeginSend(buf,&nbsp;offset,&nbsp;size,&nbsp;flags,&nbsp;callback,&nbsp;state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async.FromBeginEnd(flags,callback,&nbsp;this.EndSend)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.AsyncReceive(buf:&nbsp;byte&nbsp;[],&nbsp;offset,&nbsp;size,&nbsp;flags:&nbsp;Sockets.SocketFlags)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;callback&nbsp;(flags:&nbsp;Sockets.SocketFlags,&nbsp;callback,&nbsp;state)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;this.BeginReceive(buf,&nbsp;offset,&nbsp;size,&nbsp;flags,&nbsp;callback,&nbsp;state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async.FromBeginEnd(flags,&nbsp;callback,&nbsp;this.EndReceive);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Socket&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;AsyncConnect&nbsp;:&nbsp;endPoint:EndPoint&nbsp;-&gt;&nbsp;Async&lt;unit&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Socket&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AsyncSend&nbsp;:&nbsp;buf:byte&nbsp;[]&nbsp;*&nbsp;offset:int&nbsp;*&nbsp;size:int&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;flags:Sockets.SocketFlags&nbsp;-&gt;&nbsp;Async&lt;int&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Socket&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AsyncReceive&nbsp;:&nbsp;buf:byte&nbsp;[]&nbsp;*&nbsp;offset:int&nbsp;*&nbsp;size:int&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;flags:Sockets.SocketFlags&nbsp;-&gt;&nbsp;Async&lt;int&gt;&nbsp;&nbsp;&nbsp;&nbsp;</CODE></P>
+      <P>Each of these new members is created from conventional .NET 
+      <CODE>Begin</CODE> and <CODE>End</CODE> pairs of members.</P>
+      <P>Our concurrent program is a state machine with three states:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Waiting&nbsp;of&nbsp;byte&nbsp;[]&nbsp;list&nbsp;*&nbsp;(unit&nbsp;-&gt;&nbsp;bool)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;On&nbsp;of&nbsp;Sockets.Socket;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Waiting&nbsp;of&nbsp;byte&nbsp;[]&nbsp;list&nbsp;*&nbsp;(unit&nbsp;-&gt;&nbsp;bool)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;On&nbsp;of&nbsp;Sockets.Socket</CODE></P>
+      <P>The machine is pushed between these states by four different 
+      messages:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;message&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ConnectTo&nbsp;of&nbsp;IPEndPoint<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ConnectionEstablished&nbsp;of&nbsp;Sockets.Socket<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Echo&nbsp;of&nbsp;byte&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Stop;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;message&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ConnectTo&nbsp;of&nbsp;IPEndPoint<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ConnectionEstablished&nbsp;of&nbsp;Sockets.Socket<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Echo&nbsp;of&nbsp;byte&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Stop</CODE></P>
+      <P>The agent expects to have <CODE>ConnectTo</CODE>, <CODE>Echo</CODE> and 
+      <CODE>Stop</CODE> messages posted to it and will post the 
+      <CODE>ConnectionEstablished</CODE> message to itself once it has 
+      asynchronously established a TCP connection.</P>
+      <P>The following <CODE>connectTo</CODE> function provides an asynchronous 
+      workflow that establishes a TCP connection asynchronously (without 
+      blocking) before posting a <CODE>ConnectionEstablished</CODE> message to 
+      the given inbox:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;connectTo&nbsp;(inbox:&nbsp;MailboxProcessor&lt;_&gt;)&nbsp;endPoint&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;addressFamily&nbsp;=&nbsp;Sockets.AddressFamily.InterNetwork<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;socketType&nbsp;=&nbsp;Sockets.SocketType.Stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;protocolType&nbsp;=&nbsp;Sockets.ProtocolType.Tcp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;socket&nbsp;=&nbsp;new&nbsp;Sockets.Socket(addressFamily,&nbsp;socketType,&nbsp;protocolType)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;socket.AsyncConnect&nbsp;endPoint<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;inbox.Post(ConnectionEstablished&nbsp;socket)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;connectTo&nbsp;:&nbsp;MailboxProcessor&lt;message&gt;&nbsp;-&gt;&nbsp;EndPoint&nbsp;-&gt;&nbsp;Async&lt;unit&gt;</CODE></P>
+      <P>The following <CODE>trySend</CODE> function attempts to send a message 
+      to a socket asynchronously, returning <CODE>true</CODE> if successful or 
+      <CODE>false</CODE> if sending failed (e.g. because the TCP connection has 
+      been closed):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;trySend&nbsp;(socket:&nbsp;Sockets.Socket)&nbsp;bytes&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;length&nbsp;=&nbsp;socket.AsyncSend(bytes,&nbsp;0,&nbsp;bytes.Length,&nbsp;Sockets.SocketFlags.None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert(length&nbsp;=&nbsp;bytes.Length)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;trySend&nbsp;:&nbsp;Sockets.Socket&nbsp;-&gt;&nbsp;byte&nbsp;[]&nbsp;-&gt;&nbsp;Async&lt;bool&gt;</CODE></P>
+      <P>Unlike the <CODE>AsyncReceive</CODE> functions, the 
+      <CODE>AsyncSend</CODE> function is always expected to process the entire 
+      message before continuing.</P>
+      <P>The state machine is implemented by the following <CODE>apply</CODE> 
+      function that accepts the state and message and performs the required 
+      action:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;apply&nbsp;(inbox:&nbsp;MailboxProcessor&lt;_&gt;)&nbsp;state&nbsp;message&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state,&nbsp;message&nbsp;with</CODE></P>
+      <P>We shall examine the body of this function case-by-case. The first case 
+      begins to connect to a remote server when the machine is in the 
+      <CODE>Off</CODE> state and receives a <CODE>ConnectTo</CODE> message:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off,&nbsp;ConnectTo&nbsp;endPoint&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;connectTo&nbsp;inbox&nbsp;endPoint&nbsp;|&gt;&nbsp;Async.Start<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Waiting([],&nbsp;fun&nbsp;()&nbsp;-&gt;&nbsp;timer.Elapsed.TotalSeconds&nbsp;&gt;&nbsp;20.0)</CODE></P>
+      <P>Note that any exception raised in the <CODE>connectTo</CODE> workflow 
+      will cause the workflow to terminate without sending the 
+      <CODE>ConnectionEstablished</CODE> message back. This will be detected by 
+      timing out if the connection is not established within 20 seconds. The 
+      timeout is accomplished by starting a timer and using it to build a 
+      predicate functions that is conveyed as an argument to the 
+      <CODE>Waiting</CODE> state. Note that the <CODE>Waiting</CODE> state is 
+      entered with an empty list as the outstanding queue of messages.</P>
+      <P>If the machine is in the <CODE>Off</CODE> state when it receives the 
+      <CODE>ConnectionEstablished</CODE> message then it connects as if it had 
+      been in the <CODE>Waiting</CODE> state:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off,&nbsp;ConnectionEstablished&nbsp;socket&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;On&nbsp;socket</CODE></P>
+      <P>Several combinations of states and messages move the machine into the 
+      <CODE>Off</CODE> state:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off,&nbsp;(Echo&nbsp;_&nbsp;|&nbsp;Stop)&nbsp;|&nbsp;(Waiting&nbsp;_&nbsp;|&nbsp;On&nbsp;_),&nbsp;Stop&nbsp;-&gt;&nbsp;return&nbsp;Off</CODE></P>
+      <P>Note the use of or-patterns to detect and handle combinations of states 
+      and messages in the same way. F# is ideal for implementing state machines 
+      not only because they can be expressed clearly and simply using union 
+      types and pattern matching over the state and message with multiple 
+      dispatch giving the desired behaviour but also because the pattern match 
+      compiler in F# verifies that every combination of state and message is 
+      catered for.</P>
+      <P>If a request is made to relay a message while a connection is waiting 
+      to be established then the message is added to the queue, ready to be sent 
+      when the connection is established:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Waiting(queue,&nbsp;timedout),&nbsp;Echo&nbsp;bytes&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Waiting(bytes::queue,&nbsp;timedout)</CODE></P>
+      <P>If the machine is in the <CODE>Waiting</CODE> state and receives a 
+      <CODE>ConnectionEstablished</CODE> message then it moves into the 
+      <CODE>On</CODE> state and relays all of the enqueued messages:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Waiting(queue,&nbsp;_),&nbsp;ConnectionEstablished&nbsp;socket&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;queue&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;queue&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;return&nbsp;On&nbsp;socket<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;bytes::queue&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;success&nbsp;=&nbsp;trySend&nbsp;socket&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;success&nbsp;then&nbsp;return!&nbsp;loop&nbsp;queue&nbsp;else&nbsp;return&nbsp;Off<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;(List.rev&nbsp;queue)</CODE></P>
+      <P>Attempting the connect to a new server when a connection is being or 
+      has been established (without the server being stopped first) leaves the 
+      machine in the same state:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(Waiting&nbsp;_&nbsp;|&nbsp;On&nbsp;_),&nbsp;ConnectTo&nbsp;_&nbsp;-&gt;&nbsp;return&nbsp;state</CODE></P>
+      <P>If a <CODE>ConnectionEstablished</CODE> message is received when the 
+      server is already connected then the new socket is closed before 
+      continuing with the currently-connected socket:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;On&nbsp;socket,&nbsp;ConnectionEstablished&nbsp;socket'&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socket'.Close()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;On&nbsp;socket</CODE></P>
+      <P>This is known as "fail fast" design in the context of fault tolerance. 
+      Closing the erroneous socket explicitly will force errors to be handled 
+      sooner.</P>
+      <P>Finally, if a request to relay a message is received while the machine 
+      is connected then the message is sent asynchronously before continuing to 
+      process incoming messages.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;On&nbsp;socket,&nbsp;Echo&nbsp;bytes&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;success&nbsp;=&nbsp;trySend&nbsp;socket&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;if&nbsp;success&nbsp;then&nbsp;state&nbsp;else&nbsp;Off<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;apply&nbsp;:&nbsp;MailboxProcessor&lt;message&gt;&nbsp;-&gt;&nbsp;state&nbsp;-&gt;&nbsp;message&nbsp;-&gt;&nbsp;Async&lt;state&gt;</CODE></P>
+      <P>Note how factoring this functionality into the <CODE>apply</CODE> 
+      function requires it to return the updated state of the machine. In 
+      contrast, handling messages in the processing loop is error prone because 
+      it is easy to forget to <CODE>return!</CODE> back to the start of the 
+      loop, causing the asynchronous agent to terminate unexpectedly.</P>
+      <P>The <CODE>Scan</CODE> and <CODE>TryScan</CODE> functions from the F# 
+      standard library allow the message queue to be searched for a message 
+      satisfying a predicate. This could be used to avoid having our own local 
+      queue. However, using a local queue not only easier and more efficient but 
+      these functions from the F# standard library are buggy: they lock the 
+      message queue of the agent for a significant amount of time which can lead 
+      to outages and even deadlocks, and the <CODE>TryScan</CODE> function does 
+      not honour its timeout correctly because any incoming messages that do not 
+      match the predicate cause the timer to be reset. Consequently, we prefer 
+      to make explicit use of our own queue.</P>
+      <P>The second half of the state machine implements the actual message 
+      loop. In order to handle the timeout we wish to handle the case of no 
+      message having been received after a shortwhile. However, we only require 
+      this functionality when we are in the <CODE>Waiting</CODE> state.</P>
+      <P>This is accomplished by matching over the state and using the 
+      <CODE>TryReceive</CODE> function with a small timeout when in the 
+      <CODE>Waiting</CODE> state or using the <CODE>Receive</CODE> function 
+      without a timeout in the <CODE>Off</CODE> or <CODE>On</CODE> states:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;wait&nbsp;(inbox:&nbsp;MailboxProcessor&lt;_&gt;)&nbsp;state&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Waiting(_,&nbsp;timedout)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;inbox.TryReceive&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;when&nbsp;timedout()&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;wait&nbsp;inbox&nbsp;Off<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;wait&nbsp;inbox&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;message&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;state&nbsp;=&nbsp;apply&nbsp;inbox&nbsp;state&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;wait&nbsp;inbox&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Off&nbsp;|&nbsp;On&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;state&nbsp;=&nbsp;apply&nbsp;inbox&nbsp;state&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;wait&nbsp;inbox&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;wait&nbsp;:&nbsp;MailboxProcessor&lt;message&gt;&nbsp;-&gt;&nbsp;state&nbsp;-&gt;&nbsp;Async&lt;'a&gt;</CODE></P>
+      <P>We shall also include a <CODE>watchdog</CODE> asynchronous workflow 
+      that uses a loop to restart a server in the event that it is killed by an 
+      escaping exception:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;watchdog&nbsp;f&nbsp;x&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;f&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;exn&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;watchdog&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;Async&lt;unit&gt;)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;Async&lt;unit&gt;</CODE></P>
+      <P>Now we can create an asynchronous agent that can connect to a remove 
+      server and echo messages to it:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;agent&nbsp;=&nbsp;new&nbsp;MailboxProcessor&lt;_&gt;(fun&nbsp;inbox&nbsp;-&gt;&nbsp;watchdog&nbsp;(wait&nbsp;inbox)&nbsp;Off);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;agent&nbsp;:&nbsp;MailboxProcessor&lt;message&gt;</CODE></P>
+      <P>The following demonstration initializes a TCP server that prints out 
+      bytes as they are received and asks the relay agent to connect to it 
+      before sending many messages:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;addressFamily&nbsp;=&nbsp;Sockets.AddressFamily.InterNetwork<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;socketType&nbsp;=&nbsp;Sockets.SocketType.Stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;protocolType&nbsp;=&nbsp;Sockets.ProtocolType.Tcp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;socket&nbsp;=&nbsp;new&nbsp;Sockets.Socket(addressFamily,&nbsp;socketType,&nbsp;protocolType)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;address&nbsp;=&nbsp;IPEndPoint(IPAddress.Loopback,&nbsp;8001)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socket.Bind&nbsp;address<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;socket.Listen&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;socket&nbsp;=&nbsp;socket.Accept()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;buffer&nbsp;=&nbsp;[|0uy|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;length&nbsp;=&nbsp;socket.AsyncReceive(buffer,&nbsp;0,&nbsp;1,&nbsp;Sockets.SocketFlags.None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printf&nbsp;"%c"&nbsp;(char&nbsp;buffer.[0])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;|&gt;&nbsp;Async.Start<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.Post(ConnectTo&nbsp;address)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;letter&nbsp;in&nbsp;'A'..'Z'&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.Post(Echo&nbsp;[|byte&nbsp;letter|])</CODE></P>
+      <P>Provided the connection is established within the 20 second timeout, 
+      all of the messages sent (even those sent while the connection was being 
+      established) are relayed correctly to the server.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a simple 
+      relay server. This concurrent program uses asynchronous workflows 
+      throughtout in order to avoid blocking any threads. This design allows 
+      servers to be created that can handle many concurrent client connections 
+      efficiently.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of network 
+      connectivity and asynchronous programming as well as fault 
+    tolerance.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20concurrent%20TCP_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

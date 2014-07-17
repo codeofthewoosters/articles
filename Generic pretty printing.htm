@@ -1,0 +1,243 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0091)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/genericprettyprinting.html -->
+<!--?xml version="1.0" encoding="UTF-8"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+     <TITLE>F# Journal</TITLE>     
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="Generic%20pretty%20printing_files/style.css" rel="stylesheet" type="text/css"> 
+    <LINK href="Generic%20pretty%20printing_files/style(1).css" rel="stylesheet" 
+type="text/css">     <LINK href="Generic%20pretty%20printing_files/individual.css" 
+rel="stylesheet" type="text/css">   
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>   
+<BODY>
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="Generic%20pretty%20printing_files/title.gif">   
+            </TD>
+    <TD><IMG src="Generic%20pretty%20printing_files/left.gif">         
+  </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Fast generic pretty printing</H1>
+      <P>The ability to convert values into legible strings efficiently, a 
+      process known as generic pretty printing, has a variety of uses including 
+      debugging and serialization. This article takes a look at the 
+      characteristics of the built-in pretty printer before considering 
+      alternatives including combinators and reflectors with a view to improving 
+      performance. Ultimately, a generic solution is proposed that runs 7,600× 
+      faster than the built-in F# solution on our test case.</P>
+      <P>Consider the following array of lists of ints:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;xs&nbsp;=&nbsp;[|for&nbsp;i&nbsp;in&nbsp;1..3&nbsp;-&gt;&nbsp;[i]|];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs&nbsp;:&nbsp;int&nbsp;list&nbsp;[]&nbsp;=&nbsp;[|[1];&nbsp;[2];&nbsp;[3]|]</CODE></P>
+      <P>Pretty printing this in F# syntax is conceptually simple but this 
+      functionality is not provided by the <CODE>ToString</CODE> method because 
+      this value is an array and arrays are a general .NET type obvlious to 
+      F#:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;xs.ToString();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;string&nbsp;=&nbsp;"Microsoft.FSharp.Collections.FSharpList`1[System.Int32][]"</CODE></P>
+      <P>F# does provide a <CODE>%A</CODE> qualifier for <CODE>printf</CODE> and 
+      related functions that allows a value of any type to be pretty 
+printed:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;sprintf&nbsp;"%A"&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;string&nbsp;=&nbsp;"[|[1];&nbsp;[2];&nbsp;[3]|]"</CODE></P>
+      <P>However, this is surprisingly slow, taking 5,900Âµs to generate a 
+      string composed of just 17 characters:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sprintf&nbsp;"%A"&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:05.928,&nbsp;CPU:&nbsp;00:00:05.834,&nbsp;GC&nbsp;gen0:&nbsp;100,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0</CODE></P>
+      <P>Note that <CODE>sprintf</CODE> itself is not inherently this slow. For 
+      example, printing the string using <CODE>%s</CODE> takes just 2.8Âµs:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sprintf&nbsp;"%s"&nbsp;"[|[1];&nbsp;[2];&nbsp;[3]|]"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:02.815,&nbsp;CPU:&nbsp;00:00:02.886,&nbsp;GC&nbsp;gen0:&nbsp;1150,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0</CODE></P>
+      <P>Therefore, the performance issue is specific to the <CODE>%A</CODE> 
+      qualifier.</P>
+      <H2>Concatenating strings</H2>
+      <P>The simplest solution is to write a function to pretty print values of 
+      this specific type by concatening strings:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;printIntListArray&nbsp;(xss:&nbsp;int&nbsp;list&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;for&nbsp;xs&nbsp;in&nbsp;xss&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;String.concat&nbsp;";&nbsp;"&nbsp;(Seq.map&nbsp;string&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;sprintf&nbsp;"[%s]"&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;String.concat&nbsp;";&nbsp;"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;sprintf&nbsp;"[|%s|]"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;sprintf&nbsp;"[|%s|]";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;printIntListArray&nbsp;:&nbsp;int&nbsp;list&nbsp;[]&nbsp;-&gt;&nbsp;string</CODE></P>
+      <P>Despite being very inefficient because of the repeated unnecessary 
+      concatenation of strings, this solution is actually over 10x times faster 
+      than <CODE>sprintf&nbsp;"%A"</CODE> and takes 357Âµs:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printIntListArray&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.357,&nbsp;CPU:&nbsp;00:00:00.374,&nbsp;GC&nbsp;gen0:&nbsp;14,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0</CODE></P>
+      <P>There are various ways to avoid repeated concatenation of strings.</P>
+      <H2>Using StringBuilder</H2>
+      <P>The idiomatic solution on .NET is to use the <CODE>StringBuilder</CODE> 
+      class that allows strings to be concatenated efficiently. The following 
+      <CODE>append</CODE> function appends a string to an existing string buffer 
+      and is useful because it facilitates type inference (unlike the overloaded 
+      <CODE>Append</CODE> method on the <CODE>StringBuilder</CODE> class):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;append&nbsp;(sb:&nbsp;System.Text.StringBuilder)&nbsp;(s:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb.Append&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;append&nbsp;:&nbsp;System.Text.StringBuilder&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;System.Text.StringBuilder</CODE></P>
+      <P>The following <CODE>printIntListArray2</CODE> function performs the 
+      same action using the <CODE>StringBuilder</CODE> class to concatenate 
+      strings more efficiently:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;printIntListArray2&nbsp;(xs:&nbsp;int&nbsp;list&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sb&nbsp;=&nbsp;System.Text.StringBuilder()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;append&nbsp;sb&nbsp;"[|"&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&gt;0&nbsp;then&nbsp;append&nbsp;sb&nbsp;";&nbsp;"&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[x]&nbsp;-&gt;&nbsp;append&nbsp;sb&nbsp;(string&nbsp;x)&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::xs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;append&nbsp;sb&nbsp;(string&nbsp;x)&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;append&nbsp;sb&nbsp;";&nbsp;"&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;append&nbsp;sb&nbsp;"["&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;xs.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;append&nbsp;sb&nbsp;"];&nbsp;"&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;append&nbsp;sb&nbsp;"|]"&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;printIntListArray2&nbsp;:&nbsp;int&nbsp;list&nbsp;[]&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>This takes 2.1Âµs which is over 100× faster than the previous solution 
+      using string concatenation and over 1,000× faster than the original 
+      <CODE>sprintf&nbsp;"%A"</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printIntListArray2&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:02.066,&nbsp;CPU:&nbsp;00:00:02.043,&nbsp;GC&nbsp;gen0:&nbsp;483,&nbsp;gen1:&nbsp;1,&nbsp;gen2:&nbsp;0</CODE></P>
+      <P>However, this solution is not generic.</P>
+      <H2>Using combinators</H2>
+      <P>Combinators can be used to turn this type-specific solution into a 
+      generic solution by providing a variety of combinators that can be 
+      combined to pretty print values of any type. The following 
+      <CODE>ofList</CODE> combinator pretty prints a list into a 
+      <CODE>StringBuilder</CODE> using the given combinator <CODE>f</CODE> to 
+      pretty print each element:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ofList&nbsp;f&nbsp;sb&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;sb&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;append&nbsp;sb&nbsp;"]"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[x]&nbsp;-&gt;&nbsp;append&nbsp;(f&nbsp;sb&nbsp;x)&nbsp;"]"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::xs&nbsp;-&gt;&nbsp;loop&nbsp;(append&nbsp;(f&nbsp;sb&nbsp;x)&nbsp;";&nbsp;")&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(append&nbsp;sb&nbsp;"[")&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ofList&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(System.Text.StringBuilder&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;System.Text.StringBuilder)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Text.StringBuilder&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;-&gt;&nbsp;System.Text.StringBuilder</CODE></P>
+      <P>Note that pattern matching makes it easy to put the <CODE>;</CODE> 
+      separator between the elements of the list by adding a special match case 
+      for the singleton list <CODE>[x]</CODE>.</P>
+      <P>For example, using <CODE>string</CODE> to convert any value to its 
+      string representation it is possible to pretty print the list 
+      <CODE>[1..3]</CODE> as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;(ofList<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fun&nbsp;sb&nbsp;n&nbsp;-&gt;&nbsp;append&nbsp;sb&nbsp;(string&nbsp;n))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(System.Text.StringBuilder())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1..3]).ToString();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;string&nbsp;=&nbsp;"[1;&nbsp;2;&nbsp;3]"</CODE></P>
+      <P>Similarly, the following <CODE>ofArray</CODE> function pretty prints an 
+      array of values of any type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ofArray&nbsp;f&nbsp;sb&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;xs.Length=0&nbsp;then&nbsp;append&nbsp;sb&nbsp;"[||]"&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;sb&nbsp;=&nbsp;append&nbsp;sb&nbsp;"[|"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb&nbsp;&lt;-&nbsp;append&nbsp;(f&nbsp;sb&nbsp;xs.[i])&nbsp;";&nbsp;"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(f&nbsp;sb&nbsp;xs.[xs.Length-1]).Append&nbsp;"|]";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ofArray&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(System.Text.StringBuilder&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;System.Text.StringBuilder)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Text.StringBuilder&nbsp;-&gt;&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;System.Text.StringBuilder</CODE></P>
+      <P>The following <CODE>print</CODE> function can be then be used to print 
+      a value of any type using the given combinator <CODE>f</CODE> by creating 
+      a temporary <CODE>StringBuilder</CODE> that is used to accumulate the 
+      result:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;print&nbsp;f&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sb&nbsp;=&nbsp;System.Text.StringBuilder()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(f&nbsp;sb&nbsp;x:&nbsp;System.Text.StringBuilder).ToString();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;print&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(System.Text.StringBuilder&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;System.Text.StringBuilder)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;-&gt;&nbsp;string</CODE></P>
+      <P>For example, the following pretty prints our example array of lists of 
+      ints by combining the appropriate combinators:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;print&nbsp;((fun&nbsp;sb&nbsp;x&nbsp;-&gt;&nbsp;append&nbsp;sb&nbsp;(string&nbsp;x))&nbsp;|&gt;&nbsp;ofList&nbsp;|&gt;&nbsp;ofArray)&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;string&nbsp;=&nbsp;"[|[1];&nbsp;[2];&nbsp;[3]|]"</CODE></P>
+      <P>This generic solution is the fastest generic solution so far, taking 
+      just 4.7Âµs to pretty print our example value:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print&nbsp;((fun&nbsp;sb&nbsp;x&nbsp;-&gt;&nbsp;append&nbsp;sb&nbsp;(string&nbsp;x))&nbsp;|&gt;&nbsp;ofList&nbsp;|&gt;&nbsp;ofArray)&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:04.736,&nbsp;CPU:&nbsp;00:00:04.742,&nbsp;GC&nbsp;gen0:&nbsp;1176,&nbsp;gen1:&nbsp;1,&nbsp;gen2:&nbsp;0</CODE></P>
+      <P>However, there is some overhead in having to compose combinators 
+      reflecting the type of the value to be printed.</P>
+      <H2>Using Reflection</H2>
+      <P>Reflection makes it possible to generate pretty printers on-demand for 
+      a given type, thus avoiding the overhead associated with composing 
+      combinators.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;genPrinter&nbsp;(typ:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;typ.IsArray&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;sb&nbsp;(xs:&nbsp;obj)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;=&nbsp;genPrinter&nbsp;(typ.GetElementType())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;:&nbsp;int&nbsp;=&nbsp;(typ.GetProperty&nbsp;"Length").GetValue(xs,&nbsp;[||])&nbsp;|&gt;&nbsp;unbox<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n=0&nbsp;then&nbsp;append&nbsp;sb&nbsp;"[||]"&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;sb&nbsp;=&nbsp;append&nbsp;sb&nbsp;"[|"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;get&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;item&nbsp;=&nbsp;typ.GetMethod("GetValue",&nbsp;[|typeof&lt;int32&gt;|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;(i:&nbsp;int)&nbsp;-&gt;&nbsp;item.Invoke(xs,&nbsp;[|box&nbsp;i|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;n-2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb&nbsp;&lt;-&nbsp;append&nbsp;(f&nbsp;sb&nbsp;(get&nbsp;i))&nbsp;";&nbsp;"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;append&nbsp;(f&nbsp;sb&nbsp;(get&nbsp;(n-1)))&nbsp;"|]"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;sb&nbsp;n&nbsp;-&gt;&nbsp;append&nbsp;sb&nbsp;(string&nbsp;n);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;genPrinter&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Type&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(System.Text.StringBuilder&nbsp;-&gt;&nbsp;obj&nbsp;-&gt;&nbsp;System.Text.StringBuilder)</CODE></P>
+      <P>Note that we use reflection to handle arrays but defer to 
+      <CODE>ToString</CODE> for other types, in this case the 
+      <CODE>int&nbsp;list</CODE> type, because F# already makes these functions 
+      pretty print for us.</P>
+      <P>This function may be used to pretty print our example value 
+      <CODE>xs</CODE> as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;print&nbsp;(genPrinter&nbsp;typeof&lt;int&nbsp;list&nbsp;[]&gt;)&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;string&nbsp;=&nbsp;"[|[1];&nbsp;[2];&nbsp;[3]|]"</CODE></P>
+      <P>In this case, we find that 100,000 applications of the function 
+      returned by <CODE>genPrinter</CODE> take 4.2s which equates to 42Âµs per 
+      call:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;printer&nbsp;=&nbsp;genPrinter&nbsp;typeof&lt;int&nbsp;list&nbsp;[]&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;100000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print&nbsp;printer&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:04.175,&nbsp;CPU:&nbsp;00:00:04.180,&nbsp;GC&nbsp;gen0:&nbsp;392,&nbsp;gen1:&nbsp;1,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>This is 9× slower than our combinators were.</P>
+      <P>Performance can be improved by precomputing the <CODE>Length</CODE> and 
+      <CODE>GetValue</CODE> functions because obtaining these functions using 
+      reflection is slow but invoking them is fast. This culminates in the 
+      following solution:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;genPrinter&nbsp;(typ:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;typ.IsArray&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;=&nbsp;genPrinter&nbsp;(typ.GetElementType())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;length&nbsp;=&nbsp;typ.GetProperty&nbsp;"Length"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;item&nbsp;=&nbsp;typ.GetMethod("GetValue",&nbsp;[|typeof&lt;int32&gt;|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;sb&nbsp;(xs:&nbsp;obj)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;:&nbsp;int&nbsp;=&nbsp;length.GetValue(xs,&nbsp;[||])&nbsp;|&gt;&nbsp;unbox<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n=0&nbsp;then&nbsp;append&nbsp;sb&nbsp;"[||]"&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;sb&nbsp;=&nbsp;append&nbsp;sb&nbsp;"[|"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;get&nbsp;i&nbsp;=&nbsp;item.Invoke(xs,&nbsp;[|box&nbsp;i|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;n-2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sb&nbsp;&lt;-&nbsp;append&nbsp;(f&nbsp;sb&nbsp;(get&nbsp;i))&nbsp;";&nbsp;"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;append&nbsp;(f&nbsp;sb&nbsp;(get&nbsp;(n-1)))&nbsp;"|]"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;sb&nbsp;n&nbsp;-&gt;&nbsp;append&nbsp;sb&nbsp;(string&nbsp;n);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;genPrinter&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Type&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(System.Text.StringBuilder&nbsp;-&gt;&nbsp;obj&nbsp;-&gt;&nbsp;System.Text.StringBuilder)</CODE></P>
+      <P>This reduces time taken to invoke the function returned by 
+      <CODE>genPrinter</CODE> from 42Âµs to 26Âµs per call:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;printer&nbsp;=&nbsp;genPrinter&nbsp;typeof&lt;int&nbsp;list&nbsp;[]&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;100000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;print&nbsp;printer&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:02.580,&nbsp;CPU:&nbsp;00:00:02.714,&nbsp;GC&nbsp;gen0:&nbsp;279,&nbsp;gen1:&nbsp;2,&nbsp;gen2:&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>Although this is faster than the previous reflection-based solution it 
+      is still over 5× slower than the generic solution using combinators.</P>
+      <H2>Revisiting combinators</H2>
+      <P>In fact, the built-in <CODE>StringBuilder</CODE> class is not the most 
+      efficient solution. A more efficient solution is to write directly into a 
+      <CODE>char</CODE> array. However, this introduces the problem of choosing 
+      an array large enough or resizing the array when it is too small. Our 
+      tests indicate that precomputing the size of the array for each message is 
+      too slow, accounting for almost half of the total running time of the 
+      pretty printer. An efficient alternative is to start pretty printing into 
+      a static array and resize it when the out of bounds exception is 
+      thrown.</P>
+      <P>We begin by writing combinators that pretty print into a given 
+      <CODE>char</CODE> array. The following <CODE>char1</CODE> combinator 
+      writes a single character into the array <CODE>cs</CODE> at the current 
+      index <CODE>n</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;char1&nbsp;(cs:&nbsp;char&nbsp;[])&nbsp;n&nbsp;c&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cs.[n]&nbsp;&lt;-&nbsp;c<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n+1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;char1&nbsp;:&nbsp;char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;char&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>Note that we are making judicious use of <CODE>inline</CODE> in the 
+      interests of performance. This is beneficial not only because it avoids 
+      the overhead of function calls, as in other languages, but also because it 
+      causes generic functions to be type specialized when they are inlined to 
+      locations that have statically-known types.</P>
+      <P>The following <CODE>char2</CODE> function emits two characters:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;char2&nbsp;(cs:&nbsp;char&nbsp;[])&nbsp;n&nbsp;c0&nbsp;c1&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cs.[n]&nbsp;&lt;-&nbsp;c0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cs.[n+1]&nbsp;&lt;-&nbsp;c1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n+2;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;char2&nbsp;:&nbsp;char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;char&nbsp;-&gt;&nbsp;char&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The following <CODE>sep</CODE> function emits <CODE>";&nbsp;"</CODE> 
+      and will be used to separate elements in lists and arrays:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;sep&nbsp;cs&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char2&nbsp;cs&nbsp;n&nbsp;';'&nbsp;'&nbsp;';;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;sep&nbsp;:&nbsp;char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The following <CODE>int</CODE> function emits the decimal 
+      representation of an <CODE>int</CODE> with a preceding <CODE>-</CODE> sign 
+      if it is negative:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;int&nbsp;cs&nbsp;n&nbsp;i&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;int&nbsp;n&nbsp;i&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&lt;9&nbsp;then&nbsp;char1&nbsp;cs&nbsp;n&nbsp;(char(48&nbsp;+&nbsp;i))&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char1&nbsp;cs&nbsp;(int&nbsp;n&nbsp;(i/10))&nbsp;(char&nbsp;(48&nbsp;+&nbsp;i%10))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;i&lt;0&nbsp;then&nbsp;int&nbsp;(char1&nbsp;cs&nbsp;n&nbsp;'-')&nbsp;-i&nbsp;else&nbsp;int&nbsp;n&nbsp;i;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;int&nbsp;:&nbsp;char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>Note our style of mutating the array elements in place but accumulating 
+      the immutable <CODE>int</CODE> index <CODE>n</CODE>. Although it is 
+      tempting to try to use a mutable index it is cumbersome and less efficient 
+      because the program ends up passing a pointer to the stack allocated 
+      <CODE>int</CODE> instead of the <CODE>int</CODE> itself even though both 
+      are the same size.</P>
+      <P>Now for the generic combinators. The following <CODE>list</CODE> 
+      combinator emits a list in F# syntax using the given function 
+      <CODE>f</CODE> to emit each element:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;list&nbsp;f&nbsp;cs&nbsp;n&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;list&nbsp;n&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[x]&nbsp;-&gt;&nbsp;f&nbsp;cs&nbsp;n&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::xs&nbsp;-&gt;&nbsp;list&nbsp;(sep&nbsp;cs&nbsp;(f&nbsp;cs&nbsp;n&nbsp;x))&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char1&nbsp;cs&nbsp;(list&nbsp;(char1&nbsp;cs&nbsp;n&nbsp;'[')&nbsp;xs)&nbsp;']';;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;list&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int)&nbsp;-&gt;&nbsp;char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;list&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>Note how elegantly the accumulation of the index <CODE>n</CODE> allows 
+      us to compose the calls to <CODE>list</CODE>, <CODE>sep</CODE> and 
+      <CODE>f</CODE> inside the pattern match at the core of the 
+      <CODE>list</CODE> function. This is both elegant and predictably efficient 
+      thanks to the carefully-crafted characteristics of the F# language.</P>
+      <P>Similarly, the following <CODE>array</CODE> function pretty prints an 
+      array:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;array&nbsp;f&nbsp;cs&nbsp;n&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;xs.Length=0&nbsp;then&nbsp;char2&nbsp;cs&nbsp;(char2&nbsp;cs&nbsp;n&nbsp;'['&nbsp;'|')&nbsp;'|'&nbsp;']'&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;n&nbsp;=&nbsp;f&nbsp;cs&nbsp;(char2&nbsp;cs&nbsp;n&nbsp;'['&nbsp;'|')&nbsp;xs.[0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;xs.Length-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n&nbsp;&lt;-&nbsp;f&nbsp;cs&nbsp;(sep&nbsp;cs&nbsp;n)&nbsp;xs.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;char2&nbsp;cs&nbsp;n&nbsp;'|'&nbsp;']';;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;array&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;list&nbsp;-&gt;&nbsp;int)&nbsp;-&gt;&nbsp;char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;list&nbsp;[]&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>Now the problem turns to allocating an array large enough to fit the 
+      message. The simplest solution is to simply preallocate an array believed 
+      to be large enough but we want to handle the problem of overflow for our 
+      users. One possible solution is to precompute the length of array that 
+      will be needed but this turns out to be almost as time consuming as the 
+      pretty printing itself. Another solution would be to increase the length 
+      of the array in the event of an overflow (appearing as an out-of-bounds 
+      exception). However, starting with a small array and doubling its length 
+      until it is long enough for each message is also too slow because 
+      exceptions are very slow on .NET:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;failwith&nbsp;"Foo"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.051,&nbsp;CPU:&nbsp;00:00:00.046,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>This shows that raising and catching a single exception takes 53Âµs, 
+      which is substantially slower than pretty printing our message. Therefore, 
+      we cannot afford to have even a single exception thrown for each message. 
+      However, we can reuse the same preallocated array for separate messages in 
+      order to amortize this cost across many calls to the pretty printer.</P>
+      <P>The following <CODE>print</CODE> function preallocates an array 
+      <CODE>cs</CODE> each time it is invoked with a combinator <CODE>f</CODE> 
+      and then loops trying to pretty print into the preallocated array and 
+      doubling its length if there is a failure:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;print&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cs&nbsp;=&nbsp;ref&nbsp;[|'&nbsp;'|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.String(!cs,&nbsp;0,&nbsp;f&nbsp;!cs&nbsp;0&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cs&nbsp;:=&nbsp;Array.append&nbsp;!cs&nbsp;!cs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;print&nbsp;:&nbsp;(char&nbsp;[]&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;int)&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;System.String)</CODE></P>
+      <P>This <CODE>print</CODE> function can be used to pretty print our 
+      example value as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;print&nbsp;(array&nbsp;(list&nbsp;int))&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;System.String&nbsp;=&nbsp;"[|[1];&nbsp;[2];&nbsp;[3]|]"</CODE></P>
+      <P>This is by far the fastest solution so far and it is completely 
+      generic:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;printIntListArray&nbsp;=&nbsp;print&nbsp;(array&nbsp;(list&nbsp;int))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printIntListArray&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.783,&nbsp;CPU:&nbsp;00:00:00.780,&nbsp;GC&nbsp;gen0:&nbsp;172,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>These results show that a single call now takes just 0.78Âµs which is 
+      7,600× faster than the built-in <CODE>sprintf&nbsp;"%A"</CODE>.</P>
+      <H2>Summary</H2>
+      <P>This article has examined a variety of techniques for generic pretty 
+      printing including the built-in <CODE>sprintf&nbsp;"%A"</CODE>, 
+      combinators and reflection. Using <CODE>sprintf&nbsp;"%A"</CODE> is easy 
+      but extremely inefficient at only 170 calls per second. Once a 
+      reflection-based solution has been defined it is almost as easy to use and 
+      performance is substantially better, allowing up to 40,000 calls per 
+      second. Combinators accumulating into a <CODE>StringBuffer</CODE> were 
+      slightly more cumbersome to use and ran at up to 210,000 calls per second. 
+      The fastest generic solution used <CODE>inline</CODE> combinators to fill 
+      a <CODE>char</CODE> array and ran at up to 1,300,000 calls per second.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of 
+      combinators, reflection and the related subject of 
+  serialization.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2011</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="Generic%20pretty%20printing_files/urchin.js" type="text/javascript">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+   </BODY></HTML>

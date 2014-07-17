@@ -1,0 +1,269 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0081)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/development.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: F# Development</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20F%23%20Development_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20F%23%20Development_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20F%23%20Development_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: F# Development</TITLE>     <LINK href="F%23%20Journal%20F%23%20Development_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20F%23%20Development_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20F%23%20Development_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20F%23%20Development_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20F%23%20Development_files/left.gif">         
+    </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>F# Development</H1>
+      <H2>Visual Studio 2005</H2>
+      <P>The F# distribution includes extensions to Microsoft Visual Studio that 
+      provide a rich development environment for F# programmers:</P>
+      <P>
+      <UL>
+        <LI>Color syntax highlighting of F# source code</LI>
+        <LI>Graphical throwback of inferred types</LI>
+        <LI>Intellisense code completion for .NET API exploration</LI>
+        <LI>Jump to definition capability</LI>
+        <LI>F# interactive session embedded in Visual Studio</LI>
+        <LI>Execution of source code from a project in the current interactive 
+        session</LI></UL>
+      <P></P>
+      <P>In this article, we shall describe how this development environment can 
+      be setup and used to make development as easy and productive as 
+      possible.</P>
+      <H2>Setting up Visual Studio</H2>
+      <P>Provided Visual Studio is installed when the F# distribution is 
+      installed, the F# extensions to Visual Studio will be installed 
+      automatically.</P>
+      <P>As we shall see later, the #light syntax and the F# interactive 
+      sessions embedded in Visual Studio work can be made to work well together. 
+      The greatly improves the developers user experience by allowing arbitrary 
+      snippets of source code (even nested code) in a project to be executed in 
+      the current interactive session.</P>
+      <P>The #light syntax benefits from the use of spaced- rather than 
+      tabbed-indentation and this is not the default setting in Visual Studio. 
+      To have tabs converted into spaces, go to the "Tools" menu and select 
+      "Options". Then choose "Text Editor", "F#" and the "Tabs" option. Set the 
+      "tab size" and "indent size" to 2 and set "Insert spaces":</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20Development_files/vs_set_tabs.gif"> 
+                  </P>
+      <P></P>
+      <P>The F# compiler will now be happy with the indentation inserted by 
+      Visual Studio when using #light syntax.</P>
+      <H2>Creating an F# project</H2>
+      <P>To create a new F# project, simply select "File", "New" and "Project" 
+      and choose the "F# projects" option under "Other Project Types":</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20Development_files/new_fs_proj.gif"> 
+                  </P>
+      <P></P>
+      <P>Once a project name has been entered you can create a new solution and 
+      project by clicking "OK". New projects contain no source files.</P>
+      <P>To write an application, you must add some F# source files to the 
+      project. Right click on the project in the "Solutions Explorer" window and 
+      select "Add -&gt; New Item...":</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20Development_files/new_fs_file.gif"> 
+                  </P>
+      <P></P>
+      <P>The F# development environment can recognise several different file 
+      types:</P>
+      <P>
+      <UL>
+        <LI>F# Interface files (.fsi) contain interface information at module 
+        boundaries</LI>
+        <LI>F# Lex files (.fsl) define lexers for interpreting data formats</LI>
+        <LI>F# Script files (.fsx) contain source code intended for interactive 
+        evaluation</LI>
+        <LI>F# Source files (.fs) are the main source files</LI>
+        <LI>F# Yacc files (.fsy) define parsers for interpreting data 
+        formats</LI>
+        <LI>ML/F# Interface files (.mli) are the OCaml equivalent of .fsi 
+        files</LI>
+        <LI>ML/F# Source files (.ml) are the OCaml equivalent of .fsi 
+      files</LI></UL>
+      <P></P>
+      <P>An F# application can be developed using only .fs files. Most of the 
+      file types will not be needed but future articles will cover the use of 
+      the fslex and fsyacc parser generators, which use the fsl and fsy file 
+      types, respectively.</P>
+      <P>New F# source code files start off with some default definitions and 
+      comments describing them, as a kick start for beginners. To start writing 
+      an application, delete the initial contents (CTRL+A and then Backspace) 
+      and save the blank file (CTRL+S).</P>
+      <H2>Using #light syntax</H2>
+      <P>The #light syntax allows shorter, clearer code and makes integration 
+      with an F# interactive session easier.</P>
+      <P>In order to use the #light syntax in a source file, you must start the 
+      file with:</P>
+<PRE>#light</PRE>
+      <P>All of the source code presented in the F#.NET Journal assumes that 
+      #light syntax is being used.</P>
+      <P>Without #light syntax, nested definitions must include various lexical 
+      tokens to disambiguate the code, such as              <CODE>in</CODE> ,    
+                <CODE>begin</CODE> and              <CODE>end</CODE> in the 
+      following example:           </P>
+<PRE>let rec ipow x n =
+  if n=0 then 1. else
+    if n=1 then x else begin
+      let x2 = ipow x (n/2) in
+      if n%2 = 0 then x2*x2 else x*x2*x2
+    end</PRE>
+      <P>With the #light syntax, the indentation is used to disambiguate the 
+      code and these lexical tokens are no longer necessary:</P>
+<PRE>let rec ipow x n =
+  if n=0 then 1. else
+    if n=1 then x else
+      let x2 = ipow x (n/2)
+      if n%2 = 0 then x2*x2 else x*x2*x2</PRE>
+      <P>Moreover, the inner              <CODE>let</CODE> binding now looks 
+      like an outer let binding, so it can be evaluated directly in an 
+      interactive session. Ordinarily, you would have to select the              
+      <CODE>let</CODE> bindings without its              <CODE>in</CODE> suffix 
+      before evaluating.           </P>
+      <H2>Using the F# interactive session</H2>
+      <P>A fresh installation may need to have the F# interactive session add-in 
+      for Visual Studio enabled. To do this, select the "Tools" menu and choose 
+      "Add-in manager":</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20Development_files/addin_manager.gif"> 
+                  </P>
+      <P></P>
+      <P>Select "F# Interactive for Visual Studio" and "Startup". The F# 
+      interactive session should now appear when Visual Studio is started. To 
+      start an interactive session if one is not already running, hit 
+      ALT+ENTER.</P>
+      <P>The F# interactive session appears as an extra window in Visual 
+      Studio:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20Development_files/fsi1.gif"> 
+                  </P>
+      <P></P>
+      <P>This new windows allows code to be entered and evaluated directly, 
+      giving the inferred types of any definitions and the results of any 
+      computations. For example, entering the following code into the 
+      interactive session:</P>
+<PRE>&gt; let rec fib = function
+    | 0 | 1 as n -&gt; n
+    | n -&gt; fib(n-1) + fib(n-2);;</PRE>
+      <P>Note the terminating              <CODE>;;</CODE> .           </P>
+      <P>Gives the following result:</P>
+<PRE>val fib : int -&gt; int</PRE>
+      <P>Meaning that the definition of the              <CODE>fib</CODE> 
+      function was inferred to have the type              <CODE>int -&gt; 
+      int</CODE> .           </P>
+      <P>This function definition can be used to evaluate Fibonacci numbers 
+      without having to compile any code. For example, the 35th Fibonacci number 
+      can be computed with:</P>
+<PRE>&gt; fib 35;;
+val it : int = 9227465</PRE>
+      <P>The F# interactive session gives the F# programming enormous potential 
+      for technical users looking for the kind of functionality provided by 
+      Matlab and Mathematica. An interactive session can be used to perform 
+      sophisticated computations and even visualizations without having to 
+      compile any code or run any applications.</P>
+      <H3>Indenting code</H3>
+      <P>The Visual Studio editor allows blocks on code to be moved left and 
+      right, and the #light syntax uses the indentation to infer the meaning of 
+      the code.</P>
+      <P>To indent a block of text further to the right, simply select the code 
+      by holding down SHIFT and moving the cursor with the arrow keys and then 
+      hitting TAB. To unindent, press SHIFT+TAB while the code is indented.</P>
+      <H3>Evaluating code interactively</H3>
+      <P>If the definition of the              <CODE>fib</CODE> function is 
+      entered into the source code file:           </P>
+<PRE>let rec fib = function
+  | 0 | 1 as n -&gt; n
+  | n -&gt; fib(n-1) + fib(n-2)</PRE>
+      <P>then it can be evaluated in the current interactive session directly 
+      from the file by selecting the code and pressing ALT+ENTER. Alternatively, 
+      source code may be evaluated a line at a time by pressing ALT+'.</P>
+      <P>Evaluating the definition of the              <CODE>fib</CODE> function 
+      from the source file causes its inferred type to be printed in the 
+      interactive session. The definition can then be used by code entered into 
+      the interactive session, including source code that is evaluated later.    
+             </P>
+      <H2>Compilation settings</H2>
+      <P>The settings used to compile an F# project are set from the "Project", 
+      "Properties" menu:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20F%23%20Development_files/project_settings.gif"> 
+                  </P>
+      <P></P>
+      <P>There are different settings for the Debug and Release build types. 
+      Debug builds typically have optimization turned off (although they still 
+      provide excellent performance).</P>
+      <P>The project type allows console applications (EXE), windows 
+      applications (WINEXE) and libraries (DLL) to be built from F# code.</P>
+      <P>Dynamically linked libraries (DLLs) may be referenced directly from 
+      source code using              <CODE>#r</CODE> . For example, the 
+      following code can be used to load the DirectX libraries:           </P>
+<PRE>#I @"C:\WINDOWS\Microsoft.NET\DirectX for Managed Code\1.0.2902.0";;
+#r @"Microsoft.DirectX.dll";;
+#r @"Microsoft.DirectX.Direct3D.dll";;
+#r @"Microsoft.DirectX.Direct3DX.dll";;</PRE>
+      <P>This particular example allows DirectX to be used from the interactive 
+      session, facilitating interactive visualization directly from Visual 
+      Studio.</P>
+      <P>The              <CODE>#I</CODE> directive adds a directory to the 
+      search path. In this case, the directory where the DirectX libraries are 
+      stored.           </P>
+      <P>The              <CODE>@</CODE> prefix indicates an unescaped string, 
+      allowing backslashes to be used without having to escape them.           
+      </P>
+      <P>The compiler can also be instructed to reference DLLs by adding to the 
+      command line given in the project settings dialog. For example:</P>
+<PRE>-r "Microsoft.DirectX.dll"</PRE>
+      <P>If an F# application is to be distributed to third parties who do not 
+      have F# installed then the F# standard library must be statically compiled 
+      into the program by adding the compiler option:</P>
+<PRE>--standalone</PRE>
+      <P>This is typically only done for Release builds as it slows compilation 
+      down considerably.</P>
+      <H2>Documentation</H2>
+      <P>Intellisense will present documentation for a definition when its 
+      comment is written in a particular style. Specifically, comments starting 
+      with              <CODE>///</CODE> are treated as documentation by 
+      Intellisense.           </P>
+      <P>If the definition of the              <CODE>fib</CODE> function is 
+      prefixed by a suitable comment:           </P>
+<PRE>/// Fibonacci function
+let rec fib = function
+  | 0 | 1 as n -&gt; n
+  | n -&gt; fib(n-1) + fib(n-2)</PRE>
+      <P>this comment is presented by Intellisense when the mouse is hovered 
+      over any instance of the variable name              <CODE>fib</CODE> in 
+      the source code.           </P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20F%23%20Development_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

@@ -1,0 +1,457 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0073)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/lzw.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Lempel-Ziv-Welch data compression</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Lempel-Ziv-Welch data compression</TITLE>     
+<LINK href="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Lempel-Ziv-Welch data compression</H1>
+      <P>LZW is a simple and effective dictionary-based data compression 
+      algorithm originally published in 1984 and subsequently used in several 
+      prominent places including the GIF image format. This article describes 
+      simple purely functional implementations of the compression and 
+      corresponding decompression algorithms before examining the translation 
+      and optimization of these algorithms into longer but more efficient 
+      imperative equivalents. In particular, F#'s sequence expressions are used 
+      extensively to create on-the-fly compressors and decompressors ideal for 
+      stream processing.</P>
+      <H2>Introduction</H2>
+      <P>Two Israeli computer scientists, Abraham Lempel and Jacob Ziv, 
+      published a series of data compression algorithms in the late 1970's, most 
+      famously the LZ77 and LZ78 algorithms. These algorithms are              
+      <I>lossless</I> , meaning the result of a compression-decompression cycle 
+      is identical to the original (in contrast with lossy algorithms that 
+      sacrific accuracy for better compression ratios and are used to compress 
+      photographs and video), and              <I>dictionary based</I> , meaning 
+      they refer back to previously encountered sequences in order to re-encode 
+      them more efficiently.           </P>
+      <P>In a sense, dictionary-based data compression algorithms are the 
+      converse of entropy encoding algorithms such as Huffman and Arithmetic 
+      coding. Specifically, entropy encoders translate constant-size input 
+      characters into variable-size sequences of output characters whereas 
+      dictionary-based encoders translate variable-size sequences of input 
+      characters into constant-size sequences of output characters.</P>
+      <P>Terry Welch published the Lempel-Ziv-Welch (LZW) algorithm in 1984. 
+      This algorithm was a significant improvement over the original work by 
+      Lempel and Ziv in terms of simplicity and run-time performance.</P>
+      <P>The LZW compression algorithm consists of the following steps:</P>
+      <P>
+      <OL>
+        <LI>Construct a dictionary                  <CODE>d</CODE> that 
+        initially maps each input character onto a compressed value.             
+          </LI>
+        <LI>Initialize a prefix string                  <CODE>w</CODE> to the 
+        empty string.               </LI>
+        <LI>Read a character                  <CODE>c</CODE> from the input.     
+                  </LI>
+        <LI>If                  <CODE>w + c</CODE> is already in the dictionary  
+                        <CODE>d</CODE> continue from step 3 with the new prefix  
+                        <CODE>w &lt;- w + c</CODE> .               </LI>
+        <LI>Otherwise, lookup the compressed code for the prefix string          
+                <CODE>w</CODE> in the dictionary                  <CODE>d</CODE> 
+        and output it, insert                  <CODE>w + c</CODE> into the 
+        dictionary using a new output value and continue from step 3 with        
+                  <CODE>w &lt; c</CODE> .               </LI>
+        <LI>Once the input is exhausted, lookup the compressed code for the 
+        remaining prefix string                  <CODE>w</CODE> in the 
+        dictionary                  <CODE>d</CODE> and output it               
+        </LI></OL>
+      <P></P>
+      <P>This compression algorithm requires a core data structure that is a 
+      dictionary mapping sequences of input characters to individual output 
+      characters.</P>
+      <P>The LZW decompression algorithm consists of the following steps:</P>
+      <P>
+      <OL>
+        <LI>Construct a dictionary                  <CODE>d</CODE> that 
+        initially maps every character onto a string containing only that 
+        character.               </LI>
+        <LI>Read a compressed value                  <CODE>k</CODE> .            
+           </LI>
+        <LI>Output                  <CODE>k</CODE> .               </LI>
+        <LI>Initialize the current prefix string                  <CODE>w</CODE> 
+        to                  <CODE>k</CODE> .               </LI>
+        <LI>Read a new compressed value                  <CODE>k</CODE> .        
+               </LI>
+        <LI>Try to find the                  <CODE>entry</CODE> string by 
+        looking up                  <CODE>k</CODE> in the dictionary             
+             <CODE>d</CODE> or create a new string by suffixing the first 
+        character of                  <CODE>w</CODE> onto                  
+        <CODE>w</CODE> .               </LI>
+        <LI>Output the string                  <CODE>entry</CODE> .              
+         </LI>
+        <LI>Suffix the first character of                  <CODE>entry</CODE> 
+        onto the end of                  <CODE>w</CODE> and insert the result 
+        into the dictionary with a new compressed value.               </LI>
+        <LI>Set                  <CODE>w &lt;- entry</CODE> and from step 5 
+        until the input is exhausted.               </LI></OL>
+      <P></P>
+      <P>This decompression algorithm requires a core data structure that is a 
+      dictionary mapping compressed values onto the decompressed strings that 
+      they represent.</P>
+      <P>In this article, we shall deal with streams of characters represented 
+      as values of the type              <CODE>int seq</CODE> .           </P>
+      <H2>Simple purely functional implementation</H2>
+      <P>The LZW compression algorithm is easily implemented in F# using a 
+      recursive function that destructures an input list:</P>
+<PRE>&gt; let compress input =
+    let rec aux d n xs = function
+      | [], [] -&gt; List.rev xs |&gt; seq
+      | w, [] -&gt; Map.find w d::xs |&gt; List.rev |&gt; seq
+      | w, c::cs -&gt;
+          let wc = w @ [c]
+          if Map.mem wc d then aux d n xs (wc, cs) else
+            aux (Map.add wc n d) (n+1) (Map.find w d::xs) ([c], cs)
+    let d = Map [ for i in 0 .. 255 -&gt; [i], i ]
+    aux d d.Count [] ([], List.of_seq input);;
+val compress : seq&lt;int&gt; -&gt; seq&lt;int&gt;</PRE>
+      <P>This implementation uses a purely functional              
+      <CODE>Map</CODE> data structure to implement the dictionary that maps each 
+      sequence of input characters onto its compressed output value. The         
+           <CODE>Map</CODE> data structure is implemented in the F# standard 
+      library as a height-balanced binary tree and, consequently, offers 
+      reasonably-good performance for the              <CODE>add</CODE> and      
+              <CODE>find</CODE> functions.           </P>
+      <P>Note that we are using the term              <I>character</I> in an 
+      abstract sense and not to refer to the concrete              
+      <CODE>char</CODE> type.           </P>
+      <P>The LZW decompression algorithm may also be implemented simply by 
+      converting the input sequence into a list and then using a recursive 
+      function to destructure the list and accumulate the output list of 
+      values:</P>
+<PRE>&gt; let decompress input =
+    match List.of_seq input with
+    | [] -&gt; []
+    | x::xs -&gt;
+        let rec aux (n, d, xs, ys) x =
+          let y =
+            if x &lt; 256 then [x] else
+              match Map.tryfind x d with
+              | Some y -&gt; y
+              | None -&gt; xs @ [List.hd xs]
+          n+1, Map.add n (xs @ [List.hd y]) d, y, List.rev y @ ys
+        let _, _, _, ys = Seq.fold aux (256, Map.empty, [x], [x]) xs
+        List.rev ys;;
+val decompress : seq&lt;int&gt; -&gt; int list</PRE>
+      <P>This implementation uses a              <CODE>Map&lt;int, int 
+      list&gt;</CODE> to map compressed values onto the sequences of output 
+      characters that they represent.           </P>
+      <P>These              <CODE>compress</CODE> and              
+      <CODE>decompress</CODE> functions should be tested on a variety of inputs 
+      to ensure that they reproduce the original data exactly. We can begin by 
+      writing a              <CODE>test</CODE> function that performs a 
+      compression-decompression cycle, checking that the result is identical to 
+      the original and giving us some useful statistics:           </P>
+<PRE>&gt; let test input =
+    let compressed = compress input
+    printf "Compressed size: %d\n" (Seq.length compressed)
+    printf "Largest output: %d\n" (Seq.max compressed)
+    if Array.of_seq(decompress compressed) = input then
+      printf "Recovered original exactly.\n"
+    else
+      printf "ERROR: Failed to recover original.\n";;
+val test : int [] -&gt; unit</PRE>
+      <P>Next, we'll enable timing to get some idea of how long the computations 
+      take:</P>
+<PRE>&gt; #time;;</PRE>
+<PRE>--&gt; Timing now on</PRE>
+      <P>We can begin by compressing a redundant sequence of zeros:</P>
+<PRE>&gt; test (Array.create 4096 0);;
+Compressed size: 91
+Largest output: 344
+Recovered original exactly.
+Real: 00:00:00.181, CPU: 00:00:00.187, GC gen0: 6, gen1: 0, gen2: 0
+val it : unit = ()</PRE>
+      <P>The original is recovered exactly, as expected. The input sequence of 
+      4,096 zeroes has been compressed down to an output of only 91 ints. 
+      However, the output ints are not in the range 0..255 as the input is and, 
+      in fact, the largest output is 344. This means that we could encode each 
+      output int using 9 bits. So the 4,096 bytes of input data have been 
+      compressed down to just 819 bits, excluding the information required to 
+      encode the number of bits used in the encoding.</P>
+      <P>A slightly more challenging input cycles through the available input 
+      characters:</P>
+<PRE>&gt; test [|for i in 1 .. 4096 -&gt; i % 256|];;
+Compressed size: 1323
+Largest output: 1534
+Recovered original exactly.
+Real: 00:00:00.066, CPU: 00:00:00.062, GC gen0: 2, gen1: 0, gen2: 0
+val it : unit = ()</PRE>
+      <P>Again, the original is recovered exactly. Eleven bits are now required 
+      to code the output characters, giving a total of 14,553 bits of output 
+      compared to 32,768 bits of input. A lower compression ratio than before 
+      but still very useful.</P>
+      <P>Finally, we can try to compress some random data:</P>
+<PRE>&gt; test
+    (let rand = System.Random() in
+     [|for i in 1 .. 4096 -&gt; rand.Next 256|]);;
+Compressed size: 3978
+Largest output: 3833
+Recovered original exactly.
+Real: 00:00:00.124, CPU: 00:00:00.124, GC gen0: 2, gen1: 1, gen2: 0
+val it : unit = ()</PRE>
+      <P>Random data is highly unlikely to be compressible because it has the 
+      highest possible entropy and this case is no exception. The 32,768 input 
+      bits require 47,736 bits to encode.</P>
+      <P>Following these tests we are confident that our simple purely 
+      functional implementations of the compression and decompression algorithms 
+      are correct. We may now progress on to optimizing these implementations, 
+      particularly by using more efficient mutable data structures.</P>
+      <H2>Efficient imperative implementation</H2>
+      <P>The              <CODE>compress</CODE> function is easily rewritten to 
+      use a mutable hash table, via the .NET              
+      <CODE>Dictionary</CODE> data structure, in place of the purely functional 
+      tree-based              <CODE>Map</CODE> data structure:           </P>
+<PRE>&gt; let compress input =
+    let mutable w = []
+    let d = System.Collections.Generic.Dictionary()
+    for i in 0..255 do
+      d.Add([i], i)
+    let r = System.Collections.Generic.List()
+    for c in input do
+      let wc = w @ [c]
+      if d.ContainsKey wc then w &lt;- wc else
+        r.Add d.[w]
+        d.Add(wc, d.Count)
+        w &lt;- [c]
+    r.Add d.[w]
+    r.ToArray() |&gt; seq;;
+val compress : seq&lt;int&gt; -&gt; seq&lt;int&gt;</PRE>
+      <P>Note that we have used the .NET              <CODE>List</CODE> data 
+      structure to construct the output              <CODE>r</CODE> because this 
+      imperative data structure provides fast append.           </P>
+      <P>This imperative equivalent of our original implementation passes the 
+      same tests and benchmarking on a 5Mb version of the King James Bible shows 
+      that the time taken is reduced from 150s for the purely functional version 
+      to 40s for this implementation. Compression is slower than decompression 
+      so this 3.75× performance improvement is certainly worthwhile.</P>
+      <P>However, there is still significant room for improvement. Specifically, 
+      the              <CODE>compress</CODE> function spends most of its time 
+      indexing a dictionary using keys are that sequences. This is inefficient 
+      because the key is traversed each time its hash is computed.           
+</P>
+      <P>A data structure known as a              <CODE>trie</CODE> is a more 
+      efficient alternative to a dictionary where the keys are sequences. A trie 
+      is essentially a tree of dictionaries where the first element of the key 
+      is used to index the first dictionary in order to obtain the second 
+      dictionary that is indexed by the second element of the key and so on. A 
+      particular advantage is that the dictionaries appearing inside the trie 
+      may leverage more specialized representations. In this case, each element 
+      of the key is an input character in the range 0..255 and, consequently, 
+      the dictionaries in the trie may be represented by 256-element arrays. 
+      This is extremely efficient because there is no binary search tree to 
+      traverse or hash function to compute, just the direct lookup of an array 
+      element.           </P>
+      <P>Thus, the core data structure of the              <CODE>compress</CODE> 
+      function may be replaced with the following              <CODE>dict</CODE> 
+      type:           </P>
+<PRE>&gt; type dict = Dict of (int * dict) option array;;
+type dict = Dict of (int * dict) option array</PRE>
+      <P>The following implementation of the              <CODE>compress</CODE> 
+      function uses this              <CODE>dict</CODE> type:           </P>
+<PRE>&gt; let compress (uncompressed: _ seq) =
+    let n_in = 256
+    let mutable n_out = 256
+    let create() = Dict(Array.create n_in None)
+    let dictionary = Array.init n_in (fun i -&gt; Some(i, create()))
+    let mutable branch = dictionary
+    let mutable k = 0
+    let result = System.Collections.Generic.List()
+    for c in uncompressed do
+      match branch.[c] with
+      | Some(k', Dict branch') -&gt;
+          branch &lt;- branch'
+          k &lt;- k'
+      | None -&gt;
+          result.Add k
+          branch.[c] &lt;- Some(n_out, create())
+          n_out &lt;- n_out + 1
+          match dictionary.[c] with
+          | Some(k', Dict branch') -&gt;
+              branch &lt;- branch'
+              k &lt;- k'
+          | None -&gt; assert false
+    result.Add k
+    seq result;;</PRE>
+      <P>The loop over the characters in the input now maintains a              
+      <CODE>branch</CODE> that is the current branch of the trie. This 
+      effectively performs the lookup in the original dictionary incrementally, 
+      one element in the key sequence at a time.           </P>
+      <P>As the costly binary tree and hash table lookups have been replaced 
+      with array accesses, this version is significantly faster still. The time 
+      taken to compress our example input has been reduced from 40s for the 
+      naive imperative version to only 15s with this implementation. So the 
+      imperative implementation is 10× faster than the purely functional 
+      implementation.</P>
+      <P>The following              <CODE>decompress</CODE> function also uses 
+      imperative data structures:           </P>
+<PRE>&gt; let decompress (compressed: _ seq) =
+    let e = compressed.GetEnumerator()
+    if not(e.MoveNext()) then seq [] else
+      let mutable w = [|e.Current|]
+      let mutable dict_size = 256
+      let dictionary =
+        Collections.ResizeArray.init dict_size (fun i -&gt; [|i|])
+      let result = Collections.ResizeArray()
+      result.Add e.Current
+      while e.MoveNext() do
+        let k = e.Current
+        let entry =
+          if k = dictionary.Count then Array.append w [|w.[0]|] else
+            dictionary.[k]
+        Array.append w [|entry.[0]|] |&gt; dictionary.Add
+        result.AddRange entry
+        w &lt;- entry
+        dict_size &lt;- dict_size + 1
+      seq result;;</PRE>
+      <P>Note that the decompression algorithm requires a dictionary that only 
+      uses a single compressed character as the key and, consequently, is much 
+      simpler to optimize to a direct array access.</P>
+      <P>This              <CODE>decompress</CODE> function also passes all of 
+      the tests we described.           </P>
+      <P>This imperative implementation of the decompression algorithm reduces 
+      the time taken to decompress our example from 12.2s for the purely 
+      functional implementation to 2.25s. So the imperative implementation is 
+      over 5× faster than the purely functional implementation.</P>
+      <P>Moreover, the imperative implementation lends itself to the use of 
+      sequence expressions for the handling of streams of data.</P>
+      <H2>Incremental compression</H2>
+      <P>The ability to incrementally handle a stream of data without requiring 
+      all of the data to be present at once can be very advantageous, particular 
+      in the context of data compression algorithms because they are often used 
+      on-line for the compression and decompression of streams of live data.</P>
+      <P>The following implementation of the              <CODE>compress</CODE> 
+      function uses a sequence comprehension to create an output sequence that 
+      generates compressed output on-demand (i.e. it is lazy):           </P>
+<PRE>&gt; let compress (uncompressed: _ seq) =
+    seq { let n_in = 256
+          let n_out = ref 256
+          let create() = Dict(Array.create n_in None)
+          let dictionary = Array.init n_in (fun i -&gt; Some(i, create()))
+          let branch = ref dictionary
+          let k = ref 0
+          for c in uncompressed do
+            match (!branch).[c] with
+            | Some(k', Dict branch') -&gt;
+                branch := branch'
+                k := k'
+            | None -&gt;
+                yield !k
+                (!branch).[c] &lt;- Some(!n_out, create())
+                incr n_out
+                match dictionary.[c] with
+                | Some(k', Dict branch') -&gt;
+                    branch := branch'
+                    k := k'
+                | None -&gt; assert false
+          yield !k };;</PRE>
+      <P>This requires some minor modifications to the eager imperative 
+      implementation:</P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>mutable</CODE> local variables from the 
+        original cannot be used in the sequence expression because they escape 
+        their scope so they must be replaced with references using               
+           <CODE>ref</CODE> and                  <CODE>:=</CODE> for assignment. 
+                      </LI>
+        <LI>The                  <CODE>result.Add</CODE> call that prepended 
+        compressed values onto the output as they were generated is replaced 
+        with a                  <CODE>yield</CODE> statement that produces a new 
+        value in the sequence and suspends computation until the next value is 
+        required.               </LI></UL>
+      <P></P>
+      <P>The consequences of these alterations are apparent as soon as we apply 
+      the              <CODE>compress</CODE> function which now terminates 
+      immediately:           </P>
+<PRE>&gt; let compressed = compress input;;
+val compressed : seq&lt;int&gt;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0</PRE>
+      <P>None of the resulting sequence was required so no computation was 
+      performed. Evaluating the sequence causes a few initial values to be 
+      evaluated by the F# interactive session's pretty printer but that is also 
+      instantaneous:</P>
+<PRE>&gt; compressed;;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val it : seq&lt;int&gt; = seq [84; 104; 101; 32; ...]</PRE>
+      <P>The time taken to perform the compression is now incurred when the 
+      sequence is enumerated from start to finish, e.g. by applying the          
+          <CODE>Array.of_seq</CODE> function to create an array from the 
+      sequence:           </P>
+<PRE>&gt; let compressed = Array.of_seq (compress input);;
+val compressed : int []
+Real: 00:00:18.795, CPU: 00:00:18.813, GC gen0: 195, gen1: 188, gen2: 6</PRE>
+      <P>Note that the time taken to compress the input stream has increased 
+      from 15s for the eager implementation to 19s for this sequence-based 
+      implementation.</P>
+      <P>Similarly, the time taken to decompress is not seen until the entire 
+      decompressed stream is needed:</P>
+<PRE>&gt; let decompressed = decompress sequence;;
+val decompressed : seq&lt;int&gt;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+&gt; decompressed;;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val it : seq&lt;int&gt; = seq [84; 104; 101; 32; ...]
+&gt; Seq.length decompressed;;
+Real: 00:00:06.487, CPU: 00:00:06.458, GC gen0: 244, gen1: 90, gen2: 0
+val it : int = 5649295</PRE>
+      <P>In this case, the time taken to decompress has risen from 2.25s to 
+      6.5s. This indicates that the overhead of using a sequence is much more 
+      significant for the decompression algorithm because it is inherently much 
+      faster than compression.</P>
+      <H2>Summary</H2>
+      <P>This article has shown how a famous dictionary-based data compression 
+      algorithm can be implemented quickly and simply from its definition as a 
+      purely functional program that is inefficient but which can be used as the 
+      basis for deriving much more optimized programs.</P>
+      <P>In particular, the impurity of the F# programming language that allows 
+      side-effects such as mutation anywhere with near-optimal performance is an 
+      essential feature for this kind of progressive optimization.</P>
+      <P>Furthermore, F#'s sequence expressions were used to convert efficient 
+      imperative implementations of the compression and decompression algorithms 
+      into sequence-based implementations that work incrementally and can be 
+      used for the on-line compression of streams.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of data 
+      compression in the context of the efficient implementation of modern 
+      parallel data compression algorithms.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Lempel-Ziv-Welch%20data%20compression_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

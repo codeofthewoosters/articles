@@ -1,0 +1,551 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0086)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/byte_interpreter.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Optimizing a simple bytecode interpreter</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Optimizing a simple bytecode interpreter</TITLE> 
+    <LINK href="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Optimizing a simple bytecode interpreter</H1>
+      <P>Interpreter and compiler writing is the bread and butter of the ML 
+      family of languages and F# is no exception. This article describes the 
+      design and implementation of an interpreter for a simple bytecode 
+      language.</P>
+      <H2>Introduction</H2>
+      <P>The language targetted by the interpreters described in this article is 
+      very simple. During evaluation program state is represented by an array of 
+      integers              <CODE>d</CODE> indexed by              
+      <CODE>p</CODE> . The eight bytecode instructions convey the following 
+      meanings in terms of C code:           </P>
+      <P>
+      <TABLE style="width: 95%; text-align: center;">
+        <TBODY>
+        <TR>
+          <TD>Bytecode</TD>
+          <TD>C equivalent</TD></TR>
+        <TR>
+          <TD><CODE>&lt;</CODE>                 </TD>
+          <TD><CODE>++p;</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>&gt;</CODE>                 </TD>
+          <TD><CODE>--p;</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>+</CODE>                 </TD>
+          <TD><CODE>++*p;</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>-</CODE>                 </TD>
+          <TD><CODE>--*p;</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>.</CODE>                 </TD>
+          <TD><CODE>putchar(*p);</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>,</CODE>                 </TD>
+          <TD><CODE>*p = getchar();</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>[</CODE>                 </TD>
+          <TD><CODE>while (*p) {</CODE>                 </TD></TR>
+        <TR>
+          <TD><CODE>]</CODE>                 </TD>
+          <TD><CODE>};</CODE>                 </TD></TR></TBODY></TABLE>
+      <P></P>
+      <P>For example, the following program accumulates              
+      <CODE>d[1]=65</CODE> and prints out "A" (the ASCII code of which is 65):   
+              </P>
+<PRE>++++++[&gt;++++++++++&lt;-]&gt;+++++.</PRE>
+      <P>This program increments              <CODE>d[0]</CODE> six times and 
+      then increments              <CODE>d[1]</CODE> by ten six times, leaving   
+                 <CODE>d[1]=60</CODE> . Finally, the value of              
+      <CODE>d[1]</CODE> is incremented five times and printed.           </P>
+      <P>This is equivalent to the following Visual C program:</P>
+<PRE>#include "stdafx.h"
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;</PRE>
+<PRE>int _tmain(int argc, _TCHAR* argv[])
+{
+	char d[2];
+	char *p=d;</PRE>
+<PRE>	d[0] = d[1] = 0;</PRE>
+<PRE>	*p += 6;
+	while (*p) {
+		++p;
+		*p += 10;
+		--p;
+		*p -= 1;
+	};
+	++p;
+	*p += 5;
+	putchar(*p);</PRE>
+<PRE>	return 0;
+}</PRE>
+      <P>The result of this program is to print the final value of              
+      <CODE>d[1]</CODE> as an ASCII character, in this case              
+      <CODE>d[1]=65</CODE> and the character is              <CODE>A</CODE> .    
+             </P>
+      <P>Let's try writing the simplest possible interpreter for this language 
+      in F#.</P>
+      <H2>Naive interpreter</H2>
+      <P>The interpreter described in this section loads the bytecode program 
+      into memory as a string and iterates over the characters of the string, 
+      interpreting them using pattern matching.</P>
+      <P>The only non-trivial construct is the loop formed by              
+      <CODE>[</CODE> and              <CODE>]</CODE> . This is implemented by 
+      maintaining a stack of the indices of the last              <CODE>[</CODE> 
+      so that it can be looped back to.           </P>
+      <P>We begin by defining a new class              <CODE>Data</CODE>  to 
+      represent the memory used by the interpreted program. This is a sparse map 
+      from              <CODE>int</CODE> to unsigned bytes (             
+      <CODE>sbyte</CODE> ) that defaults to zero:           </P>
+<PRE>&gt; type Data() =
+    let m = Hashtbl.create 1</PRE>
+<PRE>    let sbyte_of_char =
+      Byte.of_char
+      &gt;&gt; SByte.of_byte
+    
+    member data.Item
+      with get(i : int) = try m.[i] with Not_found -&gt; 0y
+      and set(i, x) = m.[i] &lt;- x</PRE>
+<PRE>    member data.edit f p =
+      data.[p] &lt;- f data.[p]</PRE>
+<PRE>    member data.read p =
+      data.[p] &lt;-
+        input_char stdin
+        |&gt; sbyte_of_char</PRE>
+<PRE>    member data.write p =
+      SByte.to_byte data.[p]
+      |&gt; Byte.to_char
+      |&gt; print_char;;
+type Data = class
+            end
+            with
+              new : unit -&gt; Data
+              member edit : f:(sbyte -&gt; sbyte) -&gt; (int -&gt; unit)
+              member Item : i:int -&gt; sbyte with get
+              member read : p:int -&gt; unit
+              member Item : i:int -&gt; sbyte with set
+              member write : p:int -&gt; unit
+            end;;</PRE>
+      <P>Note the use of unsigned byte literals such as              
+      <CODE>0y</CODE> , keeping the code size down. The nested              
+      <CODE>sbyte_of_char</CODE> helper function simply addresses a gap in the 
+      current F# standard library.           </P>
+      <P>The interpreter will use a              <CODE>ffwd</CODE> function to 
+      fast forward over a loop (enclosed in              <CODE>[...]</CODE> in 
+      the interpreted language) when a loop completes. This function updates the 
+      program counter              <CODE>pc</CODE> that is used to index the 
+      current location in the interpreted bytecode string              
+      <CODE>code</CODE> :           </P>
+<PRE>&gt; let rec ffwd (code : string) lev pc =
+    match code.[pc], lev with
+    | ']', 1 -&gt; pc
+    | ']', lev -&gt; ffwd code (lev - 1) (pc + 1)
+    | '[', _ -&gt; ffwd code (lev + 1) (pc + 1)
+    | _ -&gt; ffwd code lev (pc + 1);;
+val ffwd : string -&gt; int -&gt; int -&gt; int</PRE>
+      <P>Note that this function handles nested loops (             
+      <CODE>[..[...]..]</CODE> ) and is written elegantly in terms of pattern 
+      matching.           </P>
+      <P>The core of the interpreter is the following              
+      <CODE>run</CODE> function:           </P>
+<PRE>&gt; let rec run code (data : Data) p pc stack =
+    if pc &gt;= 0 &amp;&amp; pc &lt; String.length code then
+      let p, pc, stack =
+        match code.[pc], stack with
+         | '&gt;', _ -&gt; p + 1, pc, stack
+         | '&lt;', _ -&gt; p - 1, pc, stack
+         | '+', _ -&gt; data.edit ((+) 1y) p; p, pc, stack
+         | '-', _ -&gt; data.edit ((+) (-1y)) p; p, pc, stack
+         | '.', _ -&gt; data.write p; p, pc, stack
+         | ',', _ -&gt; data.read p; p, pc, stack
+         | '[', _ when data.[p] = 0y -&gt; p, ffwd code 1 (pc + 1), stack
+         | '[', _ -&gt; p, pc, pc :: stack
+         | ']', _::stack when data.[p] = 0y -&gt; p, pc, stack
+         | ']', pc::_ -&gt; p, pc, stack
+         | _ -&gt; p, pc, stack
+      run code data p (pc + 1) stack;;
+val run : string -&gt; Data -&gt; int -&gt; int -&gt; int list -&gt; unit</PRE>
+      <P>Provided the program counter is still inside the program (i.e. 
+      interpreting completes when the program counter overruns the end of the 
+      program), this function pattern matches over the byte at the current code 
+      location and uses this run-time dispatch to perform the appropriate 
+      operation. The first two clauses move the data pointer. The next two 
+      clauses edit the data at the data pointer (incrementing or decrementing 
+      it). The next two clauses handle reading and writing data using the        
+            <CODE>read</CODE> and              <CODE>write</CODE> member 
+      functions of the              <CODE>Data</CODE> class, respectively. The 
+      final four clauses handle the looping construct in the bytecode using 
+      guarded patterns to determine whether or not the loop has completed. 
+      Finally, the              <CODE>run</CODE> function invokes itself 
+      recursively to interpret the next bytecode instruction (at              
+      <CODE>pc + 1</CODE> ).           </P>
+      <P>The interpreter itself is now completely defined and all that remains 
+      is the code to load a bytecode program. As .NET interoperability is a 
+      strength of the F# language, we shall use a standard Windows GUI dialog 
+      box to let the user select the bytecode file they wish to run. We begin by 
+      defining a function              <CODE>load_code</CODE> to load the 
+      bytecode program:           </P>
+<PRE>&gt; open System.IO;;
+&gt; let load_code (file : string) =
+    use s = new StreamReader(file)
+    s.ReadToEnd();;
+val load_code : string -&gt; string</PRE>
+      <P>The main program shows the open file dialog box and invokes the 
+      interpreter if a bytecode program was selected by the user:</P>
+<PRE>&gt; open System.Windows.Forms;;
+&gt; let main() =
+    let dialog = new OpenFileDialog()
+    if dialog.ShowDialog() = DialogResult.OK then
+      run (load_code dialog.FileName) (Data()) 0 0 [];;
+val main : unit -&gt; unit</PRE>
+      <P>This program can be run either in an F# interactive session or as a 
+      compiled executable. Windows Forms requires that the GUI thread is in 
+      single threaded apartment mode, which can be assured in compiled code 
+      using the              <CODE>[&lt;System.STAThread&gt;]</CODE> pragma:     
+            </P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do main();;</PRE>
+      <P>Selecting the hellow.bf program using the dialog box (which, at the 
+      time of writing, gets hidden behind Visual Studio) gives the following 
+      result:</P>
+<PRE>Hello world!</PRE>
+      <P>That is actually the given bytecode program being read and interpreted. 
+      The amount of F# code required to write this entire interpreter is 
+      incredibly small: well under 100LOC. This interpreter can handle a variety 
+      of programs written in this language. Several example programs are listed 
+      at the end of the article.</P>
+      <P>However, this interpreter is very slow. On this machine, a typical C 
+      interpreter runs the Towers of Hanoi program in around 30s but this naive 
+      F# implementation takes 2029s. F# can always do much better than 67× 
+      slower than C, so there is clearly plenty of room for optimization!</P>
+      <H2>Algorithmic optimizations</H2>
+      <P>The most important and, in this case, the most obvious optimization is 
+      to translate the bytecode into an F# data structure that is more amenable 
+      to interpreting. F# excels at pattern matching over variant types, so they 
+      are the obvious choice for representing a bytecode program. Indeed, this 
+      is exactly the representation used by many metaprograms that manipulate 
+      other programs, including theorem provers, computer algebra packages and 
+      interpreters and compilers of conventional programming languages.</P>
+      <P>This bytecode language could be loaded into a direct equivalent, with 
+      eight type constructors, something like this:</P>
+<PRE>type t =
+  | Left
+  | Right
+  | Increment
+  | Decrement
+  | Write
+  | Read
+  | StartLoop
+  | EndLoop</PRE>
+      <P>However, the flexibility of F#'s variant types allows us to express 
+      more information in a compact way. For a start, we can compress the 
+      repetitive sequences such as              <CODE>++++++</CODE> into 
+      something like              <CODE>Add 5</CODE> :           </P>
+<PRE>type t =
+  | Move of int
+  | Add of int
+  | Write
+  | Read
+  | StartLoop
+  | EndLoop</PRE>
+      <P>Also, we can convert nested              <CODE>[</CODE> and             
+       <CODE>]</CODE> into a tree using a              <CODE>Loop</CODE> 
+      constructor:           </P>
+<PRE>type t =
+  | Move of int
+  | Add of int
+  | Write
+  | Read
+  | Loop of t list</PRE>
+      <P>Finally, we can perform a simple but important high-level 
+      simplification by noting that many of the loops are simply 
+      multiplications.</P>
+      <P>We refer to these loops where the body of the loop leaves the pointer 
+      unchanged and contains only moves and adds as              <I>linear 
+      loops</I> and we reduce these into a simplified form that obviates the 
+      need to do any iteration.           </P>
+      <P>Consider the loop in our first example program:</P>
+<PRE>[&gt;++++++++++&lt;-]</PRE>
+      <P>As the              <CODE>&lt;</CODE> and              
+      <CODE>&gt;</CODE> leave the pointer at the same place after each 
+      iteration, we know that this loop will only run              
+      <CODE>d[p]</CODE> times upon entry because this value is decremented once 
+      in each iteration until it reaches zero. More generally, if the value is 
+      decremented              <CODE>dn</CODE> times each loop then we know the 
+      loop will iterate              <CODE>d[p] / dn</CODE> times.           
+</P>
+      <P>By compiling a list of how much other values are offset each iteration, 
+      we can skip the iteration and replace the repeated additions with 
+      multiplications. The above loop can be represented by:</P>
+<PRE>Linear(1, [|1, 10|])</PRE>
+      <P>The first int is              <CODE>dn</CODE> and the list gives the 
+      relative offset from              <CODE>p</CODE> and the increment per 
+      iteration for any other values altered by the loop. In this case, the loop 
+      adds 10 to              <CODE>d[p+1]</CODE> each iteration.           </P>
+      <P>Thus, the following variant type is a much more efficient 
+      representation of a loaded bytecode program than the string used in the 
+      previous interpreter:</P>
+<PRE>&gt; type t =
+    | Move of int
+    | Add of sbyte
+    | Out
+    | In
+    | Linear of sbyte * (int * sbyte) array
+    | Loop of t array;;</PRE>
+      <P>A program represented by a data structure of this type may be 
+      interpreted by the following              <CODE>run</CODE> function:       
+          </P>
+<PRE>&gt; let rec run code (data : Data) p =
+    Array.fold_left (run_aux data) p code
+  and run_aux data p = function
+    | Move dp -&gt; p + dp
+    | Add dn -&gt; data.[p] &lt;- data.[p] + dn; p
+    | Out -&gt; data.write p; p
+    | In -&gt; data.read p; p
+    | Linear(dn, ops) -&gt;
+        let q = data.[p] / sbyte dn
+        Array.iter (fun (dp, dn) -&gt; data.[p+dp] &lt;- data.[p+dp] + q*dn) ops
+        data.[p] &lt;- 0y
+        p
+    | Loop code' -&gt;
+        let mutable p = p
+        while data.[p] &lt;&gt; 0y do
+          p &lt;- run code' data p
+        p;;
+val run : t array -&gt; Data -&gt; int -&gt; int
+val run_aux : Data -&gt; int -&gt; t -&gt; int</PRE>
+      <P>The main performance advantage of this function stems from the 
+      algorithmic optimizations of amortizing repeated moves and additions and 
+      simplifying linear loops.</P>
+      <P>Whilst simplifying a linear loop, it is necessary to accumulate 
+      alterations made to other values. The following              
+      <CODE>add</CODE> function updates an association list by accumulating the 
+      increments or decrements              <CODE>dv</CODE> made at a given 
+      offset              <CODE>k</CODE> :           </P>
+<PRE>&gt; let rec add k (dv : sbyte) ops =
+    let v =
+      match Map.tryfind k ops with
+      | Some v -&gt; v
+      | None -&gt; 0y
+    Map.add k (v + dv) ops;;
+val add : 'a -&gt; sbyte -&gt; Map&lt;'a,sbyte&gt; -&gt; Map&lt;'a,sbyte&gt;</PRE>
+      <P>The following              <CODE>linearize</CODE> function uses this    
+                <CODE>add</CODE> function to accumulate the offset of each value 
+      altered by a linear loop, or raises the built-in              
+      <CODE>Exit</CODE> exception if the loops turns out to be non-linear 
+      (because the final value of              <CODE>p</CODE> is different to 
+      its starting value or the loop contained constructs other than move and 
+      add:           </P>
+<PRE>&gt; let linearize (dp, denom, ops) = function
+    | Add dn when dp=0 -&gt; dp, denom - dn, ops
+    | Add dn -&gt; dp, denom, add dp dn ops
+    | Move ddp -&gt; dp + ddp, denom, ops
+    | _ -&gt; raise Exit;;
+val linearize :
+  int * sbyte * Map&lt;int,sbyte&gt; -&gt; t -&gt; int * sbyte * Map&lt;int,sbyte&gt;</PRE>
+      <P>The following              <CODE>loop</CODE> function constructs a loop 
+      as a linear loop if possible or an ordinary loop otherwise:           </P>
+<PRE>&gt; let loop code =
+    try
+      let dp, denom, code' = Seq.fold linearize (0, 0y, Map.empty) code
+      if dp &lt;&gt; 0 then raise Exit
+      Linear(denom, Map.to_array code')
+    with
+    | Exit -&gt;
+        Loop code;;
+val loop : t array -&gt; t</PRE>
+      <P>The functionality of the interpreter is completed by a              
+      <CODE>load_code</CODE> function that converts the bytecode into a data 
+      structure of the type              <CODE>t array</CODE> :           </P>
+<PRE>&gt; let try_input_char ch =
+    try
+      Some(input_char ch)
+    with
+    | End_of_file -&gt; None;;
+val try_input_char : in_channel -&gt; char option
+&gt; let rec load_code ch t =
+    match try_input_char ch, t with
+    | Some '&gt;', Move n::t -&gt; load_code ch (Move (n + 1)::t)
+    | Some '&lt;', Move n::t -&gt; load_code ch (Move (n - 1)::t)
+    | Some '&gt;', t -&gt; load_code ch (Move 1::t)
+    | Some '&lt;', t -&gt; load_code ch (Move (-1)::t)
+    | Some '+', Add n::t -&gt; load_code ch (Add (n + 1y)::t)
+    | Some '-', Add n::t -&gt; load_code ch (Add (n - 1y)::t)
+    | Some '+', t -&gt; load_code ch (Add 1y::t)
+    | Some '-', t -&gt; load_code ch (Add (-1y)::t)
+    | Some '.', t -&gt; load_code ch (Out::t)
+    | Some ',', t -&gt; load_code ch (In::t)
+    | Some '[', t -&gt; load_code ch (loop (load_code ch [])::t)
+    | Some ']', t -&gt; List.rev t |&gt; Array.of_seq
+    | Some _, t -&gt; load_code ch t
+    | None, t -&gt; List.rev t |&gt; Array.of_seq;;
+val load_code : in_channel -&gt; t list -&gt; t array</PRE>
+      <P>There are several interesting aspects to this function:</P>
+      <P>
+      <UL>
+        <LI>The auxiliary                  <CODE>try_input_char</CODE> function 
+        boxes the result of                  <CODE>input_char</CODE> to ensure 
+        that recursive loading of the bytecode by recursive calls to             
+             <CODE>load_code</CODE> are tail recursive.               </LI>
+        <LI>Double recursion of                  <CODE>load_code ch (loop 
+        (load_code ch [])::t)</CODE> when a loop is entered, loading the body of 
+        the loop first followed by the remainder of the program.               
+        </LI>
+        <LI>Subsequent moves and adds are amortized and the first occurrence 
+        causes a +/- 1 move or add to be loaded into the result.</LI></UL>
+      <P></P>
+      <P>Finally, this interpreter can be run with:</P>
+<PRE>&gt; let main() =
+    let dialog = new OpenFileDialog()
+    if dialog.ShowDialog() = DialogResult.OK then
+      use ch = open_in dialog.FileName
+      let code = load_code ch []
+      run code (Data()) 0 |&gt; ignore
+      input_line stdin |&gt; ignore;;
+val main : unit -&gt; unit</PRE>
+      <P>Primarily due to the algorithmic optimizations of amortizing 
+      consecutive moves and adds and simplifying linear loops, this 
+      implementation of the interpreter is much faster than the previous one. 
+      The time taken to evaluate the Towers of Hanoi benchmark is reduced from 
+      2029s to only 39.5s. Moreover, despite its simplicity and brevity, this 
+      implementation is substantially faster than most implementations in other 
+      languages including some "high performance" interpreters written in C 
+      because they do not perform simplifying transformations that are made easy 
+      by F#'s pattern matching capabilities.</P>
+      <H2>Low-level optimizations</H2>
+      <P>We can also provide a more efficient drop-in replacement of the         
+           <CODE>Data</CODE> class used to represent the memory of the 
+      interpreted program. The previous implementation used a hash table. Using 
+      a hash table is simple but requires a hash value to be computed and 
+      various indirections to be performed before the actual corresponding value 
+      is obtained. As getting and setting memory elements are the most common 
+      operations, a dense array is a much more efficient data structure provided 
+      the bytecode programs do not spread their memory usage over a wide range 
+      (i.e. they use memory densely rather than sparsely), which is generally 
+      true.           </P>
+      <P>The following implementation of the              <CODE>Data</CODE> 
+      class uses a resizeable array to store the memory of an interpreted 
+      program:           </P>
+<PRE>&gt; type Data() =
+    let m = Collections.ResizeArray&lt;sbyte&gt;()
+    
+    let sbyte_of_char =
+      Byte.of_char
+      &gt;&gt; SByte.of_byte
+    
+    member data.Item
+      with get(i : int) =
+        try
+          m.[i]
+        with
+        | :? System.ArgumentOutOfRangeException -&gt; 0y
+      and set(i, x) =
+        let n = 1 + i - m.Count
+        if n&gt;0 then m.AddRange(Array.create n 0y)
+        m.[i] &lt;- x
+    
+    member data.edit f p =
+      data.[p] &lt;- f data.[p]
+    
+    member data.read p =
+      data.[p] &lt;-
+        input_char stdin
+        |&gt; sbyte_of_char
+    
+    member data.write p =
+      SByte.to_byte data.[p]
+      |&gt; Byte.to_char
+      |&gt; print_char;;
+type Data = class
+            end
+            with
+              new : unit -&gt; Data
+              member edit : f:(sbyte -&gt; sbyte) -&gt; (int -&gt; unit)
+              member Item : i:int -&gt; sbyte with get
+              member read : p:int -&gt; unit
+              member Item : i:int -&gt; sbyte with set
+              member write : p:int -&gt; unit
+            end</PRE>
+      <P>This is significantly more efficient than the hash table and reduces 
+      the time taken for the Hanoi program down to only 22.2s.</P>
+      <H2>Summary</H2>
+      <P>Algorithmic optimizations should always be sought first and the second 
+      implementation is much faster than many "optimized" C implementations 
+      available on the web.</P>
+      <P>The optimization technique of composing closures that perform 
+      specialized computations is both generically applicable and practically 
+      useful. In this case, the technique was used largely to avoid the run-time 
+      dispatch incurred by pattern matching.</P>
+      <P>An unusual property of the final              <CODE>run</CODE> function 
+      is that it performs computations not just when all of its arguments have 
+      been applied (as the previous version did) but it performs useful 
+      computations both on the first application and on the second application. 
+      This technique of staging computations naturally lends itself to hoisting 
+      computations from inner loops. However, doing so necessarily results in 
+      closures rather than ordinary functions, making function invocation 
+      slightly slower. So a performance improvement is not guaranteed and 
+      experimentation is always required. In object oriented design, staged 
+      computations are sometimes referred to as the              <I>Factory 
+      design pattern</I> .           </P>
+      <P>Writing bytecode interpreters is an easy way to start learning about 
+      interpreter and compiler writing. Future F#.NET Journal articles will 
+      cover interpreters for more interesting languages.</P>
+      <H2>Complete implementations</H2>
+      <P>The first and last versions of the interpreter are available for 
+      download as zipped Visual Studio projects:</P>
+      <P>
+      <UL>
+        <LI><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/ByteInterpreter1.zip">Naive</A> 
+                      </LI>
+        <LI><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/ByteInterpreter2.zip">Optimized</A> 
+                      </LI></UL>
+      <P></P>
+      <P>Example programs:</P>
+      <P>
+      <UL>
+        <LI><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/a.bf">A</A> 
+                      </LI>
+        <LI><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/hellow.bf">Hello 
+        world!</A>               </LI>
+        <LI><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/hanoi.bf">Towers 
+        of Hanoi</A>               </LI></UL>
+      <P></P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Optimizing%20a%20simple%20bytecode%20interpreter_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

@@ -1,0 +1,439 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0075)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/logic.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Logic programming: n-queens and knight's tour 
+problems</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Logic programming: n-queens and knight's tour 
+problems</TITLE>     <LINK href="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Logic programming: n-queens and knight's tour problems</H1>
+      <P>Logic programming is a paradigm often seen in problem solving and AI. 
+      This article introduces the subject of logic programming and explains why 
+      the F# language is ideally suited to these kinds of applications, using 
+      the familiar examples of solving the n-queens problem and finding a 
+      knights tour. Moreover, the differences between the .NET implementation 
+      and those bred specifically for this style of programming is described and 
+      techniques that can be used to close the performance gap are 
+discussed.</P>
+      <H2>Logic programming</H2>
+      <P>The immutable singly-linked list data structure appears quirky when 
+      discovering the ML family of languages from an imperative background. 
+      Moreover, the extreme lengths to which compiler implementations have gone 
+      in order to make this data structure as efficient as possible can seem 
+      very surprising. The motivation behind the heavy use of lists in 
+      functional languages and the demands on its performance stem from the 
+      idiomatic application of this family of programming languages to 
+      metaprogramming and, in particular, the writing of interpreters and 
+      compilers for other languages. These applications involve a great deal of 
+      logic programming, where automated searches are used to rewrite programs 
+      in order to improve properties such as performance and memory 
+      efficiency.</P>
+      <P>Logic programming often entails exhaustively searching relatively small 
+      problem domains. These domains are often described by short sequences of 
+      values and, consequently, lists are the ideal representation. For example, 
+      by maintaining a list of possible choices and applying logical 
+      restrictions to filter out invalid or undesireable options, gradually 
+      restricting the search space until only the desired choices remain.</P>
+      <P>Backtracking is an essential part of logic programming. When it can be 
+      determined that a branch of a search cannot yield any solutions, the 
+      entire branch is discarded. This asymptotic optimization often provides 
+      huge performance improvements.</P>
+      <P>The previous F#.NET Journal article number 6              <I>"Designing 
+      and implementing a Sudoku Solver"</I> (30th June 2007) used logic 
+      programming to solve Sudoku puzzles.           </P>
+      <H2>The n-queens problem</H2>
+      <P>This classic problem is a much simpler alternative to chess AI that 
+      still captures the essence of logic programming in the context of 
+      deterministic board games. The problem is to place              <I>n</I> 
+      chess queens on an              <I>n</I> ×             <I>n</I> chessboard 
+      such that none of them are able to capture any other using the standard 
+      chess queen's moves. In other words, no two queens are separated 
+      horizontally, vertically or diagonally.           </P>
+      <P>This problem is easily solved by maintaining a list of possible 
+      positions for queens and recursively searching both with and without a 
+      queen at each position. When a queen is placed, the list of possible 
+      positions for queens is filtered to remove any positions attacked by the 
+      new queen.</P>
+      <P>The following              <CODE>safe</CODE> function returns           
+         <CODE>true</CODE> if queens placed at              <CODE>(x1, 
+      y1)</CODE> and              <CODE>(x2, y2)</CODE> cannot attack each 
+      other:           </P>
+<PRE>&gt; let safe (x1, y1) (x2, y2) =
+    x1 &lt;&gt; x2 &amp;&amp; y1 &lt;&gt; y2 &amp;&amp; x2 - x1 &lt;&gt; y2 - y1 &amp;&amp; x1 - y2 &lt;&gt; x2 - y1;;
+val safe : int * int -&gt; int * int -&gt; bool</PRE>
+      <P>The core of the solver is the following              
+      <CODE>search</CODE> function:           </P>
+<PRE>&gt; let rec search f n qs ps accu =
+    match ps with
+    | [] when List.length qs = n -&gt; f accu ps
+    | [] -&gt; accu
+    | q::ps -&gt;
+        search f n qs ps accu
+        |&gt; search f n (q::qs) (List.filter (safe q) ps);;
+val search :
+  ((int * int) list -&gt; 'a -&gt; 'a) -&gt;
+    int -&gt; (int * int) list -&gt; (int * int) list -&gt; 'a -&gt; 'a</PRE>
+      <P>The first match case applies the given function              
+      <CODE>f</CODE> to the accumulator              <CODE>accu</CODE> and 
+      positions              <CODE>ps</CODE> of the queens in the obtained 
+      solution. This is the form of a fold over the set of solutions.           
+      </P>
+      <P>The second match case applies when there are no legal places to put 
+      another queen on the board but fewer than              <CODE>n</CODE> 
+      queens have been placed and, consequently, there can be no solutions.      
+           </P>
+      <P>The final match case covers the general case where a queen may be 
+      placed at              <CODE>q</CODE> . Two recursive calls to the         
+           <CODE>search</CODE> function are made. The first recursive call 
+      considers what happens if a queen is not placed at              
+      <CODE>q</CODE> . The second recursive call considers placing a queen at    
+                <CODE>q</CODE> and filters the list of possible positions for 
+      future queens by removing positions attacked by the new queen at           
+         <CODE>q</CODE> .           </P>
+      <P>This is idiomatic logic programming in an ML-like programming language: 
+      the set of possible positions for queens is represented by the immutable 
+      singly-linked list              <CODE>ps</CODE> which is refined whenever 
+      a queen is placed. Recursion is used to narrow the number of possible 
+      solutions until only valid solutions exist. The ability to create new 
+      lists using functions like              <CODE>List.filter</CODE> makes it 
+      very easy to express a solution to this problem succinctly in F#. The use 
+      of immutable data structures relieves the programmer from the burden of 
+      having to explicitly undo state when a branch of the search returns.       
+          </P>
+      <P>Implementations of languages such as OCaml are very heavily optimized 
+      for this kind of idiomatic logic programming. This style of programming 
+      generates huge numbers of very short-lived values, as the intermediate 
+      lists usually lead to dead ends in the search and are discarded. 
+      Specifically, the OCaml implementation uses a copying generational garbage 
+      collector where new values are allocated into a nursery generation (called 
+      the minor heap) that is a simple array that fits into the CPU cache and 
+      incurs only a pointer bump for allocation. When this generation is full, 
+      the values in it are traversed and only surviving values are moved into 
+      the next generation (the major heap), the pointer is reset and values are 
+      allocated into the same array. This allows recently-allocated values to be 
+      recycled very efficiently because they are simply overwritten without even 
+      incurring a cache miss. Although the CLR uses a similar design for gen0, 
+      the overheads of concurrent garbage collection are substantial. 
+      Consequently, OCaml is typically 10× faster than F# on these kinds of 
+      programs. As the shared heap is a single shared global resource, intensive 
+      allocation from any thread introduces contention that kills scalability. 
+      Thus, the performance of this kind of F# code cannot easily be improved 
+      through the use of parallelism.</P>
+      <P>The number of solutions for a board of a given size              
+      <CODE>n</CODE> may be found using the following              
+      <CODE>solutions</CODE> function:           </P>
+<PRE>&gt; let solutions n =
+    let ps =
+      [ for x in 1..n do
+          for y in 1..n do
+            yield x, y ]
+    search (fun qs -&gt; ( + ) 1) n [] ps 0;;
+val solutions : int -&gt; int</PRE>
+      <P>For example, the number of solutions for board sizes              
+      <I>1..8</I> is:           </P>
+<PRE>&gt; List.map solutions [1..8];;
+val it : int array = [1; 0; 0; 2; 10; 4; 40; 92]</PRE>
+      <P>The              <CODE>#time</CODE> directive can be used to measure 
+      the performance of this implementation from the REPL:           </P>
+<PRE>&gt; #time;;</PRE>
+<PRE>--&gt; Timing now on</PRE>
+<PRE>&gt; List.map solutions [1..10];;
+Real: 00:00:03.939, CPU: 00:00:02.667, GC gen0: 129, gen1: 3, gen2: 1
+val it : int list = [1; 0; 0; 2; 10; 4; 40; 92; 352; 724]</PRE>
+      <P>The performance bottleneck in this implementation is allocation. 
+      Performance can be improved by addressing the three sources of 
+      allocation:</P>
+      <P>
+      <UL>
+        <LI>The tuples used to store coordinates on the board.</LI>
+        <LI>The                  <CODE>qs</CODE> list used to accumulate the 
+        positions of the queens.               </LI>
+        <LI>The                  <CODE>List.filter</CODE> function that creates 
+        a new list, copying many elements.               </LI></UL>
+      <P></P>
+      <P>Tuples can be replaced with a struct type:</P>
+<PRE>&gt; [&lt;Struct&gt;]
+  type Pair&lt;'a, 'b&gt; =
+    val x : 'a
+    val y : 'b
+    new(x, y) = {x=x; y=y}
+    override this.ToString() =
+      sprintf "(%A, %A)" this.x this.y;;
+type Pair&lt;'a,'b&gt; =
+  struct
+    new : x:'a * y:'b -&gt; Pair&lt;'a,'b&gt;
+    val x: 'a
+    val y: 'b
+    override ToString : unit -&gt; string
+  end</PRE>
+      <P>The              <CODE>Struct</CODE> attribute was recently added to 
+      F#.           </P>
+      <P>The              <CODE>safe</CODE> function has a simple replacement:   
+              </P>
+<PRE>&gt; let safe (p1: Pair&lt;int, int&gt;) (p2: Pair&lt;int, int&gt;) =
+    p1.x &lt;&gt; p2.x &amp;&amp; p1.y &lt;&gt; p2.y &amp;&amp; p2.x - p1.x &lt;&gt; p2.y - p1.y &amp;&amp; p1.x - p2.y &lt;&gt; p2.x - p1.y;;
+val safe : Pair&lt;int,int&gt; -&gt; Pair&lt;int,int&gt; -&gt; bool</PRE>
+      <P>The sequence of board positions              <CODE>ps</CODE> may be 
+      replaced by an array. Rather than allocating and filling a new array when 
+      filtering, we can permute the elements in the current array such that the 
+      filtered out elements appear at the beginning. The following              
+      <CODE>filter</CODE> function accomplishes this:           </P>
+<PRE>&gt; let filter p (a: _ []) n =
+    let rec loop i j =
+      if i &gt; j then j+1 else
+        if p a.[i] then
+          if p a.[j] then
+            loop (i+1) j
+          else
+            loop (i+1) (j-1)
+        else
+          if p a.[j] then
+            let t = a.[j]
+            a.[j] &lt;- a.[i]
+            a.[i] &lt;- t
+            loop (i+1) (j-1)
+          else
+            loop i (j-1)
+    loop 0 (n-1);;
+val filter : ('a -&gt; bool) -&gt; 'a [] -&gt; int -&gt; int</PRE>
+      <P>This technique is particularly productive in this context because the 
+      resulting array, as a permutation of the original, does not require that 
+      any state changes be undone because the              <CODE>search</CODE> 
+      function will only be required to leave the same elements in the array but 
+      their order is irrelevant.           </P>
+      <P>Finally, the              <CODE>search</CODE> function may be written 
+      to use these array-based representations instead as follows:           
+</P>
+<PRE>&gt; let rec search f n (qs: _ []) (ps: _ []) i accu =
+    if i=0 then
+      if n=0 then f qs accu else accu
+    else
+      let q = ps.[i-1]
+      let accu = search f n qs ps (i-1) accu
+      let j = filter (safe q) ps (i-1)
+      qs.[n-1] &lt;- q
+      search f (n-1) qs ps j accu;;
+val search :
+  (Pair&lt;int,int&gt; [] -&gt; 'a -&gt; 'a) -&gt;
+    int -&gt; Pair&lt;int,int&gt; [] -&gt; Pair&lt;int,int&gt; [] -&gt; int -&gt; 'a -&gt; 'a</PRE>
+      <P>Aside from the new              <CODE>filter</CODE> function, this 
+      implementation is only slightly longer than the original. However, there 
+      is significant conceptual overhead required to understand that the 
+      mutation performed by the              <CODE>filter</CODE> function is 
+      correct in this case.           </P>
+      <P>This struct and array based implementation is around 2.6× faster than 
+      the original tuple- and list-based implementation. Remarkably, this is 
+      still slightly slower than a simple list-based implementation written in 
+      OCaml!</P>
+      <H2>Knights tour</H2>
+      <P>The knights tour is a similar problem: find the routes a knight can 
+      take that visit each square on the chessboard once from a given starting 
+      position.</P>
+      <P>The following higher-order              <CODE>moves</CODE> function 
+      folds the given function              <CODE>f</CODE> over the moves for a 
+      knight in chess:           </P>
+<PRE>&gt; let moves f a =
+    f (f (f (f (f (f (f (f a (-1, 2)) (1, 2)) (2, 1)) (2, -1))
+              (1, -2)) (-1, -2)) (-2, -1)) (-2, 1);;
+val moves : ('a -&gt; int * int -&gt; 'a) -&gt; 'a -&gt; 'a</PRE>
+      <P>This is an efficient solution to representing a small number of moves 
+      such as those of a knight because it can avoid the generation of 
+      intermediate data structures (deforesting).</P>
+      <P>The following              <CODE>search</CODE> function tries to find a 
+      knights tour:           </P>
+<PRE>&gt; let rec search f n free ps accu (x, y) =
+    if Set.isEmpty free then f accu ps else
+      let move_to accu (dx, dy) =
+        let p = x + dx, y + dy
+        if Set.contains p free then
+          search f n (Set.remove p free) (p::ps) accu p
+      moves move_to accu;;
+val search :
+  (unit -&gt; (int * int) list -&gt; unit) -&gt;
+    'a -&gt; Set&lt;int * int&gt; -&gt; (int * int) list -&gt; unit -&gt; int * int -&gt; unit</PRE>
+      <P>If the set of free positions is empty then all              <I>n</I> ×  
+                 <I>n</I> positions have been visited and the              
+      <CODE>f</CODE> function is applied to the tour              
+      <CODE>ps</CODE> that has been found. Otherwise, the              
+      <CODE>moves</CODE> function is used to apply the nested              
+      <CODE>move_to</CODE> function with each of the knights moves from the 
+      current position.           </P>
+      <P>The              <CODE>move_to</CODE> function calculates the new 
+      position              <CODE>p</CODE> and, if it is free (not yet been 
+      visited), continues the search from there by removing the new position 
+      from the set of free positions and accumulating it into the current tour   
+                 <CODE>ps</CODE> .           </P>
+      <P>The following main program tries to find one knights tour on an         
+           <I>n</I> ×             <I>n</I> board for each of              
+      <I>n=1..6</I> and prints the first tour found in each case:           </P>
+<PRE>&gt; exception Fin;;
+exception Fin</PRE>
+<PRE>&gt; do
+    for n=1 to 6 do
+      printf "n=%d: \n" n
+      let f () ps =
+        let b = Array.init n (fun _ -&gt; Array.create n 0)
+        let i = ref 1 in
+        List.iter (fun (x, y) -&gt; b.[y-1].[x-1] &lt;- !i; incr i) (List.rev ps)
+        for x=1 to n do
+          for y=1 to n do
+            printf "%2d " b.[y-1].[x-1]
+          printf "\n"
+        printf "\n"
+        raise Fin
+      try
+        let p = 1, 1
+        let free =
+          set
+            [ for x in 1..n do
+                for y in 1..n do
+                  if (x, y) &lt;&gt; p then yield (x, y) ]
+        search f n free [p] () p
+        printf "No solutions\n\n"
+      with Fin -&gt; ();;</PRE>
+      <P>Note the raising of an exception to escape the              
+      <CODE>search</CODE> fold as soon as a knight's tour is found.           
+      </P>
+      <P>When run from an F# interactive session, this program completes in 
+      8.75s:</P>
+<PRE>n=1: 
+ 1 </PRE>
+<PRE>n=2: 
+No solutions</PRE>
+<PRE>n=3: 
+No solutions</PRE>
+<PRE>n=4: 
+No solutions</PRE>
+<PRE>n=5: 
+ 1 16 11 20  3 
+10 21  2 17 12 
+15 24 19  4  7 
+22  9  6 13 18 
+25 14 23  8  5 </PRE>
+<PRE>n=6: 
+ 1 14 25 28  3 36 
+24 29  2 35 16 27 
+13 20 15 26  9  4 
+30 23  8 19 34 17 
+ 7 12 21 32  5 10 
+22 31  6 11 18 33 </PRE>
+<PRE>Real: 00:00:08.750, CPU: 00:00:08.751, GC gen0: 231, gen1: 0, gen2: 0
+val it : unit = ()</PRE>
+      <P>Printing the tours on a board makes it easy to verify the solutions by 
+      inspection.</P>
+      <P>Finding a tour on a full 8×8 board would take a long time using this 
+      algorithm. Thus, it is desireable to optimize this program.</P>
+      <P>A simple and effective optimization known as "Warnsdorff's rule" is to 
+      search the most constrained branches first. In the context of the knights 
+      tour, this encourages the tour to visit board positions that are most 
+      likely to become dead ends sooner rather than later.</P>
+      <P>This is very easy to implement in F#. The following              
+      <CODE>search</CODE> function accumulates a list of moves to free board 
+      positions and with their "freedom", meaning the number of free positions 
+      that the knight can jump to from there. The resulting list is sorted into 
+      non-descending order by freedom before searching the least-free (most 
+      constrained) moves first:           </P>
+<PRE>&gt; let rec search f n free ps accu (x, y) =
+    if Set.isEmpty free then f accu ps else
+      let freedom (x, y) a (dx, dy) =
+        if Set.contains (x+dx, y+dy) free then a+1 else a in
+      let aux t (dx, dy) =
+        let p = x + dx, y + dy in
+        if Set.contains p free then (moves (freedom p) 0, p)::t else t in
+      let move_to accu (_, p) =
+        search f n (Set.remove p free) (p::ps) accu p in
+      Seq.fold move_to accu (List.sort (moves aux []));;
+val search :
+  ('a -&gt; (int * int) list -&gt; 'a) -&gt;
+    'b -&gt; Set&lt;int * int&gt; -&gt; (int * int) list -&gt; 'a -&gt; int * int -&gt; 'a</PRE>
+      <P>The performance improvement due to this simple algorithmic optimization 
+      is significant:</P>
+<PRE>n=1: 
+ 1 </PRE>
+<PRE>n=2: 
+No solutions</PRE>
+<PRE>n=3: 
+No solutions</PRE>
+<PRE>n=4: 
+No solutions</PRE>
+<PRE>n=5: 
+ 1 20  9 14  3 
+10 15  2 19 24 
+21  8 23  4 13 
+16 11  6 25 18 
+ 7 22 17 12  5 </PRE>
+<PRE>n=6: 
+ 1 28  9 20  3 30 
+10 21  2 29 16 19 
+35  8 27 18 31  4 
+22 11 34 15 26 17 
+ 7 36 13 24  5 32 
+12 23  6 33 14 25 </PRE>
+<PRE>Real: 00:00:00.100, CPU: 00:00:00.093, GC gen0: 1, gen1: 0, gen2: 0
+val it : unit = ()</PRE>
+      <P>Warnsdorff's rule has allowed us to find knight's tours 87.5× faster 
+      than the naive brute-force approach! We can now find a knights tour on the 
+      full-size 8×8 board easily:</P>
+<PRE>n=8: 
+ 1 16 31 40  3 18 21 56 
+30 39  2 17 42 55  4 19 
+15 32 41 46 53 20 57 22 
+38 29 48 43 58 45 54  5 
+33 14 37 52 47 60 23 62 
+28 49 34 59 44 63  6  9 
+13 36 51 26 11  8 61 24 
+50 27 12 35 64 25 10  7</PRE>
+      <H2>Summary</H2>
+      <P>This article has introduced the topic of logic programming and 
+      explained why the F# language is very well-suited to this kind of 
+      programming. Immutable data structures and custom syntax for constructing 
+      and deconstructing lists make it very easy to solve logic problems. 
+      However, the resulting idiomatic ML programs can run very slowly in F# and 
+      optimizing them to achieve performance comparable to OCaml can require the 
+      use of imperative data structures.</P>
+      <P>Future F#.NET Journal articles will revisit logic programming in the 
+      context of AI and puzzle solving and the same techniques will be covered 
+      in the context of other paradigms such as 
+combinatorics.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Logic%20programming%20n-queens%20and%20knight's%20tour%20problems_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

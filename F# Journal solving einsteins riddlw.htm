@@ -1,0 +1,160 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0085)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/EinsteinsRiddle.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20solving%20einsteins%20riddlw_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20solving%20einsteins%20riddlw_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20solving%20einsteins%20riddlw_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20solving%20einsteins%20riddlw_files/title.gif"> </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20solving%20einsteins%20riddlw_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Solving Einstein's Riddle</H1>
+      <P>Einstein is said to have posed a logic puzzle, sometimes called the 
+      "zebra puzzle", that only 2% of people would be able to solve. This 
+      article reviews the puzzle and walks through a simple solver written in F# 
+      that finds the correct answer in a fraction of a second.</P>
+      <H2>The puzzle</H2>
+      <P>The puzzle concerns five people living in five houses of different 
+      colors who prefer different drinks, pets and cigarettes. The following 
+      clues are given:</P>
+      <P>1 The Brit lives in the red house </P>
+      <P>2 The Swede keeps dogs as pets </P>
+      <P>3 The Dane drinks tea </P>
+      <P>4 The green house is on the left of the white house</P>
+      <P>5 The green house's owner drinks coffee </P>
+      <P>6 The person who smokes Pall Mall rears birds </P>
+      <P>7 The owner of the yellow house smokes Dunhill </P>
+      <P>8 The man living in the centre house drinks milk </P>
+      <P>9 The Norwegian lives in the first house </P>
+      <P>10 The person who smokes Marlboro lives next to the one who keeps cats 
+      </P>
+      <P>11 The person who keeps horses lives next to the person who smokes 
+      Dunhill </P>
+      <P>12 The person who smokes Winfield drinks beer </P>
+      <P>13 The German smokes Rothmans</P>
+      <P>14 The Norwegian lives next to the blue house </P>
+      <P>15 The person who smokes Marlboro has a neigbor who drinks water </P>
+      <P>And the question is "who owns the fish"?</P>
+      <H2>Designing a solution</H2>
+      <P>This puzzle is most easily interpreted by using the house number as a 
+      key. The nationalities, house colors, drinks, pets and cigarette brands 
+      may then be distributed among the house numbers by considering 
+      permutations of the given 5-element sets.</P>
+      <P>There are 5!=120 permutations of a 5-element sequence. There are 5 such 
+      sequences to permute so the search space contains 120^5 or 25 billion 
+      5-tuples of permutations. A naive solver would simply enumerate all of 
+      these and filter for the only solution that satisfies all of the hints. 
+      How long might this take?</P>
+      <P>The following program creates a list of 120 fake permutation lists each 
+      of length 5 and then enumerates 3 lots of nested permutations:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;perms&nbsp;=&nbsp;[for&nbsp;i&nbsp;in&nbsp;1..120&nbsp;-&gt;&nbsp;[i..i+4]];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;perms&nbsp;:&nbsp;int&nbsp;list&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[[1;&nbsp;2;&nbsp;3;&nbsp;4;&nbsp;5];&nbsp;[2;&nbsp;3;&nbsp;4;&nbsp;5;&nbsp;6];&nbsp;[3;&nbsp;4;&nbsp;5;&nbsp;6;&nbsp;7];&nbsp;[4;&nbsp;5;&nbsp;6;&nbsp;7;&nbsp;8];&nbsp;...<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&nbsp;for&nbsp;x&nbsp;in&nbsp;perms&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;y&nbsp;in&nbsp;perms&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;z&nbsp;in&nbsp;perms&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x.Head=1&nbsp;&amp;&amp;&nbsp;y.Head=1&nbsp;&amp;&amp;&nbsp;z.Head=1&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;x,&nbsp;y,&nbsp;z&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:05.971,&nbsp;CPU:&nbsp;00:00:06.536,&nbsp;GC&nbsp;gen0:&nbsp;220,&nbsp;gen1:&nbsp;2,&nbsp;gen2:&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(int&nbsp;*&nbsp;int&nbsp;*&nbsp;int)&nbsp;list&nbsp;=&nbsp;[(1,&nbsp;1,&nbsp;1)]</CODE></P>
+      <P>Our puzzle requires 5 lots of permutations to be nested so it will take 
+      around 120^2 times longer which equates to 20 hours of compute time. We 
+      consider this to be too long.</P>
+      <P>The simplest way to accelerate the solver is to hoist as many of the 
+      tests as possible. For example, the first hint requires that the Brit 
+      lives in the red house so it only requires the nationalities and house 
+      colors to be checked and, therefore, can avoid enumerating all 
+      permutations of drinks, pets and cigarettes when the Brit has not been 
+      placed in the red house. As we shall see, this dramatically prunes the 
+      search space so such a solver is fast enough to be useful.</P>
+      <H2>Implementing a solution</H2>
+      <P>The different nationalities, colors and so forth could simply be 
+      represented as strings but union types provide more type safety. For 
+      example, with union types any confusion between nationality and color is 
+      caught as a type error at compile time by the compiler.</P>
+      <P>The nationalities may be defined as:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Nation&nbsp;=&nbsp;British&nbsp;|&nbsp;Swedish&nbsp;|&nbsp;Danish&nbsp;|&nbsp;Norwegian&nbsp;|&nbsp;German;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Nation&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;British<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Swedish<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Danish<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Norwegian<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;German</CODE></P>
+      <P>The house colors as:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;House&nbsp;=&nbsp;Red&nbsp;|&nbsp;Green&nbsp;|&nbsp;Blue&nbsp;|&nbsp;White&nbsp;|&nbsp;Yellow;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;House&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Red<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Green<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Blue<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;White<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Yellow</CODE></P>
+      <P>The drinks as:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Drink&nbsp;=&nbsp;Milk&nbsp;|&nbsp;Coffee&nbsp;|&nbsp;Water&nbsp;|&nbsp;Beer&nbsp;|&nbsp;Tea;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Drink&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Milk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Coffee<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Water<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Beer<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Tea</CODE></P>
+      <P>The brands of cigarette as:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Smoke&nbsp;=&nbsp;PallMall&nbsp;|&nbsp;Dunhill&nbsp;|&nbsp;Marlboro&nbsp;|&nbsp;Rothmans&nbsp;|&nbsp;Winfield;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Smoke&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PallMall<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Dunhill<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Marlboro<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Rothmans<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Winfield</CODE></P>
+      <P>And finally the pets:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Pet&nbsp;=&nbsp;Dog&nbsp;|&nbsp;Cat&nbsp;|&nbsp;Fish&nbsp;|&nbsp;Horse&nbsp;|&nbsp;Bird;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Pet&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Dog<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Cat<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Fish<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Horse<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Bird</CODE></P>
+      <P>We shall be enumerating all possibilities so we also define lists 
+      containing all of the values of each union type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;nations&nbsp;=&nbsp;[British;&nbsp;Swedish;&nbsp;Danish;&nbsp;Norwegian;&nbsp;German];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;nations&nbsp;:&nbsp;Nation&nbsp;list&nbsp;=&nbsp;[British;&nbsp;Swedish;&nbsp;Danish;&nbsp;Norwegian;&nbsp;German]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;houses&nbsp;=&nbsp;[Red;&nbsp;Green;&nbsp;Blue;&nbsp;White;&nbsp;Yellow];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;houses&nbsp;:&nbsp;House&nbsp;list&nbsp;=&nbsp;[Red;&nbsp;Green;&nbsp;Blue;&nbsp;White;&nbsp;Yellow]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;drinks&nbsp;=&nbsp;[Milk;&nbsp;Coffee;&nbsp;Water;&nbsp;Beer;&nbsp;Tea];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;drinks&nbsp;:&nbsp;Drink&nbsp;list&nbsp;=&nbsp;[Milk;&nbsp;Coffee;&nbsp;Water;&nbsp;Beer;&nbsp;Tea]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;smokes&nbsp;=&nbsp;[PallMall;&nbsp;Dunhill;&nbsp;Marlboro;&nbsp;Rothmans;&nbsp;Winfield];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;smokes&nbsp;:&nbsp;Smoke&nbsp;list&nbsp;=&nbsp;[PallMall;&nbsp;Dunhill;&nbsp;Marlboro;&nbsp;Rothmans;&nbsp;Winfield]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;pets&nbsp;=&nbsp;[Dog;&nbsp;Cat;&nbsp;Fish;&nbsp;Horse;&nbsp;Bird];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;pets&nbsp;:&nbsp;Pet&nbsp;list&nbsp;=&nbsp;[Dog;&nbsp;Cat;&nbsp;Fish;&nbsp;Horse;&nbsp;Bird]</CODE></P>
+      <P>We require the ability to generate all permutations of each of these 
+      lists. This is most easily done via a <CODE>distribute</CODE> function 
+      that takes an element and a list and returns a list of lists with the 
+      element inserted at each possible position:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;distribute&nbsp;y&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;[[y]]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::xs&nbsp;-&gt;&nbsp;(y::x::xs)::[for&nbsp;xs&nbsp;in&nbsp;distribute&nbsp;y&nbsp;xs&nbsp;-&gt;&nbsp;x::xs];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;distribute&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;list</CODE></P>
+      <P>For example, distributing <CODE>1</CODE> throughout the list 
+      <CODE>[2;&nbsp;3;&nbsp;4]</CODE> produces:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;distribute&nbsp;1&nbsp;[2..4];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;list&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[[1;&nbsp;2;&nbsp;3;&nbsp;4];&nbsp;[2;&nbsp;1;&nbsp;3;&nbsp;4];&nbsp;[2;&nbsp;3;&nbsp;1;&nbsp;4];&nbsp;[2;&nbsp;3;&nbsp;4;&nbsp;1]]</CODE></P>
+      <P>The following <CODE>permute</CODE> function computes the permutations 
+      of a list by distributing each head element throughout the permutations of 
+      the tail list recursively until the base case is reached:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;permute&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;[[]]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;x::xs&nbsp;-&gt;&nbsp;List.collect&nbsp;(distribute&nbsp;x)&nbsp;(permute&nbsp;xs);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;permute&nbsp;:&nbsp;'a&nbsp;list&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;list</CODE></P>
+      <P>For example, there are 3! = 6 permutations of the list 
+      <CODE>[1;&nbsp;2;&nbsp;3]</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;permute&nbsp;[1..3];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;list&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[[1;&nbsp;2;&nbsp;3];&nbsp;[2;&nbsp;1;&nbsp;3];&nbsp;[2;&nbsp;3;&nbsp;1];&nbsp;[1;&nbsp;3;&nbsp;2];&nbsp;[3;&nbsp;1;&nbsp;2];&nbsp;[3;&nbsp;2;&nbsp;1]]</CODE></P>
+      <P>We use permutations to assign sequences of nationalities, colors and so 
+      forth to house numbers. The following <CODE>find</CODE> function searches 
+      a permutation for a given value and returns its index within the sequence 
+      plus one as the house number:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;find&nbsp;xs&nbsp;x&nbsp;=&nbsp;List.findIndex&nbsp;((=)&nbsp;x)&nbsp;xs&nbsp;+&nbsp;1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;find&nbsp;:&nbsp;'a&nbsp;list&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;int&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>For example, in the list <CODE>nations</CODE> defined above the Brit is 
+      in house number one and the Norwegian is in house number four:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;find&nbsp;nations&nbsp;Norwegian;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;4</CODE></P>
+      <P>Several of the puzzle's hints constrain neighboring houses to have 
+      specific nationalities, colors and so forth so we define the following 
+      auxiliary function to identify house numbers that are next to each 
+      other:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;nextTo&nbsp;i&nbsp;j&nbsp;=&nbsp;abs(i-j)=1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;nextTo&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;bool</CODE></P>
+      <P>The answer will be generated as a 5-tuple of 5-element lists giving the 
+      permutations of nations, colors and so on but would be more comprehensible 
+      as a 5-element list of 5-tuples giving the nationality, house color, 
+      drink, cigarette and pet in each of the five houses. We define the 
+      following <CODE>zip5</CODE> function to perform this transpose:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;zip5&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;v::vs,&nbsp;w::ws,&nbsp;x::xs,&nbsp;y::ys,&nbsp;z::zs&nbsp;-&gt;&nbsp;(v,&nbsp;w,&nbsp;x,&nbsp;y,&nbsp;z)::zip5(vs,&nbsp;ws,&nbsp;xs,&nbsp;ys,&nbsp;zs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;[];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;zip5&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;list&nbsp;*&nbsp;'b&nbsp;list&nbsp;*&nbsp;'c&nbsp;list&nbsp;*&nbsp;'d&nbsp;list&nbsp;*&nbsp;'e&nbsp;list&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;*&nbsp;'b&nbsp;*&nbsp;'c&nbsp;*&nbsp;'d&nbsp;*&nbsp;'e)&nbsp;list</CODE></P>
+      <P>Finally, Einstein's riddle may be solved using a list comprehension to 
+      enumerate the permutations of nationalities, house colors and so on that 
+      satisfy all of the predicates:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&nbsp;for&nbsp;nations&nbsp;in&nbsp;permute&nbsp;nations&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;find&nbsp;nations&nbsp;Norwegian&nbsp;=&nbsp;1&nbsp;then&nbsp;//&nbsp;9<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;houses&nbsp;in&nbsp;permute&nbsp;houses&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;find&nbsp;nations&nbsp;British&nbsp;=&nbsp;find&nbsp;houses&nbsp;Red&nbsp;&amp;&amp;&nbsp;//&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;find&nbsp;houses&nbsp;Green&nbsp;=&nbsp;find&nbsp;houses&nbsp;White-1&nbsp;&amp;&amp;&nbsp;//&nbsp;4<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nextTo&nbsp;(find&nbsp;nations&nbsp;Norwegian)&nbsp;(find&nbsp;houses&nbsp;Blue)&nbsp;then&nbsp;//&nbsp;14<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;drinks&nbsp;in&nbsp;permute&nbsp;drinks&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;find&nbsp;nations&nbsp;Danish&nbsp;=&nbsp;find&nbsp;drinks&nbsp;Tea&nbsp;&amp;&amp;&nbsp;//&nbsp;3<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;find&nbsp;houses&nbsp;Green&nbsp;=&nbsp;find&nbsp;drinks&nbsp;Coffee&nbsp;&amp;&amp;&nbsp;//&nbsp;5<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;3&nbsp;=&nbsp;find&nbsp;drinks&nbsp;Milk&nbsp;then&nbsp;//&nbsp;8<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;smokes&nbsp;in&nbsp;permute&nbsp;smokes&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;find&nbsp;houses&nbsp;Yellow&nbsp;=&nbsp;find&nbsp;smokes&nbsp;Dunhill&nbsp;&amp;&amp;&nbsp;//&nbsp;7<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;find&nbsp;smokes&nbsp;Winfield&nbsp;=&nbsp;find&nbsp;drinks&nbsp;Beer&nbsp;&amp;&amp;&nbsp;//&nbsp;12<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;find&nbsp;nations&nbsp;German&nbsp;=&nbsp;find&nbsp;smokes&nbsp;Rothmans&nbsp;&amp;&amp;&nbsp;//&nbsp;13<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nextTo&nbsp;(find&nbsp;smokes&nbsp;Marlboro)&nbsp;(find&nbsp;drinks&nbsp;Water)&nbsp;then&nbsp;//&nbsp;15<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;pets&nbsp;in&nbsp;permute&nbsp;pets&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;find&nbsp;nations&nbsp;Swedish&nbsp;=&nbsp;find&nbsp;pets&nbsp;Dog&nbsp;&amp;&amp;&nbsp;//&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;find&nbsp;smokes&nbsp;PallMall&nbsp;=&nbsp;find&nbsp;pets&nbsp;Bird&nbsp;&amp;&amp;&nbsp;//&nbsp;6<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nextTo&nbsp;(find&nbsp;pets&nbsp;Cat)&nbsp;(find&nbsp;smokes&nbsp;Marlboro)&nbsp;&amp;&amp;&nbsp;//&nbsp;10<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;nextTo&nbsp;(find&nbsp;pets&nbsp;Horse)&nbsp;(find&nbsp;smokes&nbsp;Dunhill)&nbsp;then&nbsp;//&nbsp;11<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;zip5(nations,&nbsp;houses,&nbsp;drinks,&nbsp;smokes,&nbsp;pets)&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.109,&nbsp;CPU:&nbsp;00:00:00.124,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(Nation&nbsp;*&nbsp;House&nbsp;*&nbsp;Drink&nbsp;*&nbsp;Smoke&nbsp;*&nbsp;Pet)&nbsp;list&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[[(Norwegian,&nbsp;Yellow,&nbsp;Water,&nbsp;Dunhill,&nbsp;Cat);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Danish,&nbsp;Blue,&nbsp;Tea,&nbsp;Marlboro,&nbsp;Horse);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(British,&nbsp;Red,&nbsp;Milk,&nbsp;PallMall,&nbsp;Bird);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(German,&nbsp;Green,&nbsp;Coffee,&nbsp;Rothmans,&nbsp;Fish);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Swedish,&nbsp;White,&nbsp;Beer,&nbsp;Winfield,&nbsp;Dog)]]</CODE></P>
+      <P>This simple solver finds the unique solution in a fraction of a second, 
+      which is more than adequate performance despite its simplicity. The answer 
+      is that the German owns the fish.</P>
+      <H2>Summary</H2>
+      <P>This article has taken a look at Einstein's Riddle and how it can be 
+      solved quickly in F#. The style used can be used to solve a wide variety 
+      of logic problems.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of logic 
+      solvers.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20solving%20einsteins%20riddlw_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

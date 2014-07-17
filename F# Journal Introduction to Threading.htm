@@ -1,0 +1,404 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/threading.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Introduction to Threading</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Introduction%20to%20Threading_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Introduction%20to%20Threading_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Introduction%20to%20Threading_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Introduction to Threading</TITLE>     <LINK 
+href="F%23%20Journal%20Introduction%20to%20Threading_files/style.css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20Introduction%20to%20Threading_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Introduction%20to%20Threading_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Introduction%20to%20Threading_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Introduction%20to%20Threading_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Introduction to Threading</H1>
+      <P>The .NET platform provides parallel execution of code through 
+      multithreading. A thread is an independent execution path, able to run 
+      simultaneously with other threads. This article describes the fundamentals 
+      of .NET threading and how this functionality can be leveraged elegantly by 
+      F# programs.</P>
+      <H2>Introduction</H2>
+      <P>Many applications can benefit from the ability to execute threads of 
+      program concurrently. On the .NET platform, this functionality is provided 
+      by              <I>threading</I> .           </P>
+      <P>The design of concurrent programs and the use of threading on the .NET 
+      platform is a huge topic fraught with perils. Consequently, this chapter 
+      aims only to provide the reader with a basic understanding of threading on 
+      the .NET platform and to provide some useful higher-order functions that 
+      can be used to improve the performance of F# programs whilst avoiding as 
+      many pitfalls as possible.</P>
+      <P>Concurrency is used to solve three main problems:</P>
+      <P>
+      <OL>
+        <LI>CPU bound computation, e.g. dividing a long running computation 
+        between two CPUs to double performance.</LI>
+        <LI>Non-CPU bound computation, e.g. downloading many protein sequences 
+        over the internet without wasting time waiting for one download to 
+        finish before beginning another.</LI>
+        <LI>Interactivity, e.g. using a multithreaded GUI to ensure that the 
+        user interface of an application continues to function while the 
+        application is processing data.</LI></OL>
+      <P></P>
+      <P>CPU-bound computations are best suited to one thread for each CPU 
+      whereas non-CPU bound computations benefit from having a number of threads 
+      that is unrelated to the number of CPUs, chosen to be a trade-off between 
+      sufficient parallelism and the overhead of context switching between 
+      threads. Multithreaded GUIs require more sophisticated use of low-level 
+      threading constructs, typically based upon message passing between the 
+      front-end GUI and the back-end computational engine.</P>
+      <H2>Determinism</H2>
+      <P>Determinism is a vitally important property of most programs. In the 
+      context of threading, a function that is careful to ensure determinism in 
+      the context of parallel execution is referred to as being thread safe. 
+      Designing functions to be thread safe is arbitrarily difficult and, 
+      consequently, containing this complexity is essential if large programs 
+      are to run correctly.</P>
+      <P>Consider a program that spawns two threads that execute in parallel, 
+      adjusting a counter. The first thread decrements the counter and the 
+      second thread increments the counter. All things being equal, we might 
+      expect the counter to be either -1, 0 or 1 at any given time. However, 
+      this is not the case for two reasons:</P>
+      <P>
+      <UL>
+        <LI>CPU time may not be divided equally between the two threads by the 
+        OS.</LI>
+        <LI>Increment and decrement are not atomic operations, so the value of 
+        the counter may be adjusted by one thread while the other thread is in 
+        the middle of an increment or decrement.</LI></UL>
+      <P></P>
+      <P>The unequal division of CPU time can be accounted for by queuing 
+      operations and              <I>scheduling</I> their execution rather than 
+      dividing them equally between threads. Each thread of computation executes 
+      tasks from the queue. If one thread is given more CPU time then it will 
+      consume more tasks from the queue, keeping all CPUs busy and making more 
+      efficient use of CPU time.           </P>
+      <P>The latter problem is more subtle and can be solved using some 
+      low-level constructs. Specifically, threads must be synchronized to ensure 
+      that certain operations (increment and decrement in this case) are 
+      executed atomically by only one thread at a time. This is achieved by 
+      wrapping the non-atomic operation in a              <I>lock</I> , a 
+      low-level construct that excludes other threads from executing the code at 
+      the same time. In this case, the increment and decrement would be wrapped 
+      in locks that depended upon a single value, thus precluding one thread 
+      from incrementing while the other was decrementing and vice-versa.         
+        </P>
+      <H2>Threads</H2>
+      <P>Threading is provided via classes from              
+      <CODE>System.Threading</CODE> :           </P>
+<PRE>&gt; open System.Threading;;</PRE>
+      <P>Concurrent threads of computation can be spawned by constructing a      
+              <CODE>Thread</CODE> object with a function              
+      <CODE>f</CODE> to execute and calling the Start method of the thread to 
+      begin execution. The following higher-order              
+      <CODE>spawn</CODE> function begins executing the given function            
+        <CODE>f</CODE> concurrently on a separate thread:           </P>
+<PRE>&gt; let spawn (f : unit -&gt; unit) =
+    let thread = new Thread(f)
+    thread.Start()
+    thread;;
+val spawn : (unit -&gt; unit) -&gt; Thread</PRE>
+      <P>After the spawn function is invoked, another computation is running 
+      concurrently. In most cases, the main thread will want to pause until the 
+      spawned thread completes, e.g. to read the result of the completed thread. 
+      This is achieved by calling the              <CODE>Join</CODE> method of 
+      the              <CODE>Thread</CODE> object that was returned by the spawn 
+      function.           </P>
+      <P>The following              <CODE>execute</CODE> function spawns several 
+      threads and waits for them all to complete:           </P>
+<PRE>&gt; let execute n f =
+    [|for i in 1 .. n -&gt; spawn f|]
+    |&gt; Array.iter (fun t -&gt; t.Join());;
+val execute : int -&gt; (unit -&gt; unit) -&gt; unit</PRE>
+      <P>In the context of functional programming, the single most important 
+      improvement that can be made to the              <CODE>spawn</CODE> and    
+                <CODE>execute</CODE> functions is to create variants that allow 
+      values fed through functions that execute concurrently. This requires the 
+      type of the function f to be generalized from              <CODE>unit 
+      -&gt; unit</CODE> to              <CODE>'a -&gt; 'b</CODE> .           
+</P>
+      <P>This improvement hints at the concept of a parallel              
+      <CODE>map</CODE> function that allows a function to be applied to 
+      different elements of the input sequence at the same time.           </P>
+      <P>A naive implementation of a parallel map can be written using the 
+      minimal threading functionality already discussed:</P>
+<PRE>  let map f a =
+    let b = Array.create (Array.length a) None
+    Array.mapi (fun i a -&gt; spawn (fun () -&gt; b.[i] &lt;- Some(f a))) a
+    |&gt; Array.iter (fun t -&gt; t.Join())
+    Array.map Option.get b;;
+val map : ('a -&gt; 'b) -&gt; 'a array -&gt; 'b array</PRE>
+      <P>This implementation spawns one thread for each element of the input 
+      array              <CODE>a</CODE> . Each thread fills the corresponding 
+      element of the array              <CODE>b</CODE> with its result. As the 
+      type of the result is not known, the intermediate array              
+      <CODE>b</CODE> contains option types that are initially set to             
+       <CODE>None</CODE> . All of the threads are started and then all of the 
+      threads are joined, pausing the main thread until every spawned thread has 
+      completed. When all of the threads have completed the array b contains 
+      only              <CODE>Some</CODE> values, which are extracted using the  
+                  <CODE>Option.get</CODE> function to return the final result.   
+              </P>
+      <P>This naive parallel map adds several overheads to the synchronous       
+             <CODE>Array.map</CODE> function:             
+      <UL>
+        <LI>Boxing and unboxing of the option type.</LI>
+        <LI>Thread creation and handling.</LI>
+        <LI>Context switching if there are more threads than free CPUs.</LI>
+        <LI>Two more array traversals.</LI></UL>
+      <P></P>
+      <P>However, even this naive implementation can give a significant 
+      performance improvement when the input array contains one element for each 
+      CPU, the computations take roughly-equal time and the time taken is much 
+      longer than the overheads.</P>
+      <P>We can time function applications using the following              
+      <CODE>time</CODE> combinator:           </P>
+<PRE>&gt; let time f x =
+    let t = new System.Diagnostics.Stopwatch()
+    t.Start()
+    try f x finally
+    printf "Took %dms\n" t.ElapsedMilliseconds;;
+val time : ('a -&gt; 'b) -&gt; 'a -&gt; 'b</PRE>
+      <P>The following Fibonacci function can be used to benchmark the parallel 
+      map:</P>
+<PRE>&gt; let rec fib = function
+    | 0 | 1 as n -&gt; n
+    | n -&gt; fib(n-1)+fib(n-2);;
+val fib : int -&gt; int</PRE>
+      <P>Comparing the performance of the sequential              
+      <CODE>Array.map</CODE> function and the new parallel              
+      <CODE>map</CODE> function shows that performance is roughly doubled for 
+      two identical tasks on a dual-core machine, as expected:           </P>
+<PRE>&gt; time (Array.map fib) [|40; 40|];;
+Took 4973ms
+val it : int array = [|102334155; 102334155|]
+&gt; time (map fib) [|40; 40|];;
+Took 2543ms
+val it : int array = [|102334155; 102334155|]</PRE>
+      <P>However, applying the naive parallel map to a long array of quick 
+      computations increases the relative cost of this function's overheads. 
+      Consequently, the parallel map function can also be much slower than a 
+      sequential map, over three orders of magnitude slower when mapping 
+      increment over each element of a 10             <SUP>4</SUP> -element 
+      array:           </P>
+<PRE>&gt; time (Array.map (( + ) 1)) [|1 .. 10000|];;
+Took 0ms
+val it : int array = ...
+&gt; time (map (( + ) 1)) [|1 .. 10000|];;
+Took 5840ms
+val it : int array = ...</PRE>
+      <P>This poor performance is caused by the unnecessary creation of 10,000 
+      threads. Indeed, we can infer that it takes of the order of 1ms to create 
+      a thread and, consequently, every function invocation by this parallel map 
+      should take at least this long or performance will suffer.</P>
+      <P>Using a smaller number of threads and synchronizing their access to the 
+      input array greatly improves the worst-case performance of this parallel 
+      map. Implementing this improved parallel map requires the use of .NET 
+      thread synchronization constructs.</P>
+      <H2>Locks</H2>
+      <P>Two of the deficiencies of the naive parallel map can be addressed by 
+      distributing the element-wise computations over a small number of threads. 
+      Using fewer threads reduces the overheads of thread creation and handling 
+      and greatly improves worst-case performance, broadening the utility of the 
+      parallel map function.</P>
+      <P>Locks are a way to mutually exclude threads from performing certain 
+      tasks concurrently, such as incrementing a counter. This exact 
+      functionality can be used to synchronise a small number of threads to 
+      process array elements concurrently, each thread consuming the next 
+      available element until no elements remain.</P>
+      <P>A section of code is most elegantly locked in F# using the higher-order 
+      function              <CODE>Idioms.lock</CODE> :           </P>
+<PRE>&gt; Idioms.lock;;
+val it : obj -&gt; (unit -&gt; 'a) -&gt; 'a</PRE>
+      <P>This function waits until the given object is unlocked, then locks it, 
+      executes the given function and unlocks the object before returning. Thus, 
+      a threadsafe increment of an              <CODE>int ref</CODE> called      
+              <CODE>n</CODE> may be written:           </P>
+<PRE>Idioms.lock n (fun () -&gt; incr n)</PRE>
+      <P>This leads to a more efficient implementation of the parallel map that 
+      uses a small number of threads that share a counter to keep track of the 
+      next unmapped element in the array. The task of incrementing the counter 
+      and returning the next unmapped element (if any) may be written:</P>
+<PRE>&gt; let next n =
+    let i = ref 0
+    fun () -&gt;
+      (fun () -&gt;
+         if !i = n then None else
+           incr i
+           Some(!i - 1))
+      |&gt; Idioms.lock i;;
+val next : int -&gt; (unit -&gt; int option)</PRE>
+      <P>Application of the first argument              <CODE>n</CODE> creates 
+      an              <CODE>int ref</CODE> that will be shared between the 
+      closures generated by supplying the subsequence              
+      <CODE>()</CODE> argument. Full application locks the counter and tries to 
+      increment it and return the current value.           </P>
+      <P>We also need a worker thread that repeatedly maps array elements until 
+      none remain:</P>
+<PRE>&gt; let rec worker next apply =
+    match next() with
+    | None -&gt; ()
+    | Some i -&gt;
+        apply i;
+        worker next apply;;
+val worker : (unit -&gt; 'a option) -&gt; ('a -&gt; unit) -&gt; unit</PRE>
+      <P>Note that this function is written in tail recursive form, with the 
+      recursive call to              <CODE>worker</CODE> appearing as a final 
+      statement.           </P>
+      <P>For example, invoking the              <CODE>worker</CODE> function to 
+      print each of ten elements sequentially gives:           </P>
+<PRE>&gt; worker (next 10) print_int;;
+0123456789</PRE>
+      <P>The parallel map itself spawns threads executing a loop function which 
+      repeatedly maps a single element and looks for the next unmapped 
+      element:</P>
+<PRE>&gt; let map n f a =
+    let m = Array.length a
+    let next = next m
+    let b = Array.create m None
+    let apply i = b.[i] &lt;- Some(f a.[i])
+    let ts =
+      [|for i in 2 .. min n m -&gt;
+          spawn (worker next) apply|]
+    worker next apply
+    ts |&gt; Seq.iter (fun t -&gt; t.Join())
+    Array.map Option.get b;;
+val map : int -&gt; ('a -&gt; 'b) -&gt; 'a array -&gt; 'b array</PRE>
+      <P>Note that this implementation is also careful to use the main thread as 
+      one of the workers, avoiding the creation of one thread.</P>
+      <P>For CPU-bound operations, this map should be invoked with one thread 
+      per CPU:</P>
+<PRE>&gt; let cpu_map f a =
+    map System.Environment.ProcessorCount f a;;
+val cpu_map : ('a -&gt; 'b) -&gt; 'a array -&gt; 'b array</PRE>
+      <P>This scheduled implementation is almost as fast for small numbers of 
+      expensive operations:</P>
+<PRE>&gt; time (cpu_map fib) [|40; 40|];;
+Took 2651ms
+val it : int array = [|102334155; 102334155|]</PRE>
+      <P>Whereas the previous implementation used one thread per array element, 
+      this implementation uses a fixed number of threads. So the worse case 
+      behaviour of trivial operations on long arrays is drastically 
+improved:</P>
+<PRE>&gt; time (Array.map (( + ) 1)) [|1 .. 1000000|];;
+Took 14ms
+...
+&gt; time (cpu_map (( + ) 1)) [|1 .. 1000000|];;
+Took 927ms
+...</PRE>
+      <P>From the results we have seen, thread creation requires around 1ms and 
+      the overhead of a parallel map is around 1us. Thus, users of this parallel 
+      map should ensure that the time taken per operation is well over 1us and 
+      the time taken for the whole map is well over 1ms.</P>
+      <P>However, this parallel map implementation has one major safety flaw: it 
+      does not handle exceptions raised when              <CODE>f</CODE> is 
+      applied to an array element. Ideally, we would like a raise the exception 
+      thrown on the foremost element and abort all worker threads as soon as 
+      possible. This is sufficiently difficult to implement correctly that we 
+      shall leave this task for a future journal article.           </P>
+      <P>This parallel map is efficient and distributes computation evenly. 
+      Consequently, this is the parallel map of choice for CPU-intensive 
+      applications that value simplicity over performance. The overheads of this 
+      parallel map implementation are primarily the creation of local threads 
+      and synchronization between those threads.</P>
+      <H2>The Thread Pool</H2>
+      <P>The previous implementation of parallel map distributed computations 
+      over a set of threads. A set of threads that serves this purpose is known 
+      as a thread pool and the .NET platform provides a global thread pool that 
+      typically contains 25 worker threads and is accessed via the              
+      <CODE>ThreadPool</CODE> namespace.           </P>
+      <P>The advantage of using a global thread pool is that the worker threads 
+      have already been created, removing this overhead from the parallel map 
+      function. The disadvantage is lack of safety: functions that use the 
+      thread pool recursively can deadlock threads in the threadpool and 
+      different parts of the program can adversely affect each others 
+      performance. So the global threadpool can facilitate a faster parallel map 
+      function but the functions passed to this map must not use the threadpool 
+      themselves.</P>
+      <P>The              <CODE>QueueUserWorkItem</CODE> method can be used to 
+      queue computations on the global threadpool directly. Asynchronous 
+      delegates provide an alternative, and often easier, way to execute 
+      computations concurrently using the threadpool.           </P>
+      <H2>Asynchronous Delegates</H2>
+      <P>A delegate is a rudimentary form of closure provided by the .NET 
+      platform. In F#, a closure can be converted into a delegate using the      
+              <CODE>System.Converter</CODE> class.           </P>
+      <P>Delegates provide asynchronous invocation via              
+      <CODE>BeginInvoke</CODE> and              <CODE>EndInvoke</CODE> methods. 
+      The former queues the delegate in the thread pool, applying any arguments, 
+      and the latter waits for it to complete and recovers its return value.     
+            </P>
+      <P>A parallel map that uses the global thread pool by invoking 
+      asynchronous delegates may be written:</P>
+<PRE>&gt; let global_map f a =
+    let d = new System.Converter&lt;'a, 'b&gt;(f)
+    Array.map (fun x -&gt; d.BeginInvoke(x, null, null)) a |&gt;
+      Array.map (fun a -&gt; d.EndInvoke(a));;
+val global_map : ('a -&gt; 'b) -&gt; 'a array -&gt; 'b array</PRE>
+      <P>This implementation of a parallel map is faster than the previous 
+      implementation when the total time taken to perform the whole map is small 
+      because the previous map implementation's performance is dominated by the 
+      1ms taken to create each thread.</P>
+      <P>Although one might expect a performance improvement in the general 
+      case, this approach incurs security checks and various other computation 
+      every time an item is queued. Consequently, this implementation is 
+      actually around 100× slower per element:</P>
+<PRE>&gt; time (cpu_map (( + ) 1)) [|1 .. 10000|];;
+Took 630ms
+...</PRE>
+      <P>Worse performance renders this approach inefficient for tasks taking 
+      under 0.1ms per element. However, this approach will reraise the earliest 
+      exception, albeit without aborting the other work items.</P>
+      <H2>Conclusions</H2>
+      <P>We have demonstrated the core concepts of threads and locks than 
+      underpin the use of threading on the .NET platform. Many aspects of 
+      concurrent programming remain to be discussed in future articles.</P>
+      <P>Wait handles can be used to stall a thread until an event occurs. For 
+      example, a parallel map implementation that uses the thread pool directly 
+      might use a wait handle to signal when the main thread can return after 
+      all work items have completed.</P>
+      <P>Message loops are used by Windows Forms to queue operations for 
+      execution on the GUI thread. Future articles will describe how concurrency 
+      can be exploited safely and correctly from Windows Forms programs, 
+      beginning with the description of a concurrent ray tracer rendering into a 
+      GUI.</P>
+      <P>Finally, the next public release of F# is scheduled to have the 
+      beginnings of a new approach to concurrent programming, based around 
+      message passing and a monadic programming style forming an easy-to-use 
+      approach that simplifies the task of writing correct concurrent 
+      programs.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Introduction%20to%20Threading_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

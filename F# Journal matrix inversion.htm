@@ -1,0 +1,160 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/matrixinverse.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20matrix%20inversion_files/style.css"><LINK rel=stylesheet 
+type=text/css 
+href="F%23%20Journal%20matrix%20inversion_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20matrix%20inversion_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20matrix%20inversion_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20matrix%20inversion_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Numerical methods: matrix inversion</H1>
+      <P>Matrix inversion is one of the most important numerical methods with 
+      many practical applications. In practice, the numerical instability of 
+      matrix inverses leads to the use of linear solvers that effectively 
+      premultiply by the inverse of a matrix without having to explicitly 
+      compute the matrix inverse. This article disregards numerical accuracy in 
+      order to write the simplest possible function that computes the inverse of 
+      a matrix. The resulting function is just 8 lines of F# code and the 
+      remainder of the article is devoted to examining the generality and 
+      parallelization of this tiny function. We find that our tiny solution is 
+      up to 4.3× faster than Mathematica 7's built-in matrix inversion.</P>
+      <H2>Disclaimer</H2>
+      <P>We cannot stress enough that production code should strive to use more 
+      numerically robust techniques than direct matrix inversion in the context 
+      of approximate arithmetic such as floating point arithmetic. For example, 
+      LU decomposition with pivoting combined with a backsolver allows vectors 
+      and matrices to be premultiplied by the inverse of a matrix without ever 
+      having the compute the matrix inverse explicitly.</P>
+      <P>The numerical method developed in this article is for educational 
+      purposes only, as a foray into the remarkable elegance attainable from F#. 
+      However, it is generic and will be used to compute exact results using 
+      rational arithmetic.</P>
+      <H2>Subdividing matrices</H2>
+      <P>We shall be using a divide-and-conquer algorithm to recursively 
+      subdivide matrices into progressively smaller sub-matrices until 
+      individual scalar values are reached. The results must then be 
+      concatenated back into larger matrices until the final inverse is 
+      obtained. This will require the ability to subdivide a square matrix into 
+      four quadrants with square matrices on the diagonals, and the ability to 
+      concatenate those back into the original matrix.</P>
+      <P>In F#, this functionality is most usefully expressed for a 
+      divide-and-conquer algorithm as an active pattern that views a matrix 
+      either as the single element of a 1×1 matrix or as the four quadrants of a 
+      larger matrix that are each at least 1×1 matrices themselves.</P>
+      <P>We begin by loading the F# Power Pack for its matrix 
+implementation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"FSharp.PowerPack.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\FSharpPowerPack-2.0.0.0\bin\FSharp.PowerPack.dll'</CODE></P>
+      <P>Next, we define a pair of active patterns that divide-and-conquer 
+      algorithms can use to subdivide matrices:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Scalar|Blocks|)&nbsp;(a:&nbsp;Matrix&lt;_&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m,&nbsp;n&nbsp;=&nbsp;a.Dimensions<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;m=1&nbsp;&amp;&amp;&nbsp;n=1&nbsp;then&nbsp;Scalar&nbsp;a.[0,0]&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Blocks(<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Matrix.Generic.init&nbsp;(m/2)&nbsp;(n/2)&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;a.[i,&nbsp;j]),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Matrix.Generic.init&nbsp;(m/2)&nbsp;(n&nbsp;-&nbsp;n/2)&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;a.[i,&nbsp;j&nbsp;+&nbsp;n/2])),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Matrix.Generic.init&nbsp;(m&nbsp;-&nbsp;m/2)&nbsp;(n/2)&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;a.[i&nbsp;+&nbsp;m/2,&nbsp;j]),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Matrix.Generic.init&nbsp;(m&nbsp;-&nbsp;m/2)&nbsp;(n&nbsp;-&nbsp;n/2)&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;a.[i&nbsp;+&nbsp;m/2,&nbsp;j&nbsp;+&nbsp;n/2])));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Scalar|Blocks|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Matrix&lt;'a&gt;&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Choice&lt;'a,((Matrix&lt;'a&gt;&nbsp;*&nbsp;Matrix&lt;'a&gt;)&nbsp;*&nbsp;(Matrix&lt;'a&gt;&nbsp;*&nbsp;Matrix&lt;'a&gt;))&gt;</CODE></P>
+      <P>Matrices can be reconstructed by the following <CODE>Scalar</CODE> and 
+      <CODE>Blocks</CODE> functions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;Scalar&nbsp;x&nbsp;=&nbsp;Matrix.Generic.create&nbsp;1&nbsp;1&nbsp;x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;Scalar&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;Matrix&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;Blocks((a:&nbsp;Matrix&lt;_&gt;,&nbsp;b:&nbsp;Matrix&lt;_&gt;),&nbsp;(c:&nbsp;Matrix&lt;_&gt;,&nbsp;d:&nbsp;Matrix&lt;_&gt;))&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m0,&nbsp;n0&nbsp;=&nbsp;a.Dimensions<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;m1,&nbsp;n1&nbsp;=&nbsp;d.Dimensions<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Matrix.Generic.init&nbsp;(m0&nbsp;+&nbsp;m1)&nbsp;(n0&nbsp;+&nbsp;n1)&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;i&nbsp;&lt;&nbsp;m0,&nbsp;j&nbsp;&lt;&nbsp;n0&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;true&nbsp;-&gt;&nbsp;a.[i,&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;false&nbsp;-&gt;&nbsp;b.[i,&nbsp;j&nbsp;-&nbsp;n0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;false,&nbsp;true&nbsp;-&gt;&nbsp;c.[i&nbsp;-&nbsp;m0,&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;false,&nbsp;false&nbsp;-&gt;&nbsp;d.[i&nbsp;-&nbsp;m0,&nbsp;j&nbsp;-&nbsp;n0]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;Blocks&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Matrix&lt;'a&gt;&nbsp;*&nbsp;Matrix&lt;'a&gt;)&nbsp;*&nbsp;(Matrix&lt;'a&gt;&nbsp;*&nbsp;Matrix&lt;'a&gt;)&nbsp;-&gt;&nbsp;Matrix&lt;'a&gt;</CODE></P>
+      <P>Finally, matrix inversion may be implemented by the following 8-line F# 
+      <CODE>invert</CODE> function using a conventional relationship between the 
+      inverse of a matrix and the inverse of its submatrix blocks:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;invert&nbsp;(i:&nbsp;'a&nbsp;-&gt;&nbsp;'a)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Scalar&nbsp;x&nbsp;-&gt;&nbsp;Scalar(i&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Blocks((A,&nbsp;B),&nbsp;(C,&nbsp;D))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;iA&nbsp;=&nbsp;invert&nbsp;i&nbsp;A<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;iAB&nbsp;=&nbsp;iA&nbsp;*&nbsp;B<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;E&nbsp;=&nbsp;invert&nbsp;i&nbsp;&lt;|&nbsp;D&nbsp;-&nbsp;C&nbsp;*&nbsp;iAB<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;SCiA&nbsp;=&nbsp;E&nbsp;*&nbsp;C&nbsp;*&nbsp;iA<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Blocks((iA&nbsp;+&nbsp;iAB&nbsp;*&nbsp;SCiA,&nbsp;-&nbsp;iAB&nbsp;*&nbsp;E),&nbsp;(-SCiA,&nbsp;E));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;invert&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;Matrix&lt;'a&gt;&nbsp;-&gt;&nbsp;Matrix&lt;'a&gt;</CODE></P>
+      <P>Note that this function is parameterized over an <CODE>i</CODE> 
+      function that is used to compute the inverse of a value. This allows us to 
+      reuse the same core definition in order to create specialized versions for 
+      matrices with different element types. For example, the following 
+      <CODE>Float</CODE> module provides the inversion function for the 
+      <CODE>float</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Float&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;invert&nbsp;a&nbsp;=&nbsp;invert&nbsp;((/)&nbsp;1.0)&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Float&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;invert&nbsp;:&nbsp;Matrix&lt;float&gt;&nbsp;-&gt;&nbsp;Matrix&lt;float&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>And the following <CODE>BigRational</CODE> function provides the 
+      inversion function for the arbitrary-precision rational arithmetic type 
+      <CODE>BigRational</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;BigRational&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;invert&nbsp;a&nbsp;=&nbsp;invert&nbsp;((/)&nbsp;1N)&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;BigRational&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;invert&nbsp;:&nbsp;Matrix&lt;BigRational&gt;&nbsp;-&gt;&nbsp;Matrix&lt;BigRational&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following matrix serves as an excellent example for matrix 
+      inversion because its inverse is also composed entirely of small 
+      integers:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;a&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;[1.0;&nbsp;3.0;&nbsp;1.0];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0;&nbsp;1.0;&nbsp;2.0];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2.0;&nbsp;3.0;&nbsp;4.0]&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;a&nbsp;:&nbsp;matrix&nbsp;=&nbsp;matrix&nbsp;[[1.0;&nbsp;3.0;&nbsp;1.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0;&nbsp;1.0;&nbsp;2.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2.0;&nbsp;3.0;&nbsp;4.0]]</CODE></P>
+      <P>We can examine the effects of subdividing this matrix easily using the 
+      <CODE>View</CODE> function of our F# for Visualization library:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"C:\Program&nbsp;Files\FlyingFrog\FSharpForVisualization.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\FlyingFrog\FSharpForVisualization.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;match&nbsp;a&nbsp;with&nbsp;Blocks((a,&nbsp;b),&nbsp;(c,&nbsp;d))&nbsp;-&gt;&nbsp;Matrix.Generic.ofSeq[[a;&nbsp;b];&nbsp;[c;&nbsp;d]]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;FlyingFrog.Graphics.View;;</CODE></P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20matrix%20inversion_files/MatrixBlocks.png"></P>
+      <P>The 3×3 matrix was subdivided into a 1×1 matrix at the top-left and a 
+      2×2 matrix at the bottom right.</P>
+      <P>This example matrix may now be inverted simply by applying the 
+      <CODE>invert</CODE> function to it:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Float.invert&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Matrix&lt;float&gt;&nbsp;=&nbsp;matrix&nbsp;[[2.0;&nbsp;9.0;&nbsp;-5.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0;&nbsp;-2.0;&nbsp;1.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-1.0;&nbsp;-3.0;&nbsp;2.0]]</CODE></P>
+      <P>We can verify that the inverse of the inverse recovers the original 
+      matrix:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Float.invert&nbsp;(Float.invert&nbsp;a);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Matrix&lt;float&gt;&nbsp;=&nbsp;matrix&nbsp;[[1.0;&nbsp;3.0;&nbsp;1.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1.0;&nbsp;1.0;&nbsp;2.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2.0;&nbsp;3.0;&nbsp;4.0]]</CODE></P>
+      <P>However, this is a poor test because the identity function also 
+      satisfies this.</P>
+      <P>Better tests for the validity of the result are to pre- and 
+      post-multiply the original matrix by itself and ensure that the result is 
+      the identity matrix:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Float.invert&nbsp;a&nbsp;*&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Matrix&lt;float&gt;&nbsp;=&nbsp;matrix&nbsp;[[1.0;&nbsp;0.0;&nbsp;0.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0;&nbsp;1.0;&nbsp;0.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0;&nbsp;0.0;&nbsp;1.0]]<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;a&nbsp;*&nbsp;Float.invert&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Matrix&lt;float&gt;&nbsp;=&nbsp;matrix&nbsp;[[1.0;&nbsp;0.0;&nbsp;0.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0;&nbsp;1.0;&nbsp;0.0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0.0;&nbsp;0.0;&nbsp;1.0]]</CODE></P>
+      <P>Moreover, our <CODE>invert</CODE> function was completely generic and 
+      can be used on matrices of different types. The following encodes our 
+      previous example matrix using arbitrary-precision rationals:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;a&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Matrix.Generic.ofSeq<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;[1N;&nbsp;3N;&nbsp;1N];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1N;&nbsp;1N;&nbsp;2N];<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2N;&nbsp;3N;&nbsp;4N]&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;a&nbsp;:&nbsp;Matrix&lt;BigRational&gt;&nbsp;=&nbsp;matrix&nbsp;[[1N;&nbsp;3N;&nbsp;1N]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[1N;&nbsp;1N;&nbsp;2N]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[2N;&nbsp;3N;&nbsp;4N]]</CODE></P>
+      <P>The inverse of this matrix may be computed as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;invert&nbsp;((/)&nbsp;1N)&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Matrix&lt;BigRational&gt;&nbsp;=&nbsp;matrix&nbsp;[[2N;&nbsp;9N;&nbsp;-5N]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0N;&nbsp;-2N;&nbsp;1N]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[-1N;&nbsp;-3N;&nbsp;2N]]</CODE></P>
+      <P>Whereas the floating point example made no assurances about accuracy 
+      due to the approximate nature of the arithmetic involved, this result uses 
+      only rational arithmetic which is exact and, therefore, the result itself 
+      is exact.</P>
+      <P>Interestingly, this F# solution can be competitively efficient. 
+      Inverting the Hilbert matrix is a notoriously-difficult challenge due to 
+      numerical precision:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Float.invert&nbsp;&lt;|&nbsp;Matrix.init&nbsp;64&nbsp;64&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;&nbsp;1.0&nbsp;/&nbsp;float(i+j+1));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Matrix&lt;float&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix&nbsp;[[-350.499305;&nbsp;34612.39734;&nbsp;-697365.9935;&nbsp;4874616.136;&nbsp;-11166444.28;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-6960415.28;&nbsp;34286404.86;&nbsp;-20338257.89;&nbsp;633281305.8;&nbsp;-2274336706.0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-609787069.1;&nbsp;1.613514816e+10;&nbsp;-3.525206009e+10;&nbsp;3.586795574e+10;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1.826219819e+10;&nbsp;3761967210.0;&nbsp;-165288445.4;&nbsp;1052682994.0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1405121844.0;&nbsp;507854378.1;&nbsp;-8240155046.0;&nbsp;2.36885613e+10;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-2.229153186e+10;&nbsp;6835280475.0;&nbsp;2.24184724e+10;&nbsp;-7.929795842e+10;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;8.724407062e+10;&nbsp;-3.405145383e+10;&nbsp;5.396255313e+10;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1.153573589e+11;&nbsp;8.728251598e+10;&nbsp;-2.218312234e+10;&nbsp;-165509300.1;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;585433553.1;&nbsp;-651313508.7;&nbsp;230742382.0;&nbsp;-362788187.9;&nbsp;947421300.1;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-830638607.8;&nbsp;246701952.1;&nbsp;-260986164.9;&nbsp;1042218657.0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1225667110.0;&nbsp;359923160.7;&nbsp;151322783.0;&nbsp;-744543097.6;&nbsp;1309422258.0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-631794442.2;&nbsp;-1437592338.0;&nbsp;3740318932.0;&nbsp;-2626895407.0;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;315032125.6;&nbsp;-737126221.2;&nbsp;839385558.5;&nbsp;266942502.9;&nbsp;-364010709.9;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-21420429.15;&nbsp;-745864987.6;&nbsp;1212975941.0;&nbsp;257902047.2;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-1483591210.0;&nbsp;502855085.3;&nbsp;758918701.8;&nbsp;-477774955.1]</CODE></P>
+      <P>so we can productively use our exact matrix inversion algorithm to 
+      solve this problem:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Matrix.Generic.init&nbsp;64&nbsp;64&nbsp;(fun&nbsp;i&nbsp;j&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1N&nbsp;/&nbsp;(BigRational.FromInt&nbsp;i&nbsp;+&nbsp;BigRational.FromInt&nbsp;j&nbsp;+&nbsp;1N))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;BigRational.invert;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;Matrix&lt;BigRational&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;matrix&nbsp;[[4096N;&nbsp;-8386560N;&nbsp;5719633920N;&nbsp;-1948011985920N;&nbsp;397394445127680N;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-53926426203826176N;&nbsp;5212887866369863680N;&nbsp;-376724235628550684160N;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;21096557195198838312960N;&nbsp;-941140857096925953628160N;&nbsp;...</CODE></P>
+      <P>This highlights just how inaccurate the floating point result was. 
+      Moreover, the F# solution took 1.2s to compute this answer whereas 
+      Mathematica 7 takes 1.6s using its built-in matrix inversion. In fact, we 
+      can easily obtain substantial performance improvements from parallelism in 
+      this case simply by parallelizing the matrix multiplication function where 
+      most of the time is spent:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(&nbsp;*|&nbsp;)&nbsp;(a:&nbsp;Matrix&lt;BigRational&gt;)&nbsp;(b:&nbsp;Matrix&lt;BigRational&gt;)&nbsp;=&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(am,&nbsp;an),&nbsp;(bm,&nbsp;bn)&nbsp;=&nbsp;a.Dimensions,&nbsp;b.Dimensions<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;assert(an&nbsp;=&nbsp;bm)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;a,&nbsp;b&nbsp;=&nbsp;a.InternalDenseValues,&nbsp;b.InternalDenseValues<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;Array2D.create&nbsp;am&nbsp;bn&nbsp;0N<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Tasks.Parallel.For(0,&nbsp;am,&nbsp;fun&nbsp;i&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=0&nbsp;to&nbsp;an-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=0&nbsp;to&nbsp;bn-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.[i,j]&nbsp;&lt;-&nbsp;c.[i,j]&nbsp;+&nbsp;a.[i,k]&nbsp;*&nbsp;b.[k,j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Matrix.Generic.ofArray2D&nbsp;c;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;*|&nbsp;)&nbsp;:&nbsp;Matrix&lt;BigRational&gt;&nbsp;-&gt;&nbsp;Matrix&lt;BigRational&gt;&nbsp;-&gt;&nbsp;Matrix&lt;BigRational&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;invert&nbsp;(i:&nbsp;'a&nbsp;-&gt;&nbsp;'a)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Scalar&nbsp;x&nbsp;-&gt;&nbsp;Scalar(i&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Blocks((A,&nbsp;B),&nbsp;(C,&nbsp;D))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;iA&nbsp;=&nbsp;invert&nbsp;i&nbsp;A<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;iAB&nbsp;=&nbsp;iA&nbsp;*|&nbsp;B<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;E&nbsp;=&nbsp;invert&nbsp;i&nbsp;&lt;|&nbsp;D&nbsp;-&nbsp;C&nbsp;*|&nbsp;iAB<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;SCiA&nbsp;=&nbsp;E&nbsp;*|&nbsp;C&nbsp;*|&nbsp;iA<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Blocks((iA&nbsp;+&nbsp;iAB&nbsp;*|&nbsp;SCiA,&nbsp;-&nbsp;iAB&nbsp;*|&nbsp;E),&nbsp;(-SCiA,&nbsp;E));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;invert&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(BigRational&nbsp;-&gt;&nbsp;BigRational)&nbsp;-&gt;&nbsp;Matrix&lt;BigRational&gt;&nbsp;-&gt;&nbsp;Matrix&lt;BigRational&gt;</CODE></P>
+      <P>This simple F# solution is now over 4.3× faster than Mathematica 7 at 
+      inverting the 128×128 Hilbert matrix.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a simple 
+      function to compute the inverse of a matrix recursively using a 
+      divide-and-conquer strategy. This result is a remarkably succinct and yet 
+      efficient solution that is even capable of outperforming expensive 
+      domain-specific commercial applications like Mathematica.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of numerical 
+      methods, divide-and-conquer algorithms and 
+parallelism.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20matrix%20inversion_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

@@ -1,0 +1,104 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0081)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/sqlserverce.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20sql%20server%20sce_files/style.css"><LINK rel=stylesheet 
+type=text/css 
+href="F%23%20Journal%20sql%20server%20sce_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20sql%20server%20sce_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20sql%20server%20sce_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20sql%20server%20sce_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Using SQL Server Compact Edition</H1>
+      <P>In addition to the heavy weight SQL Server 2008 and its free sibling 
+      SQL Express, Microsoft also offer a light-weight database called SQL 
+      Server Compact Edition (CE) that requires fewer resources and, in 
+      particular, can be run from a DLL and does not require installation or 
+      background services. This article walks through the use of the Northwind 
+      database from SQL Server CE including a WPF-based user interface built 
+      upon asynchronous message passing.</P>
+      <P>We begin by defining the connection string that will be used to point 
+      SQL Server CE at the appropriate data source:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;connectionString&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Data&nbsp;Source=C:\\Users\\Jon\\Documents\\Databases\\Northwind.sdf;";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;connectionString&nbsp;:&nbsp;string&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Data&nbsp;Source=C:\Users\Jon\Documents\Databases\Northwind.sdf;"</CODE></P>
+      <P>In this case, the connection string is the location of a 
+      <CODE>.sdf</CODE> database file, a copy of the Northwind database file 
+      found in the SQL Server CE installation.</P>
+      <P>The following function synchronously extracts the entire contents of a 
+      database table into a .NET <CODE>DataTable</CODE> object:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;tableOfQuery&nbsp;commandText&nbsp;(parameters:&nbsp;(string&nbsp;*&nbsp;obj)&nbsp;seq)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;connection&nbsp;=&nbsp;new&nbsp;System.Data.SqlServerCe.SqlCeConnection(connectionString)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;connection.Open()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;command&nbsp;=&nbsp;connection.CreateCommand()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;command.CommandText&nbsp;&lt;-&nbsp;commandText<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;name,&nbsp;value&nbsp;in&nbsp;parameters&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Data.SqlServerCe.SqlCeParameter(name,&nbsp;value)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;command.Parameters.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;adapter&nbsp;=&nbsp;new&nbsp;System.Data.SqlServerCe.SqlCeDataAdapter(command)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;table&nbsp;=&nbsp;new&nbsp;System.Data.DataTable()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;adapter.Fill&nbsp;table&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;table;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;tableOfQuery&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;seq&lt;string&nbsp;*&nbsp;obj&gt;&nbsp;-&gt;&nbsp;System.Data.DataTable</CODE></P>
+      <P>Many GUI controls can visualize <CODE>DataTable</CODE> objects 
+      directly, including the WPF <CODE>DataGrid</CODE> control.</P>
+      <P>The <CODE>tableOfQuery</CODE> function defined above can be used to 
+      extract the names of the tables in the database via the implicit 
+      <CODE>INFORMATION_SCHEMA.Tables</CODE> table as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;tables&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;row&nbsp;in&nbsp;(tableOfQuery&nbsp;"SELECT&nbsp;*&nbsp;FROM&nbsp;INFORMATION_SCHEMA.Tables"&nbsp;[]).Rows&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;row.["TABLE_NAME"]&nbsp;:?&gt;&nbsp;string&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;tables&nbsp;:&nbsp;string&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;["Categories";&nbsp;"Customers";&nbsp;"Employees";&nbsp;"Order&nbsp;Details";&nbsp;"Orders";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"Products";&nbsp;"Shippers";&nbsp;"Suppliers"]</CODE></P>
+      <P>For example, the distribution of orders by the country they were 
+      shipped to is easily calculated:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&nbsp;for&nbsp;row&nbsp;in&nbsp;(tableOfQuery&nbsp;"SELECT&nbsp;*&nbsp;FROM&nbsp;Orders"&nbsp;[]).Rows&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(row.["Ship&nbsp;country"]&nbsp;:?&gt;&nbsp;string)&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.countBy&nbsp;id<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.sortBy&nbsp;(fun&nbsp;(_,&nbsp;n)&nbsp;-&gt;&nbsp;-n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.ofSeq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(string&nbsp;*&nbsp;int)&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|("Germany",&nbsp;150);&nbsp;("USA",&nbsp;149);&nbsp;("France",&nbsp;100);&nbsp;("Brazil",&nbsp;97);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("UK",&nbsp;73);&nbsp;("Venezuela",&nbsp;64);&nbsp;("Sweden",&nbsp;49);&nbsp;("Austria",&nbsp;46);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("Canada",&nbsp;43);&nbsp;("Italy",&nbsp;42);&nbsp;("Mexico",&nbsp;36);&nbsp;("Spain",&nbsp;35);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("Denmark",&nbsp;29);&nbsp;("Finland",&nbsp;28);&nbsp;("Belgium",&nbsp;28);&nbsp;("Ireland",&nbsp;28);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("Switzerland",&nbsp;27);&nbsp;("Portugal",&nbsp;18);&nbsp;("Argentina",&nbsp;18);&nbsp;("Norway",&nbsp;10);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("Poland",&nbsp;8)|]</CODE></P>
+      <P>Or the number of orders placed in each month of the year:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&nbsp;for&nbsp;row&nbsp;in&nbsp;(tableOfQuery&nbsp;"SELECT&nbsp;*&nbsp;FROM&nbsp;Orders"&nbsp;[]).Rows&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(row.["Order&nbsp;Date"]&nbsp;:?&gt;&nbsp;System.DateTime)&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.countBy&nbsp;(fun&nbsp;d&nbsp;-&gt;&nbsp;d.Year,&nbsp;d.Month)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.sortBy&nbsp;(fun&nbsp;(_,&nbsp;n)&nbsp;-&gt;&nbsp;-n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.ofSeq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|((1994,&nbsp;3),&nbsp;74);&nbsp;((1994,&nbsp;2),&nbsp;67);&nbsp;((1994,&nbsp;1),&nbsp;61);&nbsp;((1993,&nbsp;12),&nbsp;58);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1993,&nbsp;11),&nbsp;50);&nbsp;((1993,&nbsp;7),&nbsp;37);&nbsp;((1993,&nbsp;9),&nbsp;37);&nbsp;((1993,&nbsp;8),&nbsp;36);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1993,&nbsp;10),&nbsp;35);&nbsp;((1992,&nbsp;12),&nbsp;33);&nbsp;((1993,&nbsp;3),&nbsp;32);&nbsp;((1993,&nbsp;4),&nbsp;32);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1993,&nbsp;6),&nbsp;31);&nbsp;((1992,&nbsp;11),&nbsp;30);&nbsp;((1993,&nbsp;1),&nbsp;30);&nbsp;((1993,&nbsp;5),&nbsp;30);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1993,&nbsp;2),&nbsp;29);&nbsp;((1992,&nbsp;10),&nbsp;28);&nbsp;((1992,&nbsp;3),&nbsp;25);&nbsp;((1992,&nbsp;6),&nbsp;25);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1992,&nbsp;7),&nbsp;25);&nbsp;((1992,&nbsp;4),&nbsp;24);&nbsp;((1992,&nbsp;8),&nbsp;24);&nbsp;((1992,&nbsp;9),&nbsp;24);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1992,&nbsp;5),&nbsp;23);&nbsp;((1991,&nbsp;7),&nbsp;20);&nbsp;((1991,&nbsp;10),&nbsp;20);&nbsp;((1992,&nbsp;1),&nbsp;20);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1991,&nbsp;8),&nbsp;18);&nbsp;((1991,&nbsp;12),&nbsp;18);&nbsp;((1992,&nbsp;2),&nbsp;18);&nbsp;((1991,&nbsp;9),&nbsp;17);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;((1991,&nbsp;11),&nbsp;17);&nbsp;((1991,&nbsp;6),&nbsp;16);&nbsp;((1991,&nbsp;5),&nbsp;14)|]</CODE></P>
+      <P>This is all that is required to extract data from the SQL Server CE 
+      database. The procedure is very similar to that of an ordinary SQL Server 
+      database.</P>
+      <H2>User interface</H2>
+      <P>The remainder of this program is devoted to visualizing the data in the 
+      database. We being by opening the <CODE>System.Windows</CODE> 
+      namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>We define a union type to represent the different kinds of messages 
+      that can be passed to the user interface thread:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;message&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NewTable&nbsp;of&nbsp;string&nbsp;*&nbsp;System.Data.DataView;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;message&nbsp;=&nbsp;|&nbsp;NewTable&nbsp;of&nbsp;string&nbsp;*&nbsp;System.Data.DataView</CODE></P>
+      <P>In this case, there is only one such message. This message instructs 
+      the user interface to include another table from the database.</P>
+      <P>Messages of this type are executed by the following function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;execute&nbsp;(tabs:&nbsp;Controls.TabControl)&nbsp;(NewTable(name,&nbsp;view))&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.DataGrid(ItemsSource=view)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.TabItem(Header=name,&nbsp;Content=grid)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;tabs.Items.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;execute&nbsp;:&nbsp;Controls.TabControl&nbsp;-&gt;&nbsp;message&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>This function visualizes each new table by adding a tab to the 
+      <CODE>TabControl</CODE> and placing a <CODE>DataGrid</CODE> in it to 
+      visualize the <CODE>DataView</CODE> of the table.</P>
+      <P>The main program may then be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;tabs&nbsp;=&nbsp;Controls.TabControl()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;postToUI&nbsp;(f:&nbsp;'a&nbsp;-&gt;&nbsp;'b)&nbsp;(x:&nbsp;'a)&nbsp;:&nbsp;'b&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tabs.Dispatcher.Invoke(new&nbsp;System.Func&lt;_&gt;(fun&nbsp;()&nbsp;-&gt;&nbsp;f&nbsp;x))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;unbox<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;table&nbsp;in&nbsp;tables&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dataTable&nbsp;=&nbsp;tableOfQuery&nbsp;(sprintf&nbsp;"SELECT&nbsp;*&nbsp;FROM&nbsp;[%s]"&nbsp;table)&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;postToUI&nbsp;(execute&nbsp;tabs)&nbsp;(NewTable(table,&nbsp;dataTable.DefaultView))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;|&gt;&nbsp;Async.Start<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=tabs))&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <P>This creates the tab control, creates a <CODE>postToUI</CODE> function 
+      that applies the given function <CODE>f</CODE> to its argument 
+      <CODE>x</CODE> on the user interface thread and then starts an 
+      asynchronous workflow reading the tables from the database on a thread in 
+      the thread pool and posting the each resulting <CODE>DataTable</CODE> to 
+      the UI thread before opening a window and running the application.</P>
+      <H2>Summary</H2>
+      <P>This article has walked through the use of SQL Server Compact Edition 
+      (CE). This technology provides a simple and space efficient database that 
+      is easy to use.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of 
+      databases.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20sql%20server%20sce_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

@@ -1,0 +1,181 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/StanfordBunny.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20visualizing%20the%20stanford%20bunny%20using%20WPF_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20visualizing%20the%20stanford%20bunny%20using%20WPF_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20visualizing%20the%20stanford%20bunny%20using%20WPF_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20visualizing%20the%20stanford%20bunny%20using%20WPF_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20visualizing%20the%20stanford%20bunny%20using%20WPF_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Stanford Bunny</H1>
+      <P>Stanford University maintain a database of 3D models, perhaps the most 
+      famous of which is the Stanford Bunny. This is a 3D scan of a statue of a 
+      rabbit. The tesselated version contains 65,000 triangles and is stored as 
+      plain text in a PLY file. This article describes a program that embeds the 
+      mesh data as an embedded resource in a .NET assembly, parses it at 
+      run-time and visualizes the results in 3D using Windows Presentation 
+      Foundation.</P>
+      <P>We begin by referencing the <CODE>PresentationCore</CODE>, 
+      <CODE>PresentationFramework</CODE>, <CODE>System.Xaml</CODE> and 
+      <CODE>WindowsBase</CODE> DLLs that are required to use WPF and setting the 
+      "Output type" to "Windows Application" in project properties to stop the 
+      console window from appearing.</P>
+      <P>Next, we open the following namespaces because we shall be using many 
+      definitions from them:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows.Media.Media3D;;</CODE></P>
+      <P>The remainder of the program is split into parsing and 
+      visualization.</P>
+      <H2>Parsing</H2>
+      <P>The textual PLY format consists of space-separated strings on each 
+      line. In order to simplify the matching and parsing of the numbers in the 
+      file we define some active patterns. The following <CODE>Int</CODE> active 
+      pattern uses the <CODE>TryParse</CODE> static member of the 
+      <CODE>Int32</CODE> class to attempt to parse a string as an 
+      <CODE>int</CODE> and return the number (if any) as a value of the 
+      <CODE>int&nbsp;option</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Int|_|)&nbsp;(s:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;n&nbsp;=&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;System.Int32.TryParse(s,&nbsp;&amp;n)&nbsp;then&nbsp;Some&nbsp;n&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Int|_|&nbsp;)&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;int&nbsp;option</CODE></P>
+      <P>Note how we create a mutable local and pass it by reference 
+      (<CODE>&amp;n</CODE>) to the <CODE>TryParse</CODE> method.</P>
+      <P>The following <CODE>Float</CODE> active pattern does the same thing for 
+      <CODE>float</CODE> numbers:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|Float|_|)&nbsp;(s:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;x&nbsp;=&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;System.Double.TryParse(s,&nbsp;&amp;x)&nbsp;then&nbsp;Some&nbsp;x&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Float|_|&nbsp;)&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;float&nbsp;option</CODE></P>
+      <P>We require the ability to split a line into words ignoring empty words 
+      so we introduce the following <CODE>split</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;split&nbsp;(s:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s.Split([|'&nbsp;'|],&nbsp;System.StringSplitOptions.RemoveEmptyEntries);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;split&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;string&nbsp;[]</CODE></P>
+      <P>If we are using F# interactive to run this program then we must load 
+      the data from file:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;getReader()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;file&nbsp;=&nbsp;@"C:\Users\Jon\Downloads\bunny.tar\bunny\reconstruction\bun_zipper.ply"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;System.IO.StreamReader(file);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;getReader&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;System.IO.StreamReader</CODE></P>
+      <P>However, we wish to incorporate the data into the .NET assembly in 
+      order to make it self-contained and more easily redistributable. To embed 
+      the data, just drag the PLY file into the project in the Solution Explorer 
+      pane in Visual Studio, select the new file and change its "Build action" 
+      in the Properties pane to "EmbeddedResource". The compiler will then embed 
+      the file into the .NET assembly and it may be accessed programmatically as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;getReader()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;assembly&nbsp;=&nbsp;System.Reflection.Assembly.GetExecutingAssembly()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stream&nbsp;=&nbsp;assembly.GetManifestResourceStream&nbsp;"bun_zipper.ply"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;System.IO.StreamReader(stream)</CODE></P>
+      <P>This code obtains a representation of the assembly and then uses it to 
+      get the manifest resource stream from the file name before creating a 
+      <CODE>StreamReader</CODE> from the <CODE>Stream</CODE>.</P>
+      <P>The data may then be parsed as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;position,&nbsp;index&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;reader&nbsp;=&nbsp;getReader()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;position,&nbsp;index&nbsp;=&nbsp;Point3DCollection(),&nbsp;Media.Int32Collection()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;not&nbsp;reader.EndOfStream&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;reader.ReadLine()&nbsp;|&gt;&nbsp;split&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[|"3";&nbsp;Int&nbsp;i;&nbsp;Int&nbsp;j;&nbsp;Int&nbsp;k|]&nbsp;-&gt;&nbsp;Seq.iter&nbsp;index.Add&nbsp;[i;&nbsp;j;&nbsp;k]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[|Float&nbsp;x;&nbsp;Float&nbsp;y;&nbsp;Float&nbsp;z;&nbsp;_;&nbsp;_|]&nbsp;-&gt;&nbsp;position.Add(Point3D(x,&nbsp;y,&nbsp;z))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;position,&nbsp;index;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;position&nbsp;:&nbsp;Point3DCollection<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;index&nbsp;:&nbsp;Media.Int32Collection</CODE></P>
+      <P>This section of code defines two global variables called 
+      <CODE>position</CODE> and <CODE>index</CODE>. The <CODE>position</CODE> 
+      collection contains the 3D coordinates of each vertex. The 
+      <CODE>index</CODE> collection contains triples of indices giving the 
+      indexes into the <CODE>position</CODE> collection of the three vertices 
+      that make up each triangle.</P>
+      <P>The input is read one line at a time by a <CODE>while</CODE> loop that 
+      terminates when the end of the stream is reached. The line is split into 
+      an array of strings containing the non-empty space-separated words on the 
+      line. A pattern match is used to dispatch according to the number of 
+      elements in the array and their contents. Vertex position data are parsed 
+      by the <CODE>Float</CODE> active pattern, converted into the WPF 
+      <CODE>Point3D</CODE> type and added to the <CODE>position</CODE> 
+      collection. Triangle index data are parsed by the <CODE>Int</CODE> active 
+      pattern and added to the <CODE>index</CODE> collection. Note the use of 
+      <CODE>Seq.iter&nbsp;index.Add</CODE> to add several elements to a 
+      collection that does not provide an <CODE>AddRange</CODE> member. 
+      Unparsable lines are ignored and the two resulting collections are 
+      returned.</P>
+      <H2>Visualization</H2>
+      <P>The program uses the zero vector:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;zero&nbsp;=&nbsp;Vector3D(0.0,&nbsp;0.0,&nbsp;0.0);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;zero&nbsp;:&nbsp;Vector3D&nbsp;=&nbsp;0,0,0</CODE></P>
+      <P>and the upward vector:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;up&nbsp;=&nbsp;Vector3D(0.0,&nbsp;1.0,&nbsp;0.0);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;up&nbsp;:&nbsp;Vector3D&nbsp;=&nbsp;0,1,0</CODE></P>
+      <P>WPF supports diffuse lighting with Gouraud shading but this requires 
+      surface normals and we do not have any. We can calculate per-vertex 
+      surface normals by accumulating the normal vectors of all triangles that 
+      involve that vertex, creating the illusion of a smooth surface:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;normal&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;normal&nbsp;=&nbsp;Array.create&nbsp;position.Count&nbsp;zero<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;n&nbsp;in&nbsp;0&nbsp;..&nbsp;3&nbsp;..&nbsp;index.Count-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i,&nbsp;j,&nbsp;k&nbsp;=&nbsp;index.[n],&nbsp;index.[n+1],&nbsp;index.[n+2]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;u,&nbsp;v,&nbsp;w&nbsp;=&nbsp;position.[i],&nbsp;position.[j],&nbsp;position.[k]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;n&nbsp;=&nbsp;Vector3D.CrossProduct(v&nbsp;-&nbsp;u,&nbsp;w&nbsp;-&nbsp;u)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n.Normalize()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;[i;&nbsp;j;&nbsp;k]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;normal.[i]&nbsp;&lt;-&nbsp;normal.[i]&nbsp;+&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Vector3DCollection&nbsp;normal;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;normal&nbsp;:&nbsp;Vector3DCollection</CODE></P>
+      <P>The global <CODE>normal</CODE> collection is defined using a local 
+      <CODE>normal</CODE> array that is initialized with a zero vector for each 
+      vertex. The <CODE>position</CODE> array is looped over in steps of three 
+      and the vertex indices <CODE>i</CODE>, <CODE>j</CODE> and <CODE>k</CODE> 
+      are obtained for each triangle. The vertex positions <CODE>u</CODE>, 
+      <CODE>v</CODE> and <CODE>w</CODE> are obtained from the indices. The 
+      surface normal <CODE>n</CODE> is computed as the cross product of two edge 
+      vectors between the vertex positons and normalized. Note that we must 
+      declare <CODE>n</CODE> to be mutable in order to use the 
+      <CODE>Normalize</CODE> member because <CODE>Vector3D</CODE> is a struct 
+      type. The value of <CODE>n</CODE> is then added to the normal vector 
+      associated with each of the three vertices of the triangle. Finally, the 
+      resulting <CODE>normal</CODE> array is used to create a 
+      <CODE>Vector3DCollection</CODE>.</P>
+      <P>The following function creates a directional light (i.e. a light at an 
+      infinite distance) with the given color and direction and upcasts it to a 
+      <CODE>Model3D</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;directionalLight&nbsp;(color,&nbsp;direction)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DirectionalLight(Color=color,&nbsp;Direction=direction)&nbsp;:&gt;&nbsp;Model3D;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;directionalLight&nbsp;:&nbsp;Media.Color&nbsp;*&nbsp;Vector3D&nbsp;-&gt;&nbsp;Model3D</CODE></P>
+      <P>We have chosen to upcast here because it makes it easier to add lights 
+      to collections later and we will not need to manipulate the light once it 
+      has been constructed.</P>
+      <P>The following uses the <CODE>directionalLight</CODE> function to define 
+      a list of three directional lights for our scene:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;lights&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;Media.Colors.Red,&nbsp;Vector3D(-1.0,&nbsp;0.0,&nbsp;1.0);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.Colors.Green,&nbsp;Vector3D(-1.0,&nbsp;-1.0,&nbsp;1.0);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.Colors.Blue,&nbsp;Vector3D(0.0,&nbsp;-1.0,&nbsp;1.0)&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;List.map&nbsp;directionalLight;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;lights&nbsp;:&nbsp;Model3D&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[System.Windows.Media.Media3D.DirectionalLight;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Windows.Media.Media3D.DirectionalLight;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Windows.Media.Media3D.DirectionalLight]</CODE></P>
+      <P>The following defines our camera including its position, direction and 
+      field of view:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;camera&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PerspectiveCamera(Position=Point3D(0.3,&nbsp;0.40,&nbsp;-0.5),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;LookDirection=Vector3D(-0.3,&nbsp;-0.3,&nbsp;0.5),<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;FieldOfView=35.0);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;camera&nbsp;:&nbsp;PerspectiveCamera&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Windows.Media.Media3D.PerspectiveCamera</CODE></P>
+      <P>The mesh is composed of the per-vertex normals, positions and triangle 
+      indices:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mesh&nbsp;=&nbsp;MeshGeometry3D(Normals=normal,&nbsp;Positions=position,&nbsp;TriangleIndices=index);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mesh&nbsp;:&nbsp;MeshGeometry3D</CODE></P>
+      <P>A WPF geometry model combines a mesh and a material:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;model&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;material&nbsp;=&nbsp;DiffuseMaterial&nbsp;Media.Brushes.White<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;GeometryModel3D(mesh,&nbsp;material)&nbsp;:&gt;&nbsp;Model3D;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;model&nbsp;:&nbsp;Model3D&nbsp;=&nbsp;System.Windows.Media.Media3D.GeometryModel3D</CODE></P>
+      <P>We have chosen to use a diffuse white material that will be shaded by 
+      WPF according to the orientation of the surface (using the surface 
+      normals).</P>
+      <P>We combine the model with our lights in a group of models that are set 
+      as the root contents of a model visual:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;visual&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;root&nbsp;=&nbsp;Model3DGroup(Children=Model3DCollection(model::lights))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ModelVisual3D(Content=root);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;visual&nbsp;:&nbsp;ModelVisual3D</CODE></P>
+      <P>A WPF <CODE>Viewport3D</CODE> control is then created using our 
+      camera:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;viewport3d&nbsp;=&nbsp;Controls.Viewport3D(Camera=camera);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;viewport3d&nbsp;:&nbsp;Controls.Viewport3D</CODE></P>
+      <P>The following function creates a WPF transform that rotates about an 
+      axis by an angle:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rotate&nbsp;axis&nbsp;angle&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;RotateTransform3D(AxisAngleRotation3D(axis,&nbsp;angle));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;rotate&nbsp;:&nbsp;Vector3D&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;RotateTransform3D</CODE></P>
+      <P>Finally, the main program adds the visual to the viewport, starts a 
+      timer, hooks the <CODE>CompositionsTarget.Rendering</CODE> event that is 
+      fired by WPF every frame and uses it to rotate the model according to the 
+      elapsed wall-clock time and then runs the application:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;visual&nbsp;|&gt;&nbsp;viewport3d.Children.Add&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;time&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Media.CompositionTarget.Rendering.Add(fun&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;model.Transform&nbsp;&lt;-&nbsp;rotate&nbsp;up&nbsp;(30.0&nbsp;*&nbsp;float&nbsp;time.Elapsed.TotalSeconds))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=viewport3d,&nbsp;Title="Stanford&nbsp;bunny"))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <P>When run, this program produces the following output:</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a 
+      self-contained WPF program that visualizes an embedded copy of the 
+      Stanford Bunny in 3D.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20visualizing%20the%20stanford%20bunny%20using%20WPF_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

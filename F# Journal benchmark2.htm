@@ -1,0 +1,184 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0088)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/parallel2_scimark2.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+     <TITLE>F# Journal</TITLE>     
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20benchmark2_files/style.css" rel="stylesheet" type="text/css"> 
+    <LINK href="F%23%20Journal%20benchmark2_files/style(1).css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20benchmark2_files/individual.css" 
+rel="stylesheet" type="text/css">   
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>   
+<BODY>
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20benchmark2_files/title.gif">   
+            </TD>
+    <TD><IMG src="F%23%20Journal%20benchmark2_files/left.gif">         
+  </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Parallelizing the SciMark2 benchmark: part 2</H1>
+      <P>The SciMark2 benchmark is one of the better benchmarks for programming 
+      languages and their implementations in the context of technical computing. 
+      This article is the second in a two-part series revisiting the SciMark2 
+      benchmark to examine the parallelization of each of its component tasks. 
+      Specifically, the Monte-Carlo, sparse matrix-vector multiplication and LU 
+      decomposition tests. The results are of general interest in the context of 
+      improving performance on multicores using parallel programming.</P>
+      <H2>Introduction</H2>
+      <P>The SciMark2 benchmark is composed of five separate tests: 1D Fast 
+      Fourier Transform, Successive-overrelaxation, Monte Carlo, Sparse 
+      matrix-vector multiply and LU decomposition. The previous article in this 
+      series found that the FFT could be parallelized efficiently only for the 
+      large problem (a 1,048,576-element vector) and not the small case (a 
+      1,024-element vector). This article examines the parallelization of the 
+      last three of these components.</P>
+      <H2>Monte-Carlo</H2>
+      <P>The Monte-Carlo task generates many random numbers and uses them to 
+      estimate the area of a circle by counting the proportion of random 
+      coordinates in the unit square that fall inside the unit circle. With 
+      independent random number generation, this is an embarrassingly-parallel 
+      problem.</P>
+      <P>The serial implementation of the Monte-Carlo test was written as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;exec&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sqr&nbsp;x&nbsp;=&nbsp;x&nbsp;*&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;c&nbsp;=&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;sqr(Random.NextDouble())&nbsp;+&nbsp;sqr(Random.NextDouble())&nbsp;&lt;=&nbsp;1.&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c&nbsp;&lt;-&nbsp;c&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.&nbsp;*&nbsp;float&nbsp;c&nbsp;/&nbsp;float&nbsp;n</CODE></P>
+      <P>In this form, the thread-unsafe <CODE>Random.NextDouble()</CODE> has 
+      the side effect of progressing the random number generator and, therefore, 
+      it cannot be called concurrently from multiple threads. Before 
+      parallelizing the loop we must ensure that there is a separate random 
+      number generator for each thread.</P>
+      <P>This can be accomplished by using the form of the higher-order 
+      <CODE>Tasks.Parallel.For</CODE> function provided by .NET that allows 
+      thread-local data to be accumulated:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;exec&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sqr&nbsp;x&nbsp;=&nbsp;x&nbsp;*&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;ref&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;body&nbsp;_&nbsp;_&nbsp;(rand:&nbsp;Random,&nbsp;dc&nbsp;as&nbsp;accu)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;sqr(rand.NextDouble())&nbsp;+&nbsp;sqr(rand.NextDouble())&nbsp;&lt;=&nbsp;1.&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;incr&nbsp;dc<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;accu<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;final&nbsp;(_,&nbsp;dc)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Interlocked.Add(c,&nbsp;!dc)&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Tasks.Parallel.For(0,&nbsp;n,&nbsp;(fun&nbsp;()&nbsp;-&gt;&nbsp;Random(),&nbsp;ref&nbsp;0),&nbsp;body,&nbsp;final)&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.&nbsp;*&nbsp;float&nbsp;!c&nbsp;/&nbsp;float&nbsp;n</CODE></P>
+      <P>Although .NET 4 includes major improvements in this context, this use 
+      of the <CODE>Parallel.For</CODE> loop is very inefficient because the work 
+      performed per loop is tiny. Specifically, the 94 MFLOPS attained by the 
+      serial implementation is degraded to only 70.7 MFLOPS for this parallel 
+      implementation. However, this is only because the benchmark accumulates 
+      statistics for 1,024 random pairs at a time. Increasing this value to 
+      100,000,000 pairs gives the parallel loop more chance and improves 
+      performance to 299 MFLOPS.</P>
+      <P>Although a 3.2× performance improvement is significant this is nowhere 
+      near the theoretical 8× performance improvement that could be achieved. 
+      Switching from high-level constructs for parallelism to low-level threads 
+      with one thread per core exposes more opportunity for parallelism albeit 
+      at the cost of coarser granularity:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;exec&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sqr&nbsp;x&nbsp;=&nbsp;x&nbsp;*&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;ref&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n_procs&nbsp;=&nbsp;System.Environment.ProcessorCount<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|for&nbsp;_&nbsp;in&nbsp;1..n_procs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;thread&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread(fun&nbsp;()&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;Random()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;dc&nbsp;=&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;n/n_procs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;sqr(rand.NextDouble())&nbsp;+&nbsp;sqr(rand.NextDouble())&nbsp;&lt;=&nbsp;1.&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;dc&nbsp;&lt;-&nbsp;dc&nbsp;+&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Interlocked.Add(c,&nbsp;dc)&nbsp;|&gt;&nbsp;ignore)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thread.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;thread|]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.iter&nbsp;(fun&nbsp;t&nbsp;-&gt;&nbsp;t.Join())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;4.&nbsp;*&nbsp;float&nbsp;!c&nbsp;/&nbsp;float&nbsp;n</CODE></P>
+      <P>This improves performance to 608 MFLOPS for a respectable speedup on 
+      6.5× on this 8-core machine.</P>
+      <H2>Sparse matrix-vector multiplication</H2>
+      <P>The Sparse matrix-vector multiplication task multiplies a dense vector 
+      by a sparse matrix. This is ideal for nested data parallelism.</P>
+      <P>The serial implementation of the sparse matrix multiplication was 
+      written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mul&nbsp;(y&nbsp;:&nbsp;_&nbsp;[])&nbsp;m&nbsp;(v&nbsp;:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;r=0&nbsp;to&nbsp;m.row.Length-2&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;sum&nbsp;=&nbsp;0.<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=m.row.[r]&nbsp;to&nbsp;m.row.[r+1]-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sum&nbsp;&lt;-&nbsp;sum&nbsp;+&nbsp;v.[m.col.[i]]&nbsp;*&nbsp;m.v.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y.[r]&nbsp;&lt;-&nbsp;sum</CODE></P>
+      <P>The simplest way to parallelize this function is to convert the outer 
+      loop into a parallel loop, computing the dot products behind the output 
+      elements in parallel:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mul&nbsp;(y&nbsp;:&nbsp;_&nbsp;[])&nbsp;m&nbsp;(v&nbsp;:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Tasks.Parallel.For(0,&nbsp;m.row.Length-1,&nbsp;fun&nbsp;r&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;sum&nbsp;=&nbsp;0.<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=m.row.[r]&nbsp;to&nbsp;m.row.[r+1]-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sum&nbsp;&lt;-&nbsp;sum&nbsp;+&nbsp;v.[m.col.[i]]&nbsp;*&nbsp;m.v.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y.[r]&nbsp;&lt;-&nbsp;sum<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <P>On the larger 100,000-row problem, this improves performance 3.1× from 
+      339 MFLOPS to 495 MFLOPS. However, on the smaller 1,000-row problem, this 
+      degrades performance 1.7× from 328 MFLOPS to 118 MFLOPS.</P>
+      <P>This simple parallel implementation can degrade performance because 
+      there is no assurance that the amount of work being performed is large 
+      enough to outweigh the overhead of introducing parallelism. The overhead 
+      is not only the time taken to spawn a task but also the false sharing 
+      introduced at the boundaries within the <CODE>y</CODE> output vector. 
+      There are several possible solutions to this problem: a serial loop could 
+      be used when the matrix is small, the chunk size of the parallel loop 
+      could be grown or some form of adaptive subdivision could be used to 
+      create sufficiently complex tasks.</P>
+      <P>Adaptive subdivision is best accomplished by augmenting the data 
+      structure itself with the required information, in this case a tree giving 
+      the amount of work (number of non-zero matrix elements) in each branch. 
+      The type may be written:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;tree&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch&nbsp;of&nbsp;int&nbsp;*&nbsp;tree&nbsp;*&nbsp;int&nbsp;*&nbsp;tree<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;SparseMatrix&nbsp;=&nbsp;{&nbsp;v:&nbsp;float&nbsp;array;&nbsp;row:&nbsp;int&nbsp;array;&nbsp;col:&nbsp;int&nbsp;array;&nbsp;tree:&nbsp;tree&nbsp;}</CODE></P>
+      <P>The following <CODE>mkTree</CODE> function constructs the tree for a 
+      given sparse matrix:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;mkTree&nbsp;(row:&nbsp;_&nbsp;[])&nbsp;i0&nbsp;i2&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;i2&nbsp;-&nbsp;i0&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0&nbsp;|&nbsp;1&nbsp;-&gt;&nbsp;0,&nbsp;Leaf<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;2&nbsp;-&gt;&nbsp;row.[i0&nbsp;+&nbsp;1]&nbsp;-&nbsp;row.[i0],&nbsp;Leaf<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i1&nbsp;=&nbsp;i0&nbsp;+&nbsp;(i2&nbsp;-&nbsp;i0)&nbsp;/&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n0,&nbsp;t0&nbsp;=&nbsp;mkTree&nbsp;row&nbsp;i0&nbsp;i1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n1,&nbsp;t1&nbsp;=&nbsp;mkTree&nbsp;row&nbsp;i1&nbsp;i2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n0&nbsp;+&nbsp;n1,&nbsp;Branch(n0,&nbsp;t0,&nbsp;n1,&nbsp;t1)</CODE></P>
+      <P>A <CODE>sparseMatrix</CODE> function to construct values of the 
+      <CODE>SparseMatrix</CODE> type may then be written:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sparseMatrix&nbsp;v&nbsp;row&nbsp;col&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;v=v;&nbsp;row=row;&nbsp;col=col;&nbsp;tree=snd(mkTree&nbsp;row&nbsp;0&nbsp;row.Length)&nbsp;}</CODE></P>
+      <P>Sparse matrix-vector multiplication may then be written using recursive 
+      subdivision:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;limit&nbsp;=&nbsp;1024<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mul&nbsp;(y&nbsp;:&nbsp;_&nbsp;[])&nbsp;m&nbsp;(v&nbsp;:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;iter&nbsp;r0&nbsp;r1&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;r=r0&nbsp;to&nbsp;r1-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;sum&nbsp;=&nbsp;0.<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=m.row.[r]&nbsp;to&nbsp;m.row.[r+1]-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sum&nbsp;&lt;-&nbsp;sum&nbsp;+&nbsp;v.[m.col.[i]]&nbsp;*&nbsp;m.v.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y.[r]&nbsp;&lt;-&nbsp;sum<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;r0&nbsp;r2&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf&nbsp;-&gt;&nbsp;iter&nbsp;r0&nbsp;r2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch(n0,&nbsp;t0,&nbsp;n1,&nbsp;t1)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n0&nbsp;&lt;&nbsp;limit&nbsp;||&nbsp;n1&nbsp;&lt;&nbsp;limit&nbsp;then&nbsp;iter&nbsp;r0&nbsp;r2&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;r1&nbsp;=&nbsp;r0&nbsp;+&nbsp;(r2&nbsp;-&nbsp;r0)&nbsp;/&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;=&nbsp;Tasks.Task&lt;_&gt;.Factory.StartNew(fun&nbsp;()&nbsp;-&gt;&nbsp;loop&nbsp;r0&nbsp;r1&nbsp;t0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;r1&nbsp;r2&nbsp;t1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f.Result<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;0&nbsp;(m.row.Length&nbsp;-&nbsp;1)&nbsp;m.tree</CODE></P>
+      <P>The nested <CODE>iter</CODE> function performs conventional iteration 
+      over a sequence of rows, filling in the elements of <CODE>y</CODE>. The 
+      nested <CODE>loop</CODE> function recursively subdivides the set of rows 
+      until the number of matrix elements in one of the child sets falls below a 
+      threshold limit (of 1,024).</P>
+      <P>Note that we are careful to stop subdivision when either child contains 
+      too few matrix elements rather than when the parent contains too few. This 
+      prevents the case where subdivision might lead to a task being spawned for 
+      a sequence of rows containing very few or even zero matrix elements.</P>
+      <P>This solution has much better performance characteristics compared to 
+      the simple parallel <CODE>For</CODE> loop. Specifically, performance on 
+      the small 1,000-row problem is improved 10% to 362 MFLOPS rather than 
+      degraded and performance on the large 100,000-row problem is improved 3× 
+      to 1,030 MFLOPS.</P>
+      <H2>LU decomposition</H2>
+      <P>The LU decomposition task computes the LU decomposition of a matrix 
+      using partial pivoting. Although naive LU decomposition is easily 
+      parallelized, partial pivoting is required for numerical robustness and 
+      inhibits parallelism.</P>
+      <P>The serial implementation of LU decomposition may be written as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;inline&nbsp;pivot&nbsp;abs&nbsp;(pivot&nbsp;:&nbsp;_&nbsp;[])&nbsp;m&nbsp;n&nbsp;zero&nbsp;(a&nbsp;:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;j&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;jp,&nbsp;t&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;for&nbsp;i&nbsp;in&nbsp;j+1..m-1&nbsp;-&gt;&nbsp;i,&nbsp;abs&nbsp;a.[i].[j]&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.fold&nbsp;(fun&nbsp;(jp,&nbsp;t)&nbsp;(i,&nbsp;aij)&nbsp;-&gt;&nbsp;if&nbsp;aij&nbsp;&gt;&nbsp;t&nbsp;then&nbsp;i,&nbsp;aij&nbsp;else&nbsp;jp,&nbsp;t)&nbsp;(j,&nbsp;abs&nbsp;a.[j].[j])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pivot.[j]&nbsp;&lt;-&nbsp;jp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;a.[jp].[j]&nbsp;=&nbsp;zero&nbsp;then&nbsp;invalidArg&nbsp;"a"&nbsp;"SingularMatrix"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;jp&nbsp;&lt;&gt;&nbsp;j&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;t&nbsp;=&nbsp;a.[jp]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a.[jp]&nbsp;&lt;-&nbsp;a.[j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a.[j]&nbsp;&lt;-&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lu&nbsp;(a&nbsp;:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;(p&nbsp;:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n,&nbsp;m&nbsp;=&nbsp;a.Length,&nbsp;a.[0].Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;minmn&nbsp;=&nbsp;min&nbsp;m&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=0&nbsp;to&nbsp;minmn&nbsp;-&nbsp;1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pivot&nbsp;abs&nbsp;p&nbsp;m&nbsp;n&nbsp;0.0&nbsp;a&nbsp;j<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;j&nbsp;&lt;&nbsp;m-1&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;aj&nbsp;=&nbsp;a.[j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;recp&nbsp;=&nbsp;1.0&nbsp;/&nbsp;aj.[j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=j+1&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ak&nbsp;=&nbsp;a.[k]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ak.[j]&nbsp;&lt;-&nbsp;ak.[j]&nbsp;*&nbsp;recp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;j&nbsp;&lt;&nbsp;minmn&nbsp;-&nbsp;1&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ii=j+1&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;aii&nbsp;=&nbsp;a.[ii]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;aiij&nbsp;=&nbsp;aii.[j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;jj=j+1&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aii.[jj]&nbsp;&lt;-&nbsp;aii.[jj]&nbsp;-&nbsp;aiij&nbsp;*&nbsp;aj.[jj]&nbsp;&nbsp;</CODE></P>
+      <P>If the partial pivoting is removed (at the expense of numerical 
+      stability when the diagonal elements are not the largest magnitude 
+      elements in each column) then the middle loop over <CODE>ii</CODE> is over 
+      the rows of the remaining submatrix and its body is independent from one 
+      iteration to the next so this loop is easily and effectively parallelized 
+      by the parallel <CODE>For</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;limit&nbsp;=&nbsp;100<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lu&nbsp;(a&nbsp;:&nbsp;_&nbsp;[]&nbsp;[])&nbsp;(p&nbsp;:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n,&nbsp;m&nbsp;=&nbsp;a.Length,&nbsp;a.[0].Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;minmn&nbsp;=&nbsp;min&nbsp;m&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=0&nbsp;to&nbsp;minmn&nbsp;-&nbsp;1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;p.[j]&nbsp;&lt;-&nbsp;j<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;j&nbsp;&lt;&nbsp;m-1&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;aj&nbsp;=&nbsp;a.[j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;recp&nbsp;=&nbsp;1.0&nbsp;/&nbsp;aj.[j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=j+1&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ak&nbsp;=&nbsp;a.[k]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ak.[j]&nbsp;&lt;-&nbsp;ak.[j]&nbsp;*&nbsp;recp<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;j&nbsp;&lt;&nbsp;minmn&nbsp;-&nbsp;1&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;iter&nbsp;ii&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;aii&nbsp;=&nbsp;a.[ii]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;aiij&nbsp;=&nbsp;aii.[j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;jj=j+1&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;aii.[jj]&nbsp;&lt;-&nbsp;aii.[jj]&nbsp;-&nbsp;aiij&nbsp;*&nbsp;aj.[jj]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&nbsp;-&nbsp;j&nbsp;&gt;&nbsp;limit&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Tasks.Parallel.For(j+1,&nbsp;m,&nbsp;iter)&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ii=j+1&nbsp;to&nbsp;m-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;iter&nbsp;ii</CODE></P>
+      <P>Note that we have introduced a limit below which the loop is performed 
+      using an ordinary <CODE>for</CODE> loop in order to avoid parallelism when 
+      it will degrade performance.</P>
+      <P>This parallel implementation degrades performance slightly from 293 
+      MFLOPS to 270 MFLOPS in the case of the small (a 100×100 matrix) problem 
+      and improves performance 1.5× for the large (1,000×1,000) problem, from 
+      676 MFLOPS to 984 MFLOPS. This indicates that there is little performance 
+      to be gained from multicore systems in this case, most likely because the 
+      bottleneck is the memory bandwidth that can be saturated by a single 
+      core.</P>
+      <H2>Summary</H2>
+      <P>This article has examined three different algorithms and used three 
+      different techniques to parallelize them efficiently. The 
+      embarrassingly-parallel Monte-Carlo benchmark was most effectively 
+      parallelized by using completely separate threads. The nested data 
+      parallel sparse matrix-vector multiplication was best parallelized by 
+      augmenting the data structure with the information required to determine 
+      the computational complexity of subdivided computations in order to 
+      estimate when parallelism would be worthwhile. Finally, LU decomposition 
+      proved difficult to parallelize efficiently but benefitted slightly from 
+      the careful placement of a parallel <CODE>For</CODE> loop that was only 
+      used when a sufficiently large amount of work was to be performed. These 
+      three techniques led to speedups ranging from 1.5× to 6.5× on an 8-core 
+      machine.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of programming 
+      multicores using F# on .NET 4.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20benchmark2_files/urchin.js" type="text/javascript">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+   </BODY></HTML>

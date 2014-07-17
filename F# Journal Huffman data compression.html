@@ -1,0 +1,378 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0077)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/huffman.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Huffman data compression</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Huffman%20data%20compression_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Huffman%20data%20compression_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Huffman%20data%20compression_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Huffman data compression</TITLE>     <LINK href="F%23%20Journal%20Huffman%20data%20compression_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Huffman%20data%20compression_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Huffman%20data%20compression_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Huffman%20data%20compression_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Huffman%20data%20compression_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Huffman data compression</H1>
+      <P>Data compression algorithms are not only very useful in practice but 
+      are also extremely compelling pragmatic examples of programming theory. 
+      The popular Huffman data compression algorithm is from the family of 
+      entropy encoding compression algorithms. This article walks through the 
+      construction of a simple array-based Huffman compression and decompressor 
+      written entirely in F# before converting the functions to handle sequences 
+      on-demand in order to provide incremental compression and 
+      decompression.</P>
+      <H2>Introduction</H2>
+      <P>Data compression has been an extremely important practical application 
+      of computer science theory for many years. Perhaps the best-known early 
+      application was the ZIP format that became popular during the 1980s. This 
+      compressed archival format was used to reduce the size of files for 
+      storage.</P>
+      <P>Today, data compression is used extensively in almost all consumer 
+      technology. Digital TV is based upon the MPEG 2 video compression format. 
+      Images on the web are stored in GIF, PNG or JPEG formats. Even mobile 
+      phones use sophisticated speech compression algorithms.</P>
+      <P>Data compression algorithms are most broadly classified into 
+      dictionary-based and entropy-based algorithms. Dictionary-based data 
+      compression algorithms encode repeated patterns in a stream of bits by 
+      referring back to a recent repetition. Entropy-based data compression 
+      algorithms convert input characters into more efficient sequences of bits, 
+      using shorter sequences to represent more common characters.</P>
+      <P>The earliest documented entropy-based data compression algorithm, 
+      called the Shannon-Fano algorithm, was described by the creator of the 
+      information theory branch of mathematics than encompasses all data 
+      compression. Later, David Huffman descibed an encoding that is provably 
+      optimal when characters are encoded into integral numbers of bits. This 
+      article describes a Huffman coder.</P>
+      <P>The technique behind Huffman coding is remarkably simple. The process 
+      begins with a sorted sequence of leaves represented by character and 
+      probability pairs. The two least probably characters are combined into a 
+      node that is given their combined probability. The process is repeated 
+      until only one node remains: the root node.</P>
+      <P>Characters are then encoded by following the tree from the root to the 
+      leaf containing the character where a left branch emits a zero bit and a 
+      right branch emits a one bit.</P>
+      <P>Decoding relies upon the fact that the encoding of any character is not 
+      the prefix of any other character's encoding. Each bit is read in and the 
+      tree is traversed, taking left or right branches according to the value of 
+      the bit. When a leaf is reached, the character is emitted and the process 
+      continues from the root of the tree.</P>
+      <H2>Core Huffman module</H2>
+      <P>Huffman compression uses a binary tree to map input bits onto 
+      compressed output sequences of bits. Left and Right branches in the tree 
+      represent zero and one input bits. Leaves in the tree contain sequences of 
+      bits that are emitted to form the compressed output. This tree data 
+      structure is represented by values of the following type:</P>
+<PRE>&gt; type node =
+    | Leaf of int
+    | Node of t * t
+  and t = int * node;;
+type node =
+  | Leaf of int
+  | Node of t * t
+and t = int * node</PRE>
+      <P>The following              <CODE>build</CODE> function takes a list of 
+      probabilities and branches and builds a Huffman tree:           </P>
+<PRE>&gt; let rec build roots =
+    match List.sort roots with
+    | [] -&gt; invalidArg "roots" "Huffman"
+    | [h] -&gt; h
+    | (p1, _ as t1)::(p2, _ as t2)::t -&gt;
+        build((p1 + p2, Node(t1, t2)) :: t);;
+val build : (int * node) list -&gt; int * node</PRE>
+      <P>The following              <CODE>mk_tree</CODE> function takes a list 
+      of character frequencies and builds a complete Huffman tree including a 
+      leaf representing the end of input:           </P>
+<PRE>&gt; let mk_tree (freqs: (byte * int) list) =
+    build((0, Leaf -1)::List.map (fun (c, p) -&gt; p, Leaf(int c)) freqs);;
+val mk_tree : (byte * int) list -&gt; int * node</PRE>
+      <P>The theory behind the Huffman compression algorithm, like many other 
+      compression algorithms, elegantly describes how an infinite stream may be 
+      compressed but fails to specify how the end of stream is represented. Two 
+      obvious solutions are to pass the length of the stream up front, or to 
+      include a separate character that is used to signify the end of the 
+      stream. We choose the latter solution, using the character              
+      <CODE>-1</CODE> to represent the end of the stream.           </P>
+      <P>The following              <CODE>mk_table</CODE> function creates a 
+      mapping from input characters to compressed output bit sequences:          
+       </P>
+<PRE>&gt; let rec mk_table = function
+    | _, Leaf c -&gt; Map[c, []]
+    | _, Node(t1, t2) -&gt;
+        let cons b (c, t) = c, b::t
+        Map
+          [ for kv in mk_table t1 do
+              yield kv.Key, true::kv.Value
+            for kv in mk_table t2 do
+              yield kv.Key, false::kv.Value ];;
+val mk_table : int * node -&gt; Map&lt;int,bool list&gt;</PRE>
+      <P>The following              <CODE>encode</CODE> function compresses an 
+      input              <CODE>string</CODE> that is a sequence of bytes and 
+      emits the result by invoking the              <CODE>write_bit</CODE> 
+      function:           </P>
+<PRE>&gt; let encode freqs (string: byte seq) write_bit =
+    let table = mk_table(mk_tree freqs)
+    let rec emit b =
+      List.iter write_bit (Map.find (int b) table)
+    Seq.iter emit string
+    List.iter write_bit (Map.find -1 table);;
+val encode : (byte * int) list -&gt; seq&lt;byte&gt; -&gt; (bool -&gt; unit) -&gt; unit</PRE>
+      <P>The following              <CODE>decode</CODE> function traverses the 
+      Huffman tree according to the compressed bits read and outputs 
+      decompressed characters when leaves are reached:           </P>
+<PRE>&gt; let rec decode_aux read_bit t tree (buf: byte ResizeArray) =
+    match t with
+    | _, Leaf(-1) -&gt; buf.ToArray()
+    | _, Leaf b -&gt;
+        buf.Add (byte b)
+        decode_aux read_bit tree tree buf
+    | _, Node(t1, t2) -&gt;
+        match read_bit(), t1, t2 with
+        | None, _, _ -&gt; invalidArg "t" "decode"
+        | Some true, t, _ | Some false, _, t -&gt;
+            decode_aux read_bit t tree buf;;
+val decode_aux :
+  (unit -&gt; bool option) -&gt;
+    int * node -&gt; int * node -&gt; ResizeArray&lt;byte&gt; -&gt; byte []</PRE>
+<PRE>&gt; let decode freqs read_bit =
+    let tree = mk_tree freqs
+    decode_aux read_bit tree tree (Collections.ResizeArray());;
+val decode : (byte * int) list -&gt; (unit -&gt; bool option) -&gt; byte []</PRE>
+      <P>This design combines conventional imperative code for IO with a purely 
+      functional data structure to represent the Huffman tree and achieves 
+      reasonable efficiency. Opting for an entirely purely functional design 
+      either avoiding mutation or restricting it using a monadic style would 
+      incur considerable overheads in F#, obfuscate the code and has no real 
+      benefit in the context of inherently impure actions such as IO.</P>
+      <H2>Example</H2>
+      <P>An example 5.5Mb file may be read into an array of bytes as 
+follows:</P>
+<PRE>&gt; let input =
+    [|use stream = System.IO.File.OpenRead @"C:\Users\Jon\Documents\bible13.txt"
+      let b = ref(stream.ReadByte())
+      while !b &lt;&gt; -1 do
+        yield byte !b
+        b := stream.ReadByte()|];;
+val input : byte array =
+  [|84uy; 104uy; 101uy; 32uy; 80uy; 114uy; 111uy; 106uy; 101uy; 99uy; 116uy;
+    32uy; 71uy; 117uy; 116uy; 101uy; 110uy; 98uy; 101uy; 114uy; 103uy; 32uy;
+    69uy; 66uy; 111uy; 111uy; 107uy; 32uy; 111uy; 102uy; 32uy; 84uy; 104uy;
+    101uy; 32uy; 66uy; 105uy; 98uy; 108uy; 101uy; 44uy; 32uy; 68uy; 111uy;
+    117uy; 97uy; 121uy; 45uy; 82uy; 104uy; 101uy; 105uy; 109uy; 115uy; 44uy;
+    32uy; 79uy; 108uy; 100uy; 32uy; 97uy; 110uy; 100uy; 32uy; 78uy; 101uy;
+    119uy; 13uy; 10uy; 84uy; 101uy; 115uy; 116uy; 97uy; 109uy; 101uy; 110uy;
+    116uy; 115uy; 44uy; 32uy; 67uy; 111uy; 109uy; 112uy; 108uy; 101uy; 116uy;
+    101uy; 32uy; 13uy; 10uy; 13uy; 10uy; 84uy; 104uy; 105uy; 115uy; 32uy;
+    101uy; ...|]</PRE>
+      <P>The frequencies of characters in the input is most easily computed 
+      using the              <CODE>Seq.countBy</CODE> function:           </P>
+<PRE>&gt; let freqs =
+    Seq.countBy id input
+    |&gt; List.of_seq
+    |&gt; List.sort;;
+val freqs : (byte * int) list =
+  [(10uy, 138428); (13uy, 138428); (32uy, 933608); (33uy, 103); (34uy, 24);
+   (35uy, 3); (36uy, 2); (37uy, 1); (38uy, 2); (39uy, 1814); (40uy, 414);
+   (41uy, 414); (42uy, 28); (44uy, 81445); (45uy, 660); (46uy, 81549);
+   (47uy, 28); (48uy, 6296); (49uy, 32280); (50uy, 22040); (51uy, 14767);
+   (52uy, 11111); (53uy, 8413); (54uy, 7708); (55uy, 7057); (56uy, 6899);
+   (57uy, 6320); (58uy, 62572); (59uy, 2219); (63uy, 3182); (64uy, 2);
+   (65uy, 22664); (66uy, 6485); (67uy, 4617); (68uy, 2658); (69uy, 3796);
+   (70uy, 3402); (71uy, 8347); (72uy, 4516); (73uy, 15171); (74uy, 7996);
+   (75uy, 380); (76uy, 10229); (77uy, 3683); (78uy, 2447); (79uy, 3016);
+   (80uy, 2685); (81uy, 21); (82uy, 1319); (83uy, 6788); (84uy, 11126);
+   (85uy, 391); (86uy, 227); (87uy, 3120); (88uy, 9); (89uy, 551); (90uy, 398);
+   (91uy, 11); (93uy, 11); (96uy, 4); (97uy, 322701); (98uy, 56099);
+   (99uy, 75143); (100uy, 197439); (101uy, 506519); (102uy, 101189);
+   (103uy, 63862); (104uy, 333787); (105uy, 238981); (106uy, 4176);
+   (107uy, 25024); (108uy, 153494); (109uy, 97968); (110uy, 273989);
+   (111uy, 306350); (112uy, 56401); (113uy, 1401); (114uy, 215101);
+   (115uy, 242500); (116uy, 388657); (117uy, 99318); (118uy, 38095);
+   (119uy, 78987); (120uy, 2600); (121uy, 73785); (122uy, 1841); (224uy, 1);
+   (239uy, 2)]</PRE>
+      <P>The following compresses the input into an array of booleans:</P>
+<PRE>&gt; let output =
+    let buf = Collections.ResizeArray()
+    encode freqs input buf.Add
+    buf.ToArray();;
+val output : bool [] =
+  [|false; true; true; false; true; false; false; true; false; false; true;
+    true; true; true; true; true; false; false; true; false; true; true; false;
+    true; false; true; true; false; false; true; false; false; false; true;
+    true; true; false; true; false; true; true; false; false; true; false;
+    true; false; true; true; true; true; true; true; false; true; true; false;
+    false; false; true; false; true; false; false; true; true; true; false;
+    false; true; false; true; true; true; false; true; true; false; false;
+    false; false; true; false; true; true; true; true; true; true; false; true;
+    false; true; false; false; false; false; false; true; true; ...|]</PRE>
+      <P>The following decompresses this back into an array of bytes:</P>
+<PRE>&gt; let decompressed =
+    let i = ref 0
+    let read () =
+      if !i = output.Length then None else
+        incr i
+        Some output.[!i - 1]
+    decode freqs read;;
+val decompressed : byte [] =
+  [|84uy; 104uy; 101uy; 32uy; 80uy; 114uy; 111uy; 106uy; 101uy; 99uy; 116uy;
+    32uy; 71uy; 117uy; 116uy; 101uy; 110uy; 98uy; 101uy; 114uy; 103uy; 32uy;
+    69uy; 66uy; 111uy; 111uy; 107uy; 32uy; 111uy; 102uy; 32uy; 84uy; 104uy;
+    101uy; 32uy; 66uy; 105uy; 98uy; 108uy; 101uy; 44uy; 32uy; 68uy; 111uy;
+    117uy; 97uy; 121uy; 45uy; 82uy; 104uy; 101uy; 105uy; 109uy; 115uy; 44uy;
+    32uy; 79uy; 108uy; 100uy; 32uy; 97uy; 110uy; 100uy; 32uy; 78uy; 101uy;
+    119uy; 13uy; 10uy; 84uy; 101uy; 115uy; 116uy; 97uy; 109uy; 101uy; 110uy;
+    116uy; 115uy; 44uy; 32uy; 67uy; 111uy; 109uy; 112uy; 108uy; 101uy; 116uy;
+    101uy; 32uy; 13uy; 10uy; 13uy; 10uy; 84uy; 104uy; 105uy; 115uy; 32uy;
+    101uy; ...|]</PRE>
+      <P>The decompressed result is identical to the original input, as 
+      expected:</P>
+<PRE>&gt; input = decompressed;;
+val it : bool = true</PRE>
+      <P>The compression ratio may be calculated as follows:</P>
+<PRE>&gt; float output.Length / 8.0 / float input.Length;;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val it : float = 0.5789038057</PRE>
+      <P>The text is compressed to only 58% of its original size.</P>
+      <H2>Handling on-demand sequences</H2>
+      <P>The main drawback of the simple implementation outlined above is that 
+      it requires the entire input to be available for processes. The simplest 
+      solution to this problem is to rewrite the compression and decompression 
+      algorithms in terms of F# sequence expressions that consume input and 
+      generate output incrementally on demand.</P>
+<PRE>&gt; module Huffman =
+    type private node =
+      | Leaf of int
+      | Node of (int * node) * (int * node)</PRE>
+<PRE>    let rec private build roots =
+      match List.sort roots with
+      | [] -&gt; invalidArg "roots" "Huffman"
+      | [h] -&gt; h
+      | (p1, _ as t1)::(p2, _ as t2)::t -&gt;
+          build((p1 + p2, Node(t1, t2)) :: t)</PRE>
+<PRE>    let private mk_tree (freqs: (byte * int) list) =
+      build((0, Leaf -1)::List.map (fun (c, p) -&gt; p, Leaf(int c)) freqs)</PRE>
+<PRE>    let rec private mk_table = function
+      | _, Leaf c -&gt; Map[c, []]
+      | _, Node(t1, t2) -&gt;
+          let cons b (c, t) = c, b::t
+          Map
+            [ for kv in mk_table t1 do
+                yield kv.Key, true::kv.Value
+              for kv in mk_table t2 do
+                yield kv.Key, false::kv.Value ]</PRE>
+<PRE>    let encode freqs (input: byte seq) =
+      let table = mk_table(mk_tree freqs)
+      seq { for b in input do
+              for b in Map.find (int b) table do
+                yield b
+            for b in Map.find -1 table do
+              yield b }</PRE>
+<PRE>    let decode freqs (input: bool seq) =
+      let tree = mk_tree freqs
+      seq { let t = ref tree
+            for bool in input do
+              match !t with
+              | _, Leaf -1 -&gt; ()
+              | _, Leaf b -&gt;
+                  yield byte b
+                  match bool, tree with
+                  | true, (_, Node(t', _)) | false, (_, Node(_, t')) -&gt;
+                      t := t'
+                  | _ -&gt; invalidArg "tree" "decode"
+              | _, Node(t1, t2) -&gt;
+                  t := if bool then t1 else t2 };;
+module Huffman = begin
+  type private node =
+    | Leaf of int
+    | Node of (int * node) * (int * node)
+  val private build : (int * node) list -&gt; int * node
+  val private mk_tree : (byte * int) list -&gt; int * node
+  val private mk_table : int * node -&gt; Map&lt;int,bool list&gt;
+  val encode : (byte * int) list -&gt; seq&lt;byte&gt; -&gt; seq&lt;bool&gt;
+  val decode : (byte * int) list -&gt; seq&lt;bool&gt; -&gt; seq&lt;byte&gt;
+end</PRE>
+      <P>This on-demand implementation may be tested as follows. We begin by 
+      creating an on-demand sequence of bytes for input:</P>
+<PRE>&gt; #time;;
+--&gt; Timing now on</PRE>
+<PRE>&gt; let input =
+    seq { use stream = System.IO.File.OpenRead @"C:\Users\Jon\Documents\bible13.txt"
+          let b = ref(stream.ReadByte())
+          while !b &lt;&gt; -1 do
+            yield byte !b
+            b := stream.ReadByte() };;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val input : seq&lt;byte&gt;</PRE>
+      <P>Note that this is obtained immediately because the input file is not 
+      read until the input sequence is traversed.</P>
+      <P>The frequencies of input characters may be obtained much more 
+      efficiently by incrementing table values directly as follows:</P>
+<PRE>&gt; let freqs =
+    let a = Array.create 256 0
+    for b in input do
+      a.[int b] &lt;- a.[int b] + 1
+    [ for i in 0..255 do
+        if a.[i] &gt; 0 then
+          yield byte i, a.[i] ];;
+...</PRE>
+      <P>The compressed sequence may be obtained as follows:</P>
+<PRE>&gt; let compressed =
+    Huffman.encode freqs input;;</PRE>
+      <P>Note that this is also instantaneous.</P>
+      <P>Compression is performed incrementally only as required. So we can get 
+      some idea of the time taken to compress the input by computing some 
+      function of the result such as the length of the output sequence:</P>
+<PRE>&gt; Seq.length compressed;;
+Real: 00:00:03.734, CPU: 00:00:03.728, GC gen0: 36, gen1: 1, gen2: 0
+val it : int = 26163187</PRE>
+      <P>Note that this took several seconds.</P>
+<PRE>&gt; let decompressed =
+    Huffman.decode freqs compressed;;
+Real: 00:00:00.007, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val decompressed : seq&lt;byte&gt;</PRE>
+      <P>The decompressed result may be compared to the original input as 
+      follows:</P>
+<PRE>&gt; Seq.compare compare input decompressed;;
+Real: 00:00:15.908, CPU: 00:00:15.912, GC gen0: 760, gen1: 4, gen2: 1
+val it : int = 0</PRE>
+      <P>The result of              <CODE>0</CODE> indicates that the sequences 
+      are identical, as expected.           </P>
+      <H2>Summary</H2>
+      <P>This article has described a simple implementation of the Huffman data 
+      compression algorithm in a form that can be used to compress data. The 
+      design leverages impure functional programming techniques to provide a 
+      simple and elegant implementation of this algorithm that is also 
+      reasonably efficient.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Huffman%20data%20compression_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

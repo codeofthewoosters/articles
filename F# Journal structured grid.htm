@@ -1,0 +1,192 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0084)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/StructuredGrid.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20structured%20grid_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20structured%20grid_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20structured%20grid_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20structured%20grid_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20structured%20grid_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Structured grids</H1>
+      <P>Spreadsheets are ubiquitous in business computing but they are a flat 
+      unstructured representation of data. Programming languages like F# make it 
+      easy to structure data but the ability to convert between flat and 
+      structured representations can make it easier to build applications for 
+      business users. This article examines the problem of converted structured 
+      data into a flat table.</P>
+      <P>Annuity products require information about the annuitant, an optional 
+      spouse and a premium. Each of the annuitant and spouse have an age and a 
+      sex. Age is conveyed as integral number of years and months.</P>
+      <P>The following <CODE>Age</CODE> record type represents the age of a 
+      person:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Age&nbsp;=&nbsp;{&nbsp;Years:&nbsp;int;&nbsp;Months:&nbsp;int&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Age&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{Years:&nbsp;int;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Months:&nbsp;int;}</CODE></P>
+      <P>Both years and months are mandatory.</P>
+      <P>The following <CODE>Sex</CODE> union type represents the sex of a 
+      person:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Sex&nbsp;=&nbsp;Male&nbsp;|&nbsp;Female;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Sex&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Male<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Female</CODE></P>
+      <P>Either male or female.</P>
+      <P>The following <CODE>Person</CODE> record type represents the age and 
+      sex of a person:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Person&nbsp;=&nbsp;{&nbsp;Age:&nbsp;Age;&nbsp;Sex:&nbsp;Sex&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Person&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{Age:&nbsp;Age;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sex:&nbsp;Sex;}</CODE></P>
+      <P>The complete input data is composed of an annuitant, optional spouse 
+      and premium:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;InputData&nbsp;=&nbsp;{&nbsp;Annuitant:&nbsp;Person;&nbsp;Spouse:&nbsp;Person&nbsp;option;&nbsp;Premium:&nbsp;float&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;InputData&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{Annuitant:&nbsp;Person;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Spouse:&nbsp;Person&nbsp;option;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Premium:&nbsp;float;}</CODE></P>
+      <P>The following example <CODE>spouse</CODE> can be used to construct some 
+      test data:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;spouse&nbsp;=&nbsp;{&nbsp;Age&nbsp;=&nbsp;{&nbsp;Years&nbsp;=&nbsp;65;&nbsp;Months&nbsp;=&nbsp;0&nbsp;};&nbsp;Sex&nbsp;=&nbsp;Female&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;spouse&nbsp;:&nbsp;Person&nbsp;=&nbsp;{Age&nbsp;=&nbsp;{Years&nbsp;=&nbsp;65;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Months&nbsp;=&nbsp;0;};<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sex&nbsp;=&nbsp;Female;}</CODE></P>
+      <P>Test inputs both with an without spouse for a variety of annuitant ages 
+      may then be generated as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inputs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;spouse&nbsp;in&nbsp;[None;&nbsp;Some&nbsp;spouse]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;age&nbsp;in&nbsp;40..5..65&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;Annuitant&nbsp;=&nbsp;{&nbsp;Age&nbsp;=&nbsp;{&nbsp;Years&nbsp;=&nbsp;age;&nbsp;Months&nbsp;=&nbsp;0&nbsp;};&nbsp;Sex&nbsp;=&nbsp;Male&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Spouse&nbsp;=&nbsp;spouse<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Premium&nbsp;=&nbsp;50000.0&nbsp;}&nbsp;];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inputs&nbsp;:&nbsp;InputData&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[{Annuitant&nbsp;=&nbsp;{Age&nbsp;=&nbsp;{Years&nbsp;=&nbsp;40;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Months&nbsp;=&nbsp;0;};<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sex&nbsp;=&nbsp;Male;};<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Spouse&nbsp;=&nbsp;null;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Premium&nbsp;=&nbsp;50000.0;};&nbsp;...</CODE></P>
+      <P>We wish to visualize this data as a structured grid with a tree of 
+      column headers and a table with one row for each input.</P>
+      <P>The tree of headers may be represented as a value of the following 
+      <CODE>Tree</CODE> union type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Tree&nbsp;=&nbsp;Branch&nbsp;of&nbsp;(string&nbsp;*&nbsp;Tree)&nbsp;list;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Tree&nbsp;=&nbsp;|&nbsp;Branch&nbsp;of&nbsp;(string&nbsp;*&nbsp;Tree)&nbsp;list</CODE></P>
+      <P>The tree of headers is derived from the structure of the run-time type 
+      of the input. The process of converting the type information into a 
+      <CODE>tree</CODE> can simplified by first defining active patterns to 
+      classify types.</P>
+      <P>The following <CODE>PrimType</CODE> matches strings and value 
+types:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|PrimType|_|)&nbsp;(ty:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ty.IsValueType&nbsp;||&nbsp;ty&nbsp;=&nbsp;typeof&lt;string&gt;&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;PrimType<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|PrimType|_|&nbsp;)&nbsp;:&nbsp;ty:System.Type&nbsp;-&gt;&nbsp;unit&nbsp;option</CODE></P>
+      <P>The following <CODE>TupleType</CODE> matches tuples, returning the 
+      types of the elements:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|TupleType|_|)&nbsp;(ty:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Reflection.FSharpType.IsTuple&nbsp;ty&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(Reflection.FSharpType.GetTupleElements&nbsp;ty)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|TupleType|_|&nbsp;)&nbsp;:&nbsp;ty:System.Type&nbsp;-&gt;&nbsp;System.Type&nbsp;[]&nbsp;option</CODE></P>
+      <P>The following <CODE>RecordType</CODE> matches F# record types, 
+      returning the name and type of each field:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|RecordType|_|)&nbsp;(ty:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Reflection.FSharpType.IsRecord&nbsp;ty&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;field&nbsp;in&nbsp;Reflection.FSharpType.GetRecordFields&nbsp;ty&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field.Name,&nbsp;field.PropertyType&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|RecordType|_|&nbsp;)&nbsp;:&nbsp;ty:System.Type&nbsp;-&gt;&nbsp;(string&nbsp;*&nbsp;System.Type)&nbsp;list&nbsp;option</CODE></P>
+      <P>The following <CODE>gen</CODE> function is a short-hand for converting 
+      a type into a generic type definition:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;gen&nbsp;(ty:&nbsp;System.Type)&nbsp;=&nbsp;ty.GetGenericTypeDefinition();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;gen&nbsp;:&nbsp;ty:System.Type&nbsp;-&gt;&nbsp;System.Type</CODE></P>
+      <P>This makes it easier to test if a type is a certain kind of generic 
+      type.</P>
+      <P>The following <CODE>OptionType</CODE> matches the F# 
+      <CODE>option</CODE> type, returning the type of the optional value:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|OptionType|_|)&nbsp;(ty:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;ty.IsGenericType&nbsp;&amp;&amp;&nbsp;gen&nbsp;ty&nbsp;=&nbsp;gen&nbsp;typeof&lt;_&nbsp;option&gt;&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(ty.GetGenericArguments().[0])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|OptionType|_|&nbsp;)&nbsp;:&nbsp;ty:System.Type&nbsp;-&gt;&nbsp;System.Type&nbsp;option</CODE></P>
+      <P>The following <CODE>UnionType</CODE> matches an F# union type, 
+      returning the name and argument types of each union case:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|UnionType|_|)&nbsp;(ty:&nbsp;System.Type)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Reflection.FSharpType.IsUnion&nbsp;ty&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;case&nbsp;in&nbsp;Reflection.FSharpType.GetUnionCases&nbsp;ty&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;case.Name,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;field&nbsp;in&nbsp;case.GetFields()&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;field.PropertyType&nbsp;]&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|UnionType|_|&nbsp;)&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ty:System.Type&nbsp;-&gt;&nbsp;(string&nbsp;*&nbsp;System.Type&nbsp;list)&nbsp;list&nbsp;option</CODE></P>
+      <P>The following <CODE>EnumType</CODE> matches a union type when all cases 
+      are argumentless:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;(|EnumType|_|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;UnionType&nbsp;cases&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Seq.forall&nbsp;(fun&nbsp;(_,&nbsp;args)&nbsp;-&gt;&nbsp;Seq.isEmpty&nbsp;args)&nbsp;cases&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some(Seq.map&nbsp;fst&nbsp;cases)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|EnumType|_|&nbsp;)&nbsp;:&nbsp;_arg1:System.Type&nbsp;-&gt;&nbsp;seq&lt;string&gt;&nbsp;option</CODE></P>
+      <P>The following <CODE>treesOfType</CODE> function converts a 
+      <CODE>System.Type</CODE> into a list of pairs of names and trees:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;treesOfType&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PrimType&nbsp;|&nbsp;EnumType&nbsp;_&nbsp;-&gt;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TupleType&nbsp;tys&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;i&nbsp;in&nbsp;0..tys.Length-1&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;i,&nbsp;Branch(treesOfType&nbsp;tys.[i])&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;RecordType&nbsp;fields&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;name,&nbsp;ty&nbsp;in&nbsp;fields&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name,&nbsp;Branch(treesOfType&nbsp;ty)&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OptionType&nbsp;ty&nbsp;-&gt;&nbsp;treesOfType&nbsp;ty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;UnionType&nbsp;cases&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;name,&nbsp;tys&nbsp;in&nbsp;cases&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name,&nbsp;Branch(List.collect&nbsp;treesOfType&nbsp;tys)&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;failwith&nbsp;"Non-F#&nbsp;type";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;treesOfType&nbsp;:&nbsp;_arg1:System.Type&nbsp;-&gt;&nbsp;(string&nbsp;*&nbsp;Tree)&nbsp;list</CODE></P>
+      <P>Primitive types and argumentless union types contain no subtrees 
+      because they produce output in the table. Tuple types are converted into a 
+      list of trees with integer names. Record types are converted into a list 
+      of trees with names given by the field names from the record. Option types 
+      are skipped, not creating a new level in the tree. Union types have each 
+      union case enumerated and converted into a named branch.</P>
+      <P>For example, converting the type of our example test data into a tree 
+      yields the following:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;treesOfType&nbsp;(inputs.[0].GetType());;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;(string&nbsp;*&nbsp;Tree)&nbsp;list&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[("Annuitant",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Branch<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[("Age",&nbsp;Branch&nbsp;[("Years",&nbsp;Branch&nbsp;[]);&nbsp;("Months",&nbsp;Branch&nbsp;[])]);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("Sex",&nbsp;Branch&nbsp;[])]);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("Spouse",<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Branch<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[("Age",&nbsp;Branch&nbsp;[("Years",&nbsp;Branch&nbsp;[]);&nbsp;("Months",&nbsp;Branch&nbsp;[])]);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;("Sex",&nbsp;Branch&nbsp;[])]);&nbsp;("Premium",&nbsp;Branch&nbsp;[])]</CODE></P>
+      <P>Note how the structure of the types is reflected in the resulting tree. 
+      Each person contains an age and a sex. Each age contains years and months, 
+      and so on.</P>
+      <P>The following <CODE>width</CODE> function computes the width of a 
+      tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;width&nbsp;ts&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.map&nbsp;(fun&nbsp;(_,&nbsp;Branch&nbsp;ts)&nbsp;-&gt;&nbsp;width&nbsp;ts)&nbsp;ts<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.fold&nbsp;(+)&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;max&nbsp;1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;width&nbsp;:&nbsp;ts:(string&nbsp;*&nbsp;Tree)&nbsp;list&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>For example, when flattened our type contains seven separate 
+fields:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;treesOfType&nbsp;(inputs.[0].GetType())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;width;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;7</CODE></P>
+      <P>The following <CODE>depth</CODE> function computes the maximum depth of 
+      a tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;depth&nbsp;ts&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.map&nbsp;(fun&nbsp;(_,&nbsp;Branch&nbsp;ts)&nbsp;-&gt;&nbsp;1&nbsp;+&nbsp;depth&nbsp;ts)&nbsp;ts<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.fold&nbsp;max&nbsp;0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;depth&nbsp;:&nbsp;ts:(string&nbsp;*&nbsp;Tree)&nbsp;list&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>For example, the deepest branch of our tree is 
+      annuitant-&gt;age-&gt;year giving a depth of three:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;treesOfType&nbsp;(inputs.[0].GetType())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;depth;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;3</CODE></P>
+      <P>The following <CODE>listOfValue</CODE> function converts one of our 
+      test inputs into a row for our table represented as a list of strings:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;listOfValue&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;listOfValue&nbsp;ty&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;match&nbsp;ty&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PrimType&nbsp;-&gt;&nbsp;yield&nbsp;string&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;TupleType&nbsp;tys&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Reflection.FSharpValue.GetTupleFields&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ty,&nbsp;x&nbsp;in&nbsp;Seq.zip&nbsp;tys&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;listOfValue&nbsp;ty&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;RecordType&nbsp;fields&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Reflection.FSharpValue.GetRecordFields&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;(_,&nbsp;ty),&nbsp;x&nbsp;in&nbsp;Seq.zip&nbsp;fields&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;listOfValue&nbsp;ty&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;OptionType&nbsp;ty2&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;info,&nbsp;xs&nbsp;=&nbsp;Reflection.FSharpValue.GetUnionFields(x,&nbsp;ty)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;xs&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[||]&nbsp;-&gt;&nbsp;//&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..width(treesOfType&nbsp;ty2)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;xs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x&nbsp;in&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;listOfValue&nbsp;ty2&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EnumType&nbsp;cases&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;info,&nbsp;_&nbsp;=&nbsp;Reflection.FSharpValue.GetUnionFields(x,&nbsp;ty)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;string(Seq.nth&nbsp;info.Tag&nbsp;cases)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;UnionType&nbsp;cases&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;info,&nbsp;xs&nbsp;=&nbsp;Reflection.FSharpValue.GetUnionFields(x,&nbsp;ty)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;_,&nbsp;tys&nbsp;=&nbsp;Seq.nth&nbsp;info.Tag&nbsp;cases<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;ty,&nbsp;x&nbsp;in&nbsp;Seq.zip&nbsp;tys&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;listOfValue&nbsp;ty&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;failwith&nbsp;"Non-F#&nbsp;type"&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;listOfValue&nbsp;(x.GetType())&nbsp;(box&nbsp;x);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;listOfValue&nbsp;:&nbsp;x:'a&nbsp;-&gt;&nbsp;string&nbsp;list</CODE></P>
+      <P>A value of a primitive type (<CODE>int</CODE>, <CODE>float</CODE>, 
+      <CODE>System.DateTime</CODE>, <CODE>string</CODE> etc.) is converted to a 
+      string using the <CODE>string</CODE> function. Tuples and records are 
+      flattened. Option types generate empty strings in the <CODE>None</CODE> 
+      case or are flattened in the <CODE>Some</CODE> case. A value of an 
+      enumeration is converted into a string by looking up the tag number in the 
+      array of union case names. A value of a union type is converted by 
+      converting each argument.</P>
+      <P>For example, converting the first of our test cases into a list of 
+      strings yields:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;listOfValue&nbsp;inputs.[0];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;string&nbsp;list&nbsp;=&nbsp;["40";&nbsp;"0";&nbsp;"Male";&nbsp;"";&nbsp;"";&nbsp;"";&nbsp;"50000"]</CODE></P>
+      <P>Note how the <CODE>Spouse=None</CODE> is converted into three empty 
+      strings because the <CODE>Some</CODE> case would have conveyed three 
+      fields.</P>
+      <P>Once we have referenced the WPF DLLs we can open the 
+      <CODE>System.Windows</CODE> namespace and start writing the GUI code:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>The following <CODE>fillGrid</CODE> function populates a WPF 
+      <CODE>Grid</CODE> control with a sequence of structured values:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;fillGrid&nbsp;header&nbsp;body&nbsp;(grid:&nbsp;Controls.Grid)&nbsp;(xs:&nbsp;seq&lt;'a&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ts&nbsp;=&nbsp;treesOfType&nbsp;typeof&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;maxDepth&nbsp;=&nbsp;depth&nbsp;ts<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..maxDepth&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..width&nbsp;ts&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ColumnDefinition()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;grid.ColumnDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;x0&nbsp;y0&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[]&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(name,&nbsp;Branch&nbsp;[])::tss&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lbl&nbsp;=&nbsp;header&nbsp;name<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(lbl,&nbsp;x0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(lbl,&nbsp;y0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRowSpan(lbl,&nbsp;maxDepth-y0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;lbl&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(x0+1)&nbsp;y0&nbsp;tss<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;(name,&nbsp;Branch&nbsp;ts)::tss&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;w&nbsp;=&nbsp;width&nbsp;ts<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lbl&nbsp;=&nbsp;header&nbsp;name<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(lbl,&nbsp;x0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumnSpan(lbl,&nbsp;w)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(lbl,&nbsp;y0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;lbl&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;x0&nbsp;(y0+1)&nbsp;ts<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(x0+w)&nbsp;y0&nbsp;tss<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;0&nbsp;0&nbsp;ts<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x&nbsp;in&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;listOfValue&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i,&nbsp;x&nbsp;in&nbsp;Seq.mapi&nbsp;(fun&nbsp;i&nbsp;x&nbsp;-&gt;&nbsp;i,&nbsp;x)&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lbl&nbsp;=&nbsp;body&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(lbl,&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(lbl,&nbsp;grid.RowDefinitions.Count)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;lbl&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;fillGrid&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;header:(string&nbsp;-&gt;&nbsp;#UIElement)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:(string&nbsp;-&gt;&nbsp;#UIElement)&nbsp;-&gt;&nbsp;grid:Controls.Grid&nbsp;-&gt;&nbsp;xs:seq&lt;'a0&gt;&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The type of the elements in the input is obtained using the expression 
+      <CODE>typeof&lt;'a&gt;</CODE> where <CODE>'a</CODE> is the function's 
+      polymorphic type variable from <CODE>xs:&nbsp;seq&lt;'a&gt;</CODE>. This 
+      is fed into the <CODE>treesOfType</CODE> function to compute the trees of 
+      headers <CODE>ts</CODE>. The maximum depth <CODE>maxDepth</CODE> of this 
+      tree is computed using the <CODE>depth</CODE> function. A row is added to 
+      the grid for each depth level in the headers. A column is added to the 
+      grid for each field in the flattened structure (the width of the tree). 
+      Then a nested <CODE>loop</CODE> function is used to fill in the headers. 
+      Headers with subheadings generate more headings to the right and 
+      subheadings below so that case makes two recursive calls to 
+      <CODE>loop</CODE>. Headings without subheadings fill downwards to the 
+      depth of the tree and make a single recursive call to <CODE>loop</CODE>. 
+      Finally, a row is added and filled in for each value in the input sequence 
+      <CODE>xs</CODE>.</P>
+      <P>The following <CODE>label</CODE> function creates a label that centers 
+      its contents and has a black border:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;label&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ctrl&nbsp;=&nbsp;Controls.Label(Content=x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl.HorizontalContentAlignment&nbsp;&lt;-&nbsp;HorizontalAlignment.Center<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl.VerticalContentAlignment&nbsp;&lt;-&nbsp;VerticalAlignment.Center<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl.BorderThickness&nbsp;&lt;-&nbsp;Thickness&nbsp;1.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl.BorderBrush&nbsp;&lt;-&nbsp;Media.Brushes.Black<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;label&nbsp;:&nbsp;x:'a&nbsp;-&gt;&nbsp;Controls.Label</CODE></P>
+      <P>The following <CODE>header</CODE> function creates such a label and 
+      sets its background color to light green:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;header&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ctrl&nbsp;=&nbsp;label&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl.Background&nbsp;&lt;-&nbsp;Media.Brushes.LightGreen<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;header&nbsp;:&nbsp;x:'a&nbsp;-&gt;&nbsp;Controls.Label</CODE></P>
+      <P>The following main program creates a grid, fills it in, places it in a 
+      scroll viewer and visualizes that in a window:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThreadAttribute&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.HorizontalAlignment&nbsp;&lt;-&nbsp;HorizontalAlignment.Left<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.VerticalAlignment&nbsp;&lt;-&nbsp;VerticalAlignment.Top<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fillGrid&nbsp;header&nbsp;label&nbsp;grid&nbsp;inputs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;scroll&nbsp;=&nbsp;Controls.ScrollViewer(Content=grid)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(Window(Content=scroll))&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <H2>Results</H2>
+      <P>When run, this program produces the following outputs:</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>Note how the three fields of spouse data are skipped when the 
+      structured data shows that there is no spouse.</P>
+      <H2>Summary</H2>
+      <P>This article has shown how reflection can be used to convert structured 
+      types into a tree of headers and flattened fields in order to visualize a 
+      sequence of values of a structured type. A similar approach can be used to 
+      convert structured data in a program into an Excel spreadsheet and back 
+      again.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of visualizing 
+      structured data.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20structured%20grid_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

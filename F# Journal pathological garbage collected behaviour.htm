@@ -1,0 +1,240 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0093)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/PathologicalGCBehaviour.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20pathological%20garbage%20collected%20behaviour_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20pathological%20garbage%20collected%20behaviour_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20pathological%20garbage%20collected%20behaviour_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20pathological%20garbage%20collected%20behaviour_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20pathological%20garbage%20collected%20behaviour_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Pathological garbage collector behaviour</H1>
+      <P>When performance is important in a garbage collected language such as 
+      F# it is useful to have some understanding of the costs of operations that 
+      the garbage collector performs. This article provides an introduction to 
+      garbage collection, an overview of the processes performed by generational 
+      garbage collectors for multithreaded programs and goes on to examine some 
+      F# programs that deliberately exhibit pathological behaviour and presents 
+      workarounds that alleviate or even eliminate the costs associated with 
+      garbage collection on .NET.</P>
+      <H2>Introduction</H2>
+      <P>Modern VMs including both the JVM and CLR use garbage collection to 
+      simulate a virtual machine with infinite memory. With garbage collection, 
+      programs are able to keep allocating memory without ever having to 
+      explicitly free it. This has many benefits including freedom from memory 
+      management issues when designing APIs and memory safety with the 
+      elimination of errors such as dangling pointers and double freeing. 
+      Today's production garbage collectors accomplish this by collating global 
+      roots (references into the heap held in core's registers, on thread's 
+      stacks and in global variables) and traversing all of the reachable 
+      objects in the heap starting from these roots. This is called tracing 
+      collection. All objects that cannot be reached from global roots can never 
+      be accessed by the program again so they are eligible for collection and 
+      the space they consume can be recycled.</P>
+      <P>Even this high-level view of garbage collection immediately highlights 
+      two costs. Firstly, collating the global roots requires the traversal of 
+      one stack for each thread. A program can have up to around 1,000 threads 
+      each with up to 1MB of stack, requiring up to a whopping 1GB of stacks to 
+      be traversed. Secondly, traversing the heap requires every reference in 
+      the heap to be examined so there is a cost associated with the number of 
+      references in the heap. Let us examine garbage collection in more detail 
+      before we revisit these costs.</P>
+      <P>The CLR provides two different garbage collectors, the workstation and 
+      server GCs. Both are generational collectors and both handle multithreaded 
+      programs. Generational garbage collection is designed to exploit the 
+      generational hypothesis that object lifetimes are heavily skewed with the 
+      vast majority of objects becoming unreachable soon after they are 
+      allocated. This is accomplished by allocating into a nursery generation 
+      until it is full whereupon reachable values in the nursery (called 
+      "survivors") are evacuated by physically copying them into the next 
+      generation. Evacuating survivors requires the values in the nursery to be 
+      traced from global roots and any references to values recently allocated 
+      into the nursery that have been written into other generations. Values in 
+      the nursery that are still reachable are then physically copied into 
+      another generation, leaving behind a forwarding pointer to their new 
+      location. Finally, all references pointing into the nursery are updated to 
+      point to the new locations of the values.</P>
+      <P>Note that evacuation requires all references to young values in the 
+      nursery that have been written into old values in other generations. Such 
+      back references are accumulated as they are created by testing every 
+      reference written into the heap. The code injected to perform this test is 
+      called the write barrier. The write barrier ignores references to other 
+      values in the nursery generation and null references and records writes of 
+      all other references. The two main schemes for recording back references 
+      are remembered sets and card marking. Remembered sets accumulate every 
+      reference written whereas card marking records the chunk of memory 
+      containing the back reference. Write barriers can be expensive and they 
+      are often overlooked when optimizing managed code.</P>
+      <P>In the pursuit of cheap allocation, generational garbage collection 
+      sacrifices the efficiency of survival under the assumption that only a 
+      small proportion of heap-allocated values will survive. However, there are 
+      some idioms that violate these assumptions by allowing many allocated 
+      values to survive at least one generation. Hash tables often contain small 
+      heap-allocated keys and values such as strings. Thus, filling a hash table 
+      can entail allocating many small values and writing references to them 
+      into the spine of the hash table that resides in another generation. This 
+      incurs many write barriers and results in many survivors that are marked, 
+      copied and all of the references to them updated. Message queues are 
+      another idiom that can violate the generational hypothesis by creating 
+      survivors that die soon after evacuation.</P>
+      <H2>A simple benchmark</H2>
+      <P>The following function measures how long it takes to perform operations 
+      that would usually be thought of as constant time:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;bench&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;r&nbsp;=&nbsp;ref&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;:=&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Writing&nbsp;int&nbsp;%d&nbsp;times&nbsp;took&nbsp;%fs"&nbsp;n&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;r&nbsp;=&nbsp;ref(box&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;:=&nbsp;null<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Writing&nbsp;null&nbsp;%d&nbsp;times&nbsp;took&nbsp;%fs"&nbsp;n&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;r,&nbsp;x&nbsp;=&nbsp;ref(box&nbsp;0),&nbsp;box&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;:=&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Writing&nbsp;existing&nbsp;reference&nbsp;%d&nbsp;times&nbsp;took&nbsp;%fs"&nbsp;n&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;r&nbsp;=&nbsp;ref(box&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;:=&nbsp;box&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Writing&nbsp;new&nbsp;reference&nbsp;%d&nbsp;times&nbsp;took&nbsp;%fs"&nbsp;n&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;r&nbsp;=&nbsp;ref(box&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;r&nbsp;:=&nbsp;box(ref&nbsp;!r)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Prepending&nbsp;new&nbsp;reference&nbsp;%d&nbsp;times&nbsp;took&nbsp;%fs"&nbsp;n&nbsp;timer.Elapsed.TotalSeconds</CODE></P>
+      <P>Specifically, this measures how long it takes to write an 
+      <CODE>int</CODE> into a reference, then the <CODE>null</CODE> reference, 
+      then a reference to a pre-existing object, then allocating and writing a 
+      reference to the new object and finally allocating a reference to the 
+      previous object and writing that (creating a linked list).</P>
+      <P>Normalizing relative to the cost of writing an <CODE>int</CODE> we find 
+      the following:</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>Writing the <CODE>null</CODE> reference is as fast as writing an 
+      <CODE>int</CODE>. Most likely, the JIT compiler is clever enough to not 
+      inject a write barrier when writing a <CODE>null</CODE> literal.</P>
+      <P>Writing a pre-existing reference is 2.4x slower than writing an 
+      <CODE>int</CODE> or <CODE>null</CODE>. This is the cost of the write 
+      barrier. The generated code is testing which generation the reference 
+      being written refers to.</P>
+      <P>Allocating and writing a reference to the new object is 7x slower than 
+      writing an <CODE>int</CODE> or <CODE>null</CODE> pointer. This is a 
+      combination of the write barrier and the cost of allocation.</P>
+      <P>Allocating a new object that refers to the old object and writing a 
+      reference to the new object is 45x slower than writing an <CODE>int</CODE> 
+      or <CODE>null</CODE>. This is primarily the cost of survival. All of the 
+      previously-allocated objects remain reachable in a chain starting from the 
+      most recently allocated object. Consequently, they all survive the younger 
+      generations and get evacuated.</P>
+      <H2>The cost of survival</H2>
+      <P>The following definition creates a large array and slides a subarray of 
+      ones within it by writing a <CODE>1</CODE> after the end of the subarray 
+      and writing a <CODE>0</CODE> over the first element of the subarray:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;nonGcTimes&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;10000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Array.zeroCreate&nbsp;(n+1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;md&nbsp;i&nbsp;=&nbsp;if&nbsp;i&lt;n&nbsp;then&nbsp;i&nbsp;else&nbsp;i-n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;live&nbsp;in&nbsp;n/1000&nbsp;..&nbsp;n/1000&nbsp;..&nbsp;n&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[i]&nbsp;&lt;-&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;i,&nbsp;j&nbsp;=&nbsp;0,&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=1&nbsp;to&nbsp;live&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[j]&nbsp;&lt;-&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;j&nbsp;&lt;-&nbsp;md(j&nbsp;+&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[i]&nbsp;&lt;-&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[j]&nbsp;&lt;-&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;&lt;-&nbsp;md(i&nbsp;+&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;j&nbsp;&lt;-&nbsp;md(j&nbsp;+&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%d&nbsp;%f"&nbsp;live&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;live,&nbsp;timer.Elapsed.TotalSeconds&nbsp;]</CODE></P>
+      <P>As you might expect, the time taken is constant regardless of the 
+      number of <CODE>1</CODE>s in the array. Now, repeat the test but writing 
+      references to newly allocated objects in front of the subarray and writing 
+      <CODE>null</CODE> references at the back:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;gcTimes&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;10000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Array.zeroCreate&nbsp;(n+1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;md&nbsp;i&nbsp;=&nbsp;if&nbsp;i&lt;n&nbsp;then&nbsp;i&nbsp;else&nbsp;i-n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;for&nbsp;live&nbsp;in&nbsp;n/1000&nbsp;..&nbsp;n/1000&nbsp;..&nbsp;n&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[i]&nbsp;&lt;-&nbsp;null<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;i,&nbsp;j&nbsp;=&nbsp;0,&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=1&nbsp;to&nbsp;live&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[j]&nbsp;&lt;-&nbsp;box&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;j&nbsp;&lt;-&nbsp;md(j&nbsp;+&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=1&nbsp;to&nbsp;n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[i]&nbsp;&lt;-&nbsp;null<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[j]&nbsp;&lt;-&nbsp;box&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;i&nbsp;&lt;-&nbsp;md(i&nbsp;+&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;j&nbsp;&lt;-&nbsp;md(j&nbsp;+&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%d&nbsp;%f"&nbsp;live&nbsp;timer.Elapsed.TotalSeconds<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;live,&nbsp;timer.Elapsed.TotalSeconds&nbsp;]</CODE></P>
+      <P>In this case, the time taken varies strongly with the number of 
+      references to objects in the array because more live references means more 
+      objects surviving the nursery generation requiring evacuation.</P>
+      <P>The following graph shows the time taken to slide the subarray one 
+      element for unboxed <CODE>int</CODE> and allocated reference elements:</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>We find that the cost of survival increases linearly with up to a 
+      million small objects and then grows much more slowly. The following graph 
+      shows the ratio of the two times to give the relative slowdown caused 
+      primarily by the evacuation of survivors:</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>The average time taken to slide the array by one element is up to 18x 
+      longer with references to recently allocated objects.</P>
+      <P>A more detailed analysis of the initial linear growth for small queue 
+      sizes shows the following:</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>Sliding the <CODE>int</CODE> array by one element takes 26ns. Sliding 
+      the array of references takes 71ns, 2.7x longer. This is the cost of 
+      allocation and the write barrier. Each additional live object adds another 
+      29ns to the time taken to slide the subarray by a single element. With 
+      1,000,000 live objects it takes 5x longer to slide the subarray by a 
+      single element than it does with no live objects.</P>
+      <P>The algorithm we have employed in our synthetic benchmark is very 
+      closely related to imperative queues and ring buffers so we can expect 
+      such concrete data structures to exhibit similar performance 
+      characteristics. The following program demonstrates the performance 
+      degradation of enqueuing and dequeuing references to newly allocated 
+      objects with queues containing zero and one million elements:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;queue&nbsp;=&nbsp;System.Collections.Generic.Queue()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;iters&nbsp;=&nbsp;100000000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;iters&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;queue.Enqueue(box&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;queue.Dequeue()&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%fus/elt&nbsp;when&nbsp;empty"&nbsp;(timer.Elapsed.TotalSeconds&nbsp;/&nbsp;float&nbsp;iters&nbsp;*&nbsp;1e6)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;1000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;queue.Enqueue(box&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;iters&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;queue.Enqueue(box&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;queue.Dequeue()&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%fus/elt&nbsp;with&nbsp;1M&nbsp;elements"&nbsp;(timer.Elapsed.TotalSeconds&nbsp;/&nbsp;float&nbsp;iters&nbsp;*&nbsp;1e6)</CODE></P>
+      <P>With an empty queue, one enqueue and one dequeue take 0.18us on 
+      average. With a queue containing a million recently heap-allocated objects 
+      the same operation takes 0.43us on average, 2.4x slower. So a performance 
+      difference can be observed with ordinary collections but it is smaller 
+      than might be expected. As an aside, further investigation revealed that 
+      the cost of survival is masked somewhat by the unnecessary use of the 
+      expensive arithmetic operation integer modulus in both the 
+      <CODE>Enqueue</CODE> and <CODE>Dequeue</CODE> functions of the built-in 
+      <CODE>Queue</CODE> collection. </P>
+      <H2>The cost of threads and stacks</H2>
+      <P>Our overview of garbage collection described how tracing collectors 
+      begin with a set of references to objects in the heap called the "global 
+      roots". This set contains global variables and local variables held in 
+      registers and on the stack. Thus, the garbage collector must traverse the 
+      stacks of all threads before it can begin tracing the reachable objects in 
+      the heap. This is the cause of the final costs we shall examine in this 
+      article: the cost of having more threads and the cost of having deep 
+      stacks.</P>
+      <P>The following <CODE>deepStack</CODE> function performs the given number 
+      of non-tail recursions before waiting for a barrier twice:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;open&nbsp;System.Threading<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;deepStack&nbsp;(barrier:&nbsp;Barrier)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;barrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;barrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;n&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1&nbsp;+&nbsp;deepStack&nbsp;barrier&nbsp;(n-1)</CODE></P>
+      <P>This allows us to create a controllably-deep stack on a given thread 
+      and pause the thread there, allowing us to study the effect this has on 
+      the performance of allocation (and garbage collection) on other threads. 
+      The following program can be used to measure the performance of allocation 
+      with varying numbers of threads each with stacks of a given depth:</P>
+      <P></P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;depth&nbsp;in&nbsp;[1000]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;threads&nbsp;in&nbsp;0..10&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;barrier&nbsp;=&nbsp;new&nbsp;Barrier(threads&nbsp;+&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..threads&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Thread(fun&nbsp;()&nbsp;-&gt;&nbsp;deepStack&nbsp;barrier&nbsp;depth&nbsp;|&gt;&nbsp;ignore).Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;barrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=1&nbsp;to&nbsp;10000000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ignore(box&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%d&nbsp;%f"&nbsp;threads&nbsp;(timer.Elapsed.TotalSeconds&nbsp;/&nbsp;10.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;barrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;""</CODE></P>
+      <P>The following graph shows the average time taken to allocate in the 
+      present of another thread with a stack at different depths:</P>
+      <P></P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>We find that the average time taken to allocate an object increases 
+      from 40ns by 0.08ns for each stack frame. With 80,000 stack frames in one 
+      thread's stack, allocation in all other threads is 200x slower on 
+      average.</P>
+      <P>Similarly, the following graph shows the average time taken to allocate 
+      in the presence of many other threads each with empty stacks:</P>
+      <P></P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>We find that the average time taken to allocate an object increases by 
+      1.7ns per thread. This indicates that allocation will be 40x slower on 
+      average if there are 1,000 threads.</P>
+      <P>The cost of having many threads or having threads with deep stacks is 
+      important because it degrades the performance of allocation across all 
+      threads. For example, TCP servers have traditionally been written using 
+      one blocking thread for each socket connection so a server with 1,000 
+      connections has around 1,000 blocked threads each with a non-empty stack 
+      and, therefore, allocation will be at least 40x slower due to the garbage 
+      collector. On .NET, this is a major benefit of asynchronous calls. As 
+      these calls are non-blocking it is possible to service 10,000 connections 
+      using around 30 threads. With fewer thread stacks to examine, the .NET GC 
+      runs a lot faster.</P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has reviewed the theory behind generational garbage 
+      collection in order to identify its potential costs. Each of these costs 
+      has been quantified through measurement.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20pathological%20garbage%20collected%20behaviour_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

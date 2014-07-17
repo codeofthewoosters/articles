@@ -1,0 +1,208 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0083)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/genericserver.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20generic%20server%20architecture_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20generic%20server%20architecture_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20generic%20server%20architecture_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20generic%20server%20architecture_files/title.gif"> 
+</TD>
+    <TD><IMG 
+      src="F%23%20Journal%20generic%20server%20architecture_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Generic server architecture</H1>
+      <P>Server applications often have very similar requirements in terms of 
+      their overall architecture. This article describes the design and 
+      implementation of a generic server that allows incoming messages to be 
+      validated per-connection, executed centrally, dispatched either to a 
+      specific connection or all connections and with all outgoing messages 
+      being filtered before they are returned to the client. The result is an 
+      elegant fully-asynchronous and generic library for server-side programming 
+      that is applicable to a wide variety of real server applications.</P>
+      <H2>Design</H2>
+      <P>There are many ways to design a generic server framework. The design 
+      presented here solves a variety of common problems. The generic server 
+      communicates using an asynchronous protocol derived from the built-in .NET 
+      serialization that is sent and received over TCP. The generic server is 
+      parameterized over three functions: validate, execute and filter. The 
+      validate function runs separately on each connection and validates 
+      messages against the connection state as they come in from the client. For 
+      example, this might be used to maintain login information and reject 
+      messages from a client that has not yet logged on. The execute function 
+      runs at the core of the server, processing all messages from all clients 
+      ready for them to be sent back either to a specific client or broadcast to 
+      all clients. Finally, the filter function runs separately on each 
+      connection and filters messages that have been executed, determining what 
+      information, if any, should be sent to the connected client. For example, 
+      a client's login details might convey permissions information that can be 
+      used to filter out information that each client is not privy to.</P>
+      <P>Contention can be a major problem in servers that either see high 
+      throughput or relay messages to many simultaneously-connected clients. The 
+      looser coupling used in this design allows the core to get on with 
+      processing the next message while the per-connection agents handle 
+      serialization and sending in parallel. In practice, a server with many 
+      connections would also want to reuse the results of serialization, which 
+      could be done either using thread-safe memoization or by augmenting each 
+      message with a lazily-evaluated serialized form.</P>
+      <H2>Defining the types</H2>
+      <P>As with many F# programs, our generic server library begins with the 
+      definitions of the types that it relies upon.</P>
+      <P>Validation on receipt and filtering before dipatch are done separately 
+      per connection inside an asynchronous agent created for each connection. 
+      Therefore, each of these agents receives messages both from the client 
+      (for validation) and back from the central server code (for filtering). 
+      Furthermore, the deserializer will also be configured to send a message to 
+      the connection agent in the event that the connection is lost. This is the 
+      most elegant way to handle shutting down per-connection agents and 
+      unregistering them from the central server.</P>
+      <P>The three different kinds of message that can be received by a 
+      connection agent are as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;connectionMessage&lt;'a,&nbsp;'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Incoming&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Outgoing&nbsp;of&nbsp;'b<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ConnectionLost;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;connectionMessage&lt;'a,'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Incoming&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Outgoing&nbsp;of&nbsp;'b<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ConnectionLost</CODE></P>
+      <P>Each connection is identified by a unique ID of the following type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;connectionId&nbsp;=&nbsp;uint64;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;connectionId&nbsp;=&nbsp;uint64</CODE></P>
+      <P>Messages for the central server are split into two kinds. Connection 
+      edit messages are used to register newly-formed connections and to 
+      unregister lost connections:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;'a&nbsp;connectionEdit&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;of&nbsp;('a&nbsp;-&gt;&nbsp;unit)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Remove;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;'a&nbsp;connectionEdit&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;of&nbsp;('a&nbsp;-&gt;&nbsp;unit)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Remove</CODE></P>
+      <P>Messages for execution are tagged with a destination that the core 
+      server uses to dispatch the result to the appropriate connection(s):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;destination&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;To&nbsp;of&nbsp;connectionId<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ToAll;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;destination&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;To&nbsp;of&nbsp;connectionId<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ToAll</CODE></P>
+      <P>Instructions are either messages for execution and relaying or 
+      connection edits:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;instruction&lt;'a,&nbsp;'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ExecuteAndRelay&nbsp;of&nbsp;'a&nbsp;*&nbsp;destination<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EditConnection&nbsp;of&nbsp;connectionId&nbsp;*&nbsp;'b&nbsp;connectionEdit;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;instruction&lt;'a,'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ExecuteAndRelay&nbsp;of&nbsp;'a&nbsp;*&nbsp;destination<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EditConnection&nbsp;of&nbsp;connectionId&nbsp;*&nbsp;'b&nbsp;connectionEdit</CODE></P>
+      <P>The following <CODE>serialize</CODE> function uses the default .NET 
+      serialization to encode any value of any type on a stream:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;serialize&nbsp;(stream:&nbsp;System.IO.Stream)&nbsp;value&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;formatter&nbsp;=&nbsp;System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;bytes&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;memoryStream&nbsp;=&nbsp;new&nbsp;System.IO.MemoryStream()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;formatter.Serialize(memoryStream,&nbsp;value)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;memoryStream.ToArray()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;System.BitConverter.GetBytes&nbsp;bytes.Length&nbsp;|&gt;&nbsp;stream.AsyncWrite<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;stream.AsyncWrite&nbsp;bytes<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;serialize&nbsp;:&nbsp;System.IO.Stream&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;Async&lt;unit&gt;</CODE></P>
+      <P>In particular, this implementation of the <CODE>serialize</CODE> 
+      function is fully asynchronous even though the underlying .NET function is 
+      synchronous. This is accomplished by delimiting each message by its 
+      length. Each message is first serialized into a <CODE>MemoryStream</CODE>. 
+      The contents of the memory stream are then sent as a 4-byte header 
+      containing the length of the body of the message followed by the body 
+      itself, both using asynchronous writes. This allows the message to be 
+      deserialized asynchronously.</P>
+      <P>The following <CODE>deserialize</CODE> function uses the default .NET 
+      serialization to deserialize a value of any type from the given 
+stream:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;deserialize&nbsp;(stream:&nbsp;System.IO.Stream)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;formatter&nbsp;=&nbsp;System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;header&nbsp;=&nbsp;stream.AsyncRead&nbsp;4<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;length&nbsp;=&nbsp;System.BitConverter.ToInt32(header,&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;bytes&nbsp;=&nbsp;stream.AsyncRead&nbsp;length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;memoryStream&nbsp;=&nbsp;new&nbsp;System.IO.MemoryStream(bytes)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;formatter.Deserialize&nbsp;memoryStream&nbsp;|&gt;&nbsp;unbox<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;deserialize&nbsp;:&nbsp;System.IO.Stream&nbsp;-&gt;&nbsp;Async&lt;'a&gt;</CODE></P>
+      <P>The use of the header+body wire format now becomes clear. A message of 
+      unknown length cannot be read asynchronously because the asynchronous read 
+      function needs to know how many bytes to read when the asynchronous read 
+      begins. Using length-delimited messages has side-stepped this problem. The 
+      <CODE>deserialize</CODE> function reads the 4-byte header in order to 
+      determine how many bytes must be read in order to deserialize the given 
+      message.</P>
+      <P>In our generic server architecture, each connection is fuelled by an 
+      asynchronous agent that sits in a loop deserializing messages and posting 
+      them to the main agent responsible for the client connection. The 
+      following <CODE>deserializer</CODE> function starts a 
+      <CODE>MailboxProcessor</CODE> that does exactly this, deserializing from 
+      <CODE>stream</CODE> and posting the resulting message by invoking the 
+      given <CODE>post</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;deserializer&nbsp;client&nbsp;stream&nbsp;post&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;client&nbsp;=&nbsp;client<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;stream&nbsp;=&nbsp;stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;deserialize&nbsp;stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;post(Incoming&nbsp;message)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;finally<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;post&nbsp;ConnectionLost<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;});;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;deserializer&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.IDisposable&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.IO.Stream&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(connectionMessage&lt;'a,'b&gt;&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;MailboxProcessor&lt;'c&gt;</CODE></P>
+      <P>Our generic server is parameterized over the functionality it contains. 
+      There are three different ways to accomplish this in F#, two of which are 
+      ordinary object-oriented solutions inherited from .NET.</P>
+      <P>The first object oriented solution is to use implementational 
+      inheritance, defining the generic server as an abstract base class with 
+      virtual methods for the validation, execution and filtering functions. 
+      This approach has fallen out of favor, partly because it leads to the 
+      diamond inheritance problem if a new solution wishes to combine two 
+      existing generic solutions.</P>
+      <P>The second object oriented solution is to use composition, passing an 
+      object that implements the validation, execution and filter functions in 
+      to the generic server when it is constructed. </P>
+      <P>The third solution is to make the generic server a higher-order 
+      function that accepts the validate, execute and filter functions as 
+      arguments. In F#, this solution has the substantial advantage that the 
+      code does not get cluttered with a large number of generic type variables. 
+      However, it it still "busy" due to the large vnumber of arguments being 
+      passed in ordder to provide the heavy genericity. As an aside, the 
+      idiomatic solution to this problem in other members of the ML family of 
+      languages is to use the higher-order module system </P>
+      <P>Another solution would be to make the generic server a higher-order 
+      function and pass it the three functions that it is parameterized over. 
+      This approach has the substantial advantage that the types can be inferred 
+      and, consequently, it is not necessary to have interfaces and classes 
+      parameterized many explicitly-written generic type variables.</P>
+      <P>We begin by writing a <CODE>server</CODE> function that creates the 
+      asynchronous agent at the core of the server, with an initial state given 
+      by the <CODE>initialCoreState</CODE> function argument and using the given 
+      <CODE>execute</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;server&nbsp;initialCoreState&nbsp;execute&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor&lt;_&gt;.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;(connections:&nbsp;Map&lt;_,&nbsp;_&gt;)&nbsp;coreState&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;EditConnection(id,&nbsp;edit)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;connections&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;edit&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Add&nbsp;post&nbsp;-&gt;&nbsp;Map.add&nbsp;id&nbsp;post&nbsp;connections<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Remove&nbsp;-&gt;&nbsp;Map.remove&nbsp;id&nbsp;connections<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;connections&nbsp;coreState<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ExecuteAndRelay(message,&nbsp;destination)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;coreState,&nbsp;message&nbsp;=&nbsp;execute(coreState,&nbsp;message)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;destination&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;To&nbsp;connectionId&nbsp;-&gt;&nbsp;connections.[connectionId]&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ToAll&nbsp;-&gt;&nbsp;Map.iter&nbsp;(fun&nbsp;_&nbsp;post&nbsp;-&gt;&nbsp;post&nbsp;message)&nbsp;connections<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;connections&nbsp;coreState<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;initialCoreState()&nbsp;|&gt;&nbsp;loop&nbsp;Map.empty);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;server&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;-&gt;&nbsp;('a&nbsp;*&nbsp;'b&nbsp;-&gt;&nbsp;Async&lt;'a&nbsp;*&nbsp;'c&gt;)&nbsp;-&gt;&nbsp;MailboxProcessor&lt;instruction&lt;'b,'c&gt;&gt;</CODE></P>
+      <P>The two different kinds of message, those about connection edits and 
+      messages for execution, are handled separately. Connection edits update a 
+      <CODE>Map</CODE> from connectionIds to functions that post back to the 
+      connection agent. Messages for execution are processed by the 
+      <CODE>execute</CODE> function. Finally, the agent is started with the 
+      empty <CODE>Map</CODE> of connections and the result of 
+      <CODE>initialCoreState</CODE> as its state.</P>
+      <P>Next, we write a <CODE>connectionAgent</CODE> function that creates an 
+      agent to handle a single client connection, this time parameterized over 
+      the <CODE>initialConnectionState</CODE>, <CODE>validate</CODE> and 
+      <CODE>filter</CODE> functions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;connectionAgent&nbsp;initialConnectionState&nbsp;validate&nbsp;filter&nbsp;post&nbsp;connectionId&nbsp;stream&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;send&nbsp;message&nbsp;=&nbsp;inbox.Post(Outgoing&nbsp;message)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;post(EditConnection(connectionId,&nbsp;Add&nbsp;send))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;connectionState&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;state&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Incoming&nbsp;message&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;connectionState,&nbsp;message,&nbsp;destination&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;validate(connectionState,&nbsp;message)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;post(ExecuteAndRelay(message,&nbsp;destination))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Some&nbsp;connectionState<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Outgoing&nbsp;message&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;connectionState,&nbsp;message&nbsp;=&nbsp;filter(connectionState,&nbsp;message)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;message&nbsp;-&gt;&nbsp;do!&nbsp;serialize&nbsp;stream&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;Some&nbsp;connectionState<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;ConnectionLost&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;post(EditConnection(connectionId,&nbsp;Remove))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;state&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;connectionState&nbsp;-&gt;&nbsp;return!&nbsp;loop&nbsp;connectionState<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;initialConnectionState&nbsp;connectionId&nbsp;|&gt;&nbsp;loop);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;connectionAgent&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(connectionId&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;*&nbsp;'b&nbsp;-&gt;&nbsp;Async&lt;'a&nbsp;*&nbsp;'c&nbsp;*&nbsp;destination&gt;)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;*&nbsp;'d&nbsp;-&gt;&nbsp;Async&lt;'a&nbsp;*&nbsp;'e&nbsp;option&gt;)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(instruction&lt;'c,'d&gt;&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;connectionId&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.IO.Stream&nbsp;-&gt;&nbsp;MailboxProcessor&lt;connectionMessage&lt;'b,'d&gt;&gt;</CODE></P>
+      <P>This agent processes the <CODE>Incoming</CODE>, <CODE>Outgoing</CODE> 
+      and <CODE>ConnectionLost</CODE> messages. Incoming messages are validated 
+      per-connection before being passed on to the core server for execution. 
+      Outgoing messages are filtered and optionally forwarded to the client. 
+      Lost connections are processed by sending an edit connection to remove the 
+      lost connection from the core and, therefore, future broadcast messages 
+      will not be sent to its agent.</P>
+      <P>The 7-line inferred type clearly shows the benefits of inferring types 
+      over having to write and maintain them by hand.</P>
+      <P>Finally, we can write the <CODE>startServer</CODE> function that is 
+      responsible for starting the server that listens on a TCP port and spawns 
+      connections as they are made:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Net;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;Sockets.TcpListener&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;server.AsyncAcceptTcpClient()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async.FromBeginEnd(server.BeginAcceptTcpClient,&nbsp;server.EndAcceptTcpClient);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;TcpListener&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;AsyncAcceptTcpClient&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Async&lt;Sockets.TcpClient&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;startServer&nbsp;(initialCoreState,&nbsp;execute)&nbsp;(initialConnectionState,&nbsp;validate,&nbsp;filter)&nbsp;address&nbsp;port&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;server&nbsp;=&nbsp;server&nbsp;initialCoreState&nbsp;execute<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;handleConnection&nbsp;connectionId&nbsp;(client:&nbsp;Sockets.TcpClient)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stream&nbsp;=&nbsp;client.GetStream()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;connection&nbsp;=&nbsp;connectionAgent&nbsp;initialConnectionState&nbsp;validate&nbsp;filter&nbsp;server.Post&nbsp;connectionId&nbsp;stream<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;deserializer&nbsp;client&nbsp;stream&nbsp;connection.Post&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;server&nbsp;=&nbsp;Sockets.TcpListener(address,&nbsp;port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;server.Start()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;connectionId&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;client&nbsp;=&nbsp;server.AsyncAcceptTcpClient()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;handleConnection&nbsp;connectionId&nbsp;client<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Async.Start<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;(connectionId&nbsp;+&nbsp;1UL)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;loop&nbsp;0UL<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}&nbsp;|&gt;&nbsp;Async.Start;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;startServer&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;*&nbsp;('a&nbsp;*&nbsp;'b&nbsp;-&gt;&nbsp;Async&lt;'a&nbsp;*&nbsp;'c&gt;)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(connectionId&nbsp;-&gt;&nbsp;'d)&nbsp;*&nbsp;('d&nbsp;*&nbsp;'e&nbsp;-&gt;&nbsp;Async&lt;'d&nbsp;*&nbsp;'b&nbsp;*&nbsp;destination&gt;)&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('d&nbsp;*&nbsp;'c&nbsp;-&gt;&nbsp;Async&lt;'d&nbsp;*&nbsp;'f&nbsp;option&gt;)&nbsp;-&gt;&nbsp;IPAddress&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The <CODE>startServer</CODE> function begins by using the 
+      <CODE>server</CODE> function to create the core agent that will execute 
+      and relay messages. A nested <CODE>handleConnection</CODE> function is 
+      then defined that will be used to deserialize incoming messages and post 
+      them to the connection's agent. Finally, an asynchronous workflow is 
+      started in the threadpool that starts listening for new connections on a 
+      TCP port and spawing handlers using the <CODE>handleConnection</CODE> 
+      function as connections are formed.</P>
+      <H2>Summary</H2>
+      <P>This article has described a generic server framework that can be used 
+      as the basis of a wide variety of real servers. The implementation is 
+      fully asynchronous and the design elegantly solves the problem of 
+      per-connection validation of messages upon entry and filtering of messages 
+      upon exit.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of server-side 
+      F# code and useful abstractions in the context of concurrent programming 
+      and distributed systems.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20generic%20server%20architecture_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

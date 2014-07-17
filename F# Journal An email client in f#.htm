@@ -1,0 +1,183 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0075)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/email.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+     <TITLE>F# Journal: An introduction to asynchronous workflows</TITLE>     
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20An%20email%20client%20in%20f%23_files/style.css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20An%20email%20client%20in%20f%23_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20An%20email%20client%20in%20f%23_files/individual.css" 
+rel="stylesheet" type="text/css">   
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>   
+<BODY>
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20An%20email%20client%20in%20f%23_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20An%20email%20client%20in%20f%23_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>An e-mail client in F#</H1>
+      <P>An e-mail client is an application that checks a remote mailbox for 
+      incoming messages and allows the user to send newly composed messages and 
+      replies to received messages. Incoming e-mails are typically read using 
+      the Post Office Protocol version 3 (POP3) which is a simple plain-text 
+      protocol implemented over TCP sockets. Outgoing e-mails are sent using the 
+      Simple Message Transfer Protocol (SMTP), an implementation of which is 
+      provided by the .NET framework. This article describes the design and 
+      implementation of an e-mail client that can be used for basic e-mail 
+      handling but, in particular, is easily programmed to perform tasks such as 
+      transaction processing automatically.</P>
+      <H2>Introduction</H2>
+      <P>The .NET Framework version 4 provides a wealth of net-related 
+      functionality and even an SMTP implementation that allows e-mail messages 
+      to be sent via a remote server with only three lines of code:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;client&nbsp;=&nbsp;new&nbsp;Mail.SmtpClient(server,&nbsp;port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;msg&nbsp;=&nbsp;new&nbsp;Mail.MailMessage(fromAddress,&nbsp;toAddress,&nbsp;subject,&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;client.Send&nbsp;msg</CODE></P>
+      <P>This is clearly a significant step towards the ability to process 
+      e-mails automatically but it is also necessary to be able to read incoming 
+      messages.</P>
+      <P>The POP3 protocol is the most common way to read incoming e-mails but 
+      it is not currently implemented by the .NET Framework. However, this 
+      protocol is sufficiently simple that it can be implemented on top of TCP 
+      sockets using the <CODE>System.Net.Sockets.TcpClient</CODE> class by 
+      reading and parsing lines of input and writing (and flushing) lines of 
+      output to query the remote server.</P>
+      <P>A typical dialog between client (C) and server (S) using the POP3 
+      protocol begins with the server acknowledging connection and the client 
+      authenticating itself:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;+OK&nbsp;Hello&nbsp;there.<BR>&nbsp;&nbsp;&nbsp;&nbsp;C:&nbsp;USER&nbsp;myself<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;+OK&nbsp;Password&nbsp;required.<BR>&nbsp;&nbsp;&nbsp;&nbsp;C:&nbsp;PASS&nbsp;mypassword<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;+OK&nbsp;logged&nbsp;in.</CODE></P>
+      <P>The <CODE>STAT</CODE> command may then be used to obtain the number and 
+      size of e-mails:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;C:&nbsp;STAT<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;+OK&nbsp;9&nbsp;70437</CODE></P>
+      <P>The <CODE>LIST</CODE> command may be used to obtain per-message 
+      information:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;C:&nbsp;LIST<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;+OK&nbsp;POP3&nbsp;clients&nbsp;that&nbsp;break&nbsp;here,&nbsp;they&nbsp;violate&nbsp;STD53.<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;1&nbsp;7731<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;1&nbsp;13652<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;1&nbsp;6316<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;1&nbsp;6816<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;.</CODE></P>
+      <P>Note the <CODE>.</CODE> used to denote the last line in variable-length 
+      output.</P>
+      <P>An individual message may then be downloaded using the 
+      <CODE>RETR&nbsp;&lt;n&gt;</CODE> command:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;C:&nbsp;RETR&nbsp;3<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;+OK&nbsp;6316&nbsp;octets&nbsp;follow.<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;...<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;.</CODE></P>
+      <P>The session may be terminated using the <CODE>QUIT</CODE> command:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;C:&nbsp;QUIT<BR>&nbsp;&nbsp;&nbsp;&nbsp;S:&nbsp;+OK&nbsp;Bye-bye.</CODE></P>
+      <P>This simple protocol can be implemented on top of TCP sockets and used 
+      to download e-mails from a remote mailbox.</P>
+      <H2>Implementation</H2>
+      <P>Our implementation begins with a module that defines the IP address and 
+      port used to access the SMTP and POP3 servers:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Server&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;server&nbsp;=&nbsp;{&nbsp;addr:&nbsp;string;&nbsp;port:&nbsp;int&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;pop3&nbsp;=&nbsp;{&nbsp;addr&nbsp;=&nbsp;"mail.plus.net";&nbsp;port&nbsp;=&nbsp;110&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;smtp&nbsp;=&nbsp;{&nbsp;addr&nbsp;=&nbsp;"relay.plus.net";&nbsp;port&nbsp;=&nbsp;25&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Server&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;server&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{addr:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;port:&nbsp;int;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;pop3&nbsp;:&nbsp;server&nbsp;=&nbsp;{addr&nbsp;=&nbsp;"mail.plus.net";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;port&nbsp;=&nbsp;110;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;smtp&nbsp;:&nbsp;server&nbsp;=&nbsp;{addr&nbsp;=&nbsp;"relay.plus.net";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;port&nbsp;=&nbsp;25;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The program will, of course, make heavy use of the 
+      <CODE>System.Net</CODE> namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Net;;</CODE></P>
+      <P>The following <CODE>send</CODE> function tries to send an e-mail using 
+      SMTP:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;send&nbsp;toAddr&nbsp;subject&nbsp;body&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;client&nbsp;=&nbsp;new&nbsp;Mail.SmtpClient(Server.smtp.addr,&nbsp;Server.smtp.port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;msg&nbsp;=&nbsp;new&nbsp;Mail.MailMessage("jon@ffconsultancy.com",&nbsp;toAddr,&nbsp;subject,&nbsp;body)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;client.Send&nbsp;msg;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;send&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;string&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Incoming messages contain more fields so it is productive to define a 
+      record type for them:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{&nbsp;id:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;date:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fromAddr:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toAddr:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subject:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;string&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{id:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;date:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fromAddr:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toAddr:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subject:&nbsp;string;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body:&nbsp;string;}</CODE></P>
+      <P>and an empty message:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;empty&nbsp;=&nbsp;{id="";&nbsp;date="";&nbsp;fromAddr="";&nbsp;toAddr="";&nbsp;subject="";&nbsp;body=""};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;empty&nbsp;:&nbsp;msg&nbsp;=&nbsp;{id&nbsp;=&nbsp;"";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;date&nbsp;=&nbsp;"";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fromAddr&nbsp;=&nbsp;"";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toAddr&nbsp;=&nbsp;"";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subject&nbsp;=&nbsp;"";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body&nbsp;=&nbsp;"";}</CODE></P>
+      <P>We shall parse raw e-mails headers obtained via POP3 using regular 
+      expressions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Text.RegularExpressions;;</CODE></P>
+      <P>The following <CODE>parse</CODE> function splits a whole message into 
+      the header and body at the first empty line and then uses regular 
+      expressions to extract the message ID, date, from address, to address, 
+      subject and body of the message from the header:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;parse&nbsp;(msg:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;(Regex&nbsp;"\n\n").Split(msg,&nbsp;2)&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;[|header;&nbsp;body|]&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;find&nbsp;prefix&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Regex(sprintf&nbsp;"%s:&nbsp;([^\n]*)"&nbsp;prefix).Match&nbsp;header).Groups.[1].Value<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some{id=find&nbsp;"Message-ID";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;date=find&nbsp;"Date";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fromAddr=find&nbsp;"From";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toAddr=find&nbsp;"To";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subject=find&nbsp;"Subject";<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body=body}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;None;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;parse&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;msg&nbsp;option</CODE></P>
+      <P>The process of opening a TCP connection to the POP3 server, querying 
+      the number of e-mails, downloading each e-mail in turn and then closing 
+      the connection can be productively factored out into a sequence expression 
+      as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;receive&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;use&nbsp;client&nbsp;=&nbsp;new&nbsp;Sockets.TcpClient(Server.pop3.addr,&nbsp;Server.pop3.port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;stream&nbsp;=&nbsp;client.GetStream()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;reader&nbsp;=&nbsp;new&nbsp;System.IO.StreamReader(stream)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;readToDot()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;line&nbsp;=&nbsp;reader.ReadLine()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;line&nbsp;&lt;&gt;&nbsp;"."&nbsp;then&nbsp;line&nbsp;+&nbsp;"\n"&nbsp;+&nbsp;readToDot()&nbsp;else&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reader.ReadLine()&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;writer&nbsp;=&nbsp;new&nbsp;System.IO.StreamWriter(stream)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;write&nbsp;(line:&nbsp;string)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writer.Write(line&nbsp;+&nbsp;"\n")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;writer.Flush()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;write&nbsp;"USER&nbsp;myname"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reader.ReadLine()&nbsp;|&gt;&nbsp;ignore&nbsp;//&nbsp;+OK&nbsp;Password&nbsp;required.<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;write&nbsp;"PASS&nbsp;mypassword"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reader.ReadLine()&nbsp;|&gt;&nbsp;ignore&nbsp;//&nbsp;+OK&nbsp;logged&nbsp;in.<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;write&nbsp;"STAT"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stat&nbsp;=&nbsp;reader.ReadLine()&nbsp;//&nbsp;+OK&nbsp;&lt;message&nbsp;count&gt;&nbsp;&lt;total&nbsp;size&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;1&nbsp;..&nbsp;int&nbsp;(stat.Split[|'&nbsp;'|]).[1]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;write(sprintf&nbsp;"RETR&nbsp;%d"&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reader.ReadLine()&nbsp;|&gt;&nbsp;ignore&nbsp;//&nbsp;+OK&nbsp;&lt;message&nbsp;size&gt;&nbsp;octets&nbsp;follow.<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;readToDot()&nbsp;|&gt;&nbsp;parse&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;msg&nbsp;-&gt;&nbsp;yield&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;write&nbsp;"QUIT"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;reader.ReadLine()&nbsp;|&gt;&nbsp;ignore&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;receive&nbsp;:&nbsp;seq&lt;msg&gt;</CODE></P>
+      <P>This leverages the fact that sequence expressions can perform startup 
+      and shutdown computations when enumeration begins and when they are 
+      disposed of, respectively. Consequently, the <CODE>receive</CODE> 
+      enumerable will connect to the POP3 server and download the latest e-mails 
+      each time it is enumerated.</P>
+      <P>Before defining the GUI we must reference the necessary WPF DLLs:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationCore.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\PresentationCore.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"PresentationFramework.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\PresentationFramework.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"WindowsBase.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\Reference&nbsp;Assemblies\Microsoft\Framework\v3.0\WindowsBase.dll'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>The following <CODE>ui</CODE> function is used to upcast controls to 
+      the <CODE>UIElement</CODE> base class, typically to create lists of 
+      them:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ui&nbsp;x&nbsp;=&nbsp;(x&nbsp;:&gt;&nbsp;UIElement);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ui&nbsp;:&nbsp;UIElement&nbsp;-&gt;&nbsp;UIElement</CODE></P>
+      <P>The <CODE>Grid</CODE> module provides a helper <CODE>create</CODE> 
+      function to create a grid from a sequence of sequences of 
+      <CODE>UIElement</CODE>s:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Grid&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;create&nbsp;ctrlss&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grid&nbsp;=&nbsp;Controls.Grid(Margin=Thickness&nbsp;5.0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;ctrlss&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.RowDefinition()&nbsp;|&gt;&nbsp;grid.RowDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..Seq.reduce&nbsp;max&nbsp;(Seq.map&nbsp;Seq.length&nbsp;ctrlss)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ColumnDefinition()&nbsp;|&gt;&nbsp;grid.ColumnDefinitions.Add<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iteri&nbsp;(fun&nbsp;y&nbsp;ctrls&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iteri&nbsp;(fun&nbsp;x&nbsp;ctrl&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetColumn(ctrl,&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.Grid.SetRow(ctrl,&nbsp;y)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grid.Children.Add&nbsp;ctrl&nbsp;|&gt;&nbsp;ignore)&nbsp;ctrls)&nbsp;ctrlss<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ui&nbsp;grid;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Grid&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;create&nbsp;:&nbsp;seq&lt;#seq&lt;'b&gt;&gt;&nbsp;-&gt;&nbsp;UIElement&nbsp;when&nbsp;'b&nbsp;:&gt;&nbsp;UIElement<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following <CODE>compose</CODE> function spawns a window that allows 
+      the user to compose an e-mail and send it via SMTP simply by clicking a 
+      button:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;compose&nbsp;msg&nbsp;_&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;msgPane&nbsp;=&nbsp;Controls.DockPanel(Margin=Thickness&nbsp;3.)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;buttons&nbsp;=&nbsp;Controls.StackPanel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buttons.Orientation&nbsp;&lt;-&nbsp;Controls.Orientation.Horizontal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(buttons,&nbsp;Controls.Dock.Top)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;msgPane.Children.Add&nbsp;buttons&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;sendButton&nbsp;=&nbsp;Controls.Button(Content="Send")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buttons.Children.Add&nbsp;sendButton&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;textBox&nbsp;isTop&nbsp;header&nbsp;txt&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;textBox&nbsp;=&nbsp;Controls.TextBox(Text=txt)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ctrl&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;isTop&nbsp;then&nbsp;ui&nbsp;textBox&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ScrollViewer(Content=textBox)&nbsp;|&gt;&nbsp;ui<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grp&nbsp;=&nbsp;Controls.GroupBox(Header=header,&nbsp;Content=ctrl)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dock&nbsp;=&nbsp;if&nbsp;isTop&nbsp;then&nbsp;Controls.Dock.Top&nbsp;else&nbsp;Controls.Dock.Bottom<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(grp,&nbsp;dock)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;msgPane.Children.Add&nbsp;grp&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;textBox<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;window&nbsp;=&nbsp;Window(Content=msgPane)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;setTitle&nbsp;str&nbsp;=&nbsp;window.Title&nbsp;&lt;-&nbsp;"Compose&nbsp;message:&nbsp;"&nbsp;+&nbsp;str<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;setTitle&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;addr&nbsp;=&nbsp;textBox&nbsp;true&nbsp;"To"&nbsp;msg.fromAddr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;subject&nbsp;=&nbsp;textBox&nbsp;true&nbsp;"Subject"&nbsp;msg.subject<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subject.TextChanged.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;setTitle&nbsp;subject.Text)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;body&nbsp;=&nbsp;"&gt;&nbsp;"&nbsp;+&nbsp;msg.body.Replace("\n",&nbsp;"\n&gt;&nbsp;")&nbsp;|&gt;&nbsp;textBox&nbsp;false&nbsp;"Message"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body.FontFamily&nbsp;&lt;-&nbsp;Media.FontFamily&nbsp;"Courier&nbsp;New"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body.AcceptsReturn&nbsp;&lt;-&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sendButton.Click.Add(fun&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;send&nbsp;addr.Text&nbsp;subject.Text&nbsp;body.Text<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;MessageBox.Show("Message&nbsp;sent")&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.Close()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;exn&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MessageBox.Show(sprintf&nbsp;"%A"&nbsp;exn)&nbsp;|&gt;&nbsp;ignore)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.Show();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;compose&nbsp;:&nbsp;msg&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The content of the window is a <CODE>DockPanel</CODE> control called 
+      <CODE>msgPane</CODE> that has a button bar and text boxes for the 
+      to-address, subject and message body. Each control is docked to the top 
+      except the message body that is docked to the bottom and fills the 
+      available space. Each text box is wrapped in a <CODE>GroupBox</CODE> with 
+      a header that describes its function for the user. The message body is 
+      also placed inside a <CODE>ScrollViewer</CODE> control in order to add a 
+      scroll bar if one is necessary.</P>
+      <P>The send button has a callback registered to its <CODE>Click</CODE> 
+      event in order to try to send the message when the user clicks the send 
+      button. If sending succeeds then a dialog pops up informing the user and 
+      the compose message window is closed. If sending fails then an error 
+      dialog pops up and the window is kept open.</P>
+      <P>The following <CODE>window</CODE> function creates the main window that 
+      allows the user to browse the inbox:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;window&nbsp;spawn&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;msgPane&nbsp;=&nbsp;Controls.DockPanel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;buttons&nbsp;=&nbsp;Controls.StackPanel(Margin=Thickness&nbsp;6.)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buttons.Orientation&nbsp;&lt;-&nbsp;Controls.Orientation.Horizontal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(buttons,&nbsp;Controls.Dock.Top)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;msgPane.Children.Add&nbsp;buttons&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;button&nbsp;content&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;button&nbsp;=&nbsp;Controls.Button(Content=content)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;buttons.Children.Add&nbsp;button&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;refreshButton&nbsp;=&nbsp;button&nbsp;"Refresh"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(button&nbsp;"Compose").Click.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;compose&nbsp;empty&nbsp;())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;replyButton&nbsp;=&nbsp;button&nbsp;"Reply"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;replyButton.IsEnabled&nbsp;&lt;-&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;replyHandler&nbsp;=&nbsp;ref&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;replyButton.Click.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;(!replyHandler)())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;textBlock&nbsp;isTop&nbsp;header&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;textBlock&nbsp;=&nbsp;Controls.TextBlock()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;grp&nbsp;=&nbsp;Controls.GroupBox(Header=header,&nbsp;Content=textBlock)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;dock&nbsp;=&nbsp;if&nbsp;isTop&nbsp;then&nbsp;Controls.Dock.Top&nbsp;else&nbsp;Controls.Dock.Bottom<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(grp,&nbsp;dock)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;msgPane.Children.Add&nbsp;grp&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;textBlock<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fromBox&nbsp;=&nbsp;textBlock&nbsp;true&nbsp;"From"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;subjectBox&nbsp;=&nbsp;textBlock&nbsp;true&nbsp;"Subject"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;msgBox&nbsp;=&nbsp;textBlock&nbsp;false&nbsp;"Message"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;msgBox.FontFamily&nbsp;&lt;-&nbsp;Media.FontFamily&nbsp;"Courier&nbsp;New"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;listPane&nbsp;=&nbsp;Controls.ListView()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;refresh&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;async&nbsp;{&nbsp;spawn&nbsp;listPane.Items.Clear&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;msg&nbsp;in&nbsp;receive&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;label&nbsp;=&nbsp;Controls.Label(Content=msg.subject)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;item&nbsp;=&nbsp;Controls.ListViewItem(Content=label)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;item.Selected.Add(fun&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fromBox.Text&nbsp;&lt;-&nbsp;msg.fromAddr<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subjectBox.Text&nbsp;&lt;-&nbsp;msg.subject<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;msgBox.Text&nbsp;&lt;-&nbsp;msg.body<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;replyButton.IsEnabled&nbsp;&lt;-&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;replyHandler&nbsp;:=&nbsp;compose&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;listPane.Items.Add&nbsp;item&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;spawn&nbsp;f&nbsp;()&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async.Start&nbsp;refresh<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;refreshButton.Click.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;Async.Start&nbsp;refresh)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;hbox&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Grid.create<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&nbsp;[&nbsp;ui(Controls.GroupBox(Header="Inbox",&nbsp;Content=listPane));<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.ScrollViewer(Content=msgPane)&nbsp;|&gt;&nbsp;ui&nbsp;]&nbsp;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Window(Title="F#&nbsp;e-mail&nbsp;client",&nbsp;Content=hbox);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;window&nbsp;:&nbsp;((unit&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;unit&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;Window</CODE></P>
+      <P>In this case, the window is split horizontally using a 
+      <CODE>Grid</CODE> control into the inbox and message sections. The inbox 
+      is a <CODE>ListView</CODE> control with a <CODE>ListViewItem</CODE> for 
+      each e-mail. Rather than block the UI while any e-mails are downloaded, we 
+      choose to start an asynchronous workflow that uses the given 
+      <CODE>spawn</CODE> function to get the UI thread to add 
+      <CODE>ListViewItem</CODE> controls as e-mails are downloaded.</P>
+      <P>The message side of the window is similar to the compose e-mail window, 
+      with buttons followed by headered boxes for the from-address, subject and 
+      message body. In this case, three buttons are provided to refresh the 
+      inbox via POP3, compose a new e-mail and reply to the current e-mail. We 
+      are careful to ensure that the reply button is disabled until the user 
+      clicks on an e-mail in the inbox to view it.</P>
+      <P>Finally, the main program is run as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;app&nbsp;=&nbsp;Application()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;spawn&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;=&nbsp;fun&nbsp;f&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;_&nbsp;=&nbsp;try&nbsp;(fun&nbsp;f_x&nbsp;()&nbsp;-&gt;&nbsp;f_x)&nbsp;(f&nbsp;x)&nbsp;with&nbsp;e&nbsp;-&gt;&nbsp;(fun&nbsp;()&nbsp;-&gt;&nbsp;raise&nbsp;e)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;priority&nbsp;=&nbsp;Threading.DispatcherPriority.Normal<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(app.Dispatcher.Invoke(priority,&nbsp;System.Func&lt;_,&nbsp;_&gt;&nbsp;f,&nbsp;null)&nbsp;:?&gt;&nbsp;unit&nbsp;-&gt;&nbsp;_)&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window&nbsp;spawn&nbsp;|&gt;&nbsp;app.Run&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <P>This uses a dispatcher to let any thread queue computations for 
+      execution on the UI thread using a <CODE>spawn</CODE> combinator.</P>
+      <H2>Results</H2>
+      <P>The inbox appears as follows and allows e-mails from the POP3 server to 
+      be browsed:</P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20An%20email%20client%20in%20f%23_files/inbox.png"></P>
+      <P>Composing an e-mail producing a window like the following:</P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20An%20email%20client%20in%20f%23_files/compose.png"></P>
+      <P>This provides the basic functionality required of an e-mail client.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a tiny but 
+      useful e-mail client. The application offers the usual SMTP and POP3 
+      support for sending and receiving messages but, in particular, is very 
+      easy to extend with automated functionality such as transaction processing 
+      because the program is written entirely in F# using modern libraries such 
+      as the .NET Framework and Windows Presentation Foundation.</P>
+      <P>Future F#.NET Journal articles will revisit the topics of network 
+      protocols and line-of-business applications.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20An%20email%20client%20in%20f%23_files/urchin.js" type="text/javascript">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+   </BODY></HTML>

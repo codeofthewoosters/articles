@@ -1,0 +1,332 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0073)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/nth.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Traversing networks: the nth-nearest neighbor</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Traversing networks: the nth-nearest 
+neighbor</TITLE>     <LINK href="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Traversing networks: the nth-nearest neighbor</H1>
+      <P>Graph theory has a great many practical applications ranging from 
+      compiler internals to the study of the structural characteristics of 
+      materials. This article describes the design and implementation of a 
+      program that finds the              <I>n</I>             <SUP>th</SUP>
+       -nearest neighbors of a given vertex in an infinite graph. This problem 
+      is of interest in the context of atomic structures.           </P>
+      <H2>Introduction</H2>
+      <P>The program developed in this article covers the following topics:</P>
+      <P>
+      <UL>
+        <LI>Set-theoretic operations: union, intersection and difference.</LI>
+        <LI>Graph-theoretic operations:                  <I>n</I>                
+         <SUP>th</SUP> -nearest neighbors.               </LI></UL>
+      <P></P>
+      <P>The graph-theoretic problem of finding the              <I>n</I>        
+           <SUP>th</SUP> -nearest neighbours allows useful topological 
+      information to be gathered from many forms of data produced by other 
+      programs. For example, in the case of simulated atomic structures, where 
+      topological information can aid the interpretation of experimental results 
+      when trying to understand molecular structure. Such topological 
+      information can also be used indirectly, in the computation of interesting 
+      properties such as the decomposition of correlation functions over 
+      neighbour shells and shortest-path ring statistics.           </P>
+      <P>We shall describe our unconventional formulation of the problem of 
+      computing the              <I>n</I>             <SUP>th</SUP> -nearest 
+      neighbours of atoms in an atomic structure simulated under periodic 
+      boundary conditions before describing a program for solving this problem 
+      and presenting demonstrative results.           </P>
+      <H2>Formulation</H2>
+      <P>The notion of the              <I>n</I>             <SUP>th</SUP>
+       -nearest neighbours              <I>N(i,n)</I> of a vertex              
+      <I>i</I> in a graph is rigorously defined by a recurrence relation based 
+      upon the set of first nearest neighbours  of any atom:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/nth.gif"> 
+                  </P>
+      <P></P>
+      <P>The base case              <I>{i}</I> for              <I>n=0</I> 
+      conveys that the 0             <SUP>th</SUP> -nearest neighbors of a 
+      vertex is simply the set containing only that vertex. The base case        
+            <I>T               <SUB>i</SUB>             </I> for              
+      <I>n=1</I> is the set of nearest neighbors of the vertex              
+      <I>i</I> and is a fundamental property of the network.           </P>
+      <P>As a recurrence relation, this computational task naturally lends 
+      itself to recursion. As this recurrence relation only makes use of the 
+      set-theoretic operations union and difference, the data structure 
+      manipulated by the recursive function is most naturally a              
+      <CODE>Set</CODE> (described in section).           </P>
+      <P>In order to develop a useful scientific program, we shall use an 
+      infinite graph to represent the topology of a crystal, i.e. a periodic 
+      tiling. Computer simulations of non-crystalline materials are typically 
+      formulated as a crystal with the largest possible unit cell, known as the 
+      supercell. Conventional approaches to the analysis of these structures 
+      reference atoms by their index  within the origin supercell. Edges in the 
+      graph representing bonded pairs of atoms in different cells are then 
+      handled by treating displacements modulo the supercell:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/conventional.gif"> 
+                  </P>
+      <P></P>
+      <P>However, this conventional approach is well-known to be flawed when 
+      applied to insufficiently large supercells, requiring erroneous results to 
+      be identified and weeded out manually.</P>
+      <P>Instead, we shall choose to reference atoms by an index composed not 
+      only of the vertex within the supercell but also the offset of the 
+      supercell from the origin:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/unconventional.gif"> 
+                  </P>
+      <P></P>
+      <P>Neighbouring vertices in the graph representing the topology are 
+      defined not only by the index of the neighbouring vertex but also by the 
+      supercell containing this neighbour (assuming the origin vertex to be in 
+      the origin supercell at).</P>
+      <H2>Implementation</H2>
+      <P>We shall now develop a complete program for computing the nearest 
+      neighbours of a given vertex with index  from a list of lists  of the 
+      indices of the neighbours of each vertex. We begin by referencing the F# 
+      Power Pack and defining the types that will represent our network of 
+      bonded atoms:</P>
+<PRE>&gt; #r "FSharp.PowerPack.dll";;</PRE>
+<PRE>&gt; open Microsoft.FSharp.Math;;</PRE>
+<PRE>&gt; type coord = { index: int; offset: vector };;
+type coord =
+  {index: int;
+   offset: vector;}</PRE>
+<PRE>&gt; type vertex = { position: vector; neighbors: HashSet&lt;coord&gt; };;
+type vertex =
+  {position: vector;
+   neighbors: HashSet&lt;coord&gt;;}</PRE>
+<PRE>&gt; type t = { supercell: vector; vertices: vertex array };;
+type t =
+  {supercell: vector;
+   vertices: vertex array;}</PRE>
+      <H3>Lexer</H3>
+      <P>In this case, we shall hand roll our own lexer as a simple F# sequence 
+      expression:</P>
+<PRE>&gt; type token = Open | Close | Number of float;;
+type token =
+  | Open
+  | Close
+  | Number of float</PRE>
+<PRE>&gt; let rec lex (s: string) =
+    seq { let i = ref 0
+          while !i &lt; s.Length do
+            match s.[!i] with
+            | '{' -&gt; yield Open
+            | '}' -&gt; yield Close
+            | ' ' | '\t' | '\n' | '\r' | ',' -&gt; ()
+            | _ -&gt;
+                let j = ref !i
+                while s.[!j + 1] &lt;&gt; ',' &amp;&amp; s.[!j + 1] &lt;&gt; '}' do
+                  incr j
+                yield Number(float(s.Substring(!i, !j - !i + 1)))
+                i := !j
+            incr i };;
+val lex : string -&gt; seq&lt;token&gt;</PRE>
+      <P>This may be used to generate a sequence of tokens from a file as 
+      follows:</P>
+<PRE>&gt; let file = __SOURCE_DIRECTORY__ + @"\cfg-100k-aSi.txt";;
+val file : string =
+  "C:\Users\Jon\Documents\Visual Studio 2008\Projects\F# Journal"+[57 chars]</PRE>
+<PRE>&gt; let tokens =
+    use stream = System.IO.File.OpenRead file
+    use reader = new System.IO.StreamReader(stream)
+    reader.ReadToEnd() |&gt; lex;;
+val tokens : seq&lt;token&gt;</PRE>
+      <H2>Parser</H2>
+      <P>The grammar is a sufficiently simple subset of Mathematica syntax that 
+      the parser can also be a hand-rolled function that converts a              
+      <CODE>token list</CODE> into a              <CODE>float tree</CODE> :      
+           </P>
+<PRE>&gt; type 'a tree = Leaf of 'a | Node of seq&lt;'a tree&gt;;;
+type 'a tree =
+  | Leaf of 'a
+  | Node of seq&lt;'a tree&gt;</PRE>
+<PRE>&gt; let rec parse = function
+    | Number x::_ -&gt; Leaf x
+    | Open::t -&gt;
+        let xs, t = parses [] t
+        Node xs
+    | _ -&gt; invalid_arg "parse"
+  and parses hs = function
+    | Number x::t -&gt; parses (Leaf x :: hs) t
+    | Open::t -&gt;
+        let ts, t = parses [] t
+        parses (Node ts :: hs) t
+    | Close::t -&gt; List.rev hs, t
+    | _ -&gt; invalid_arg "parses";;
+val parse : token list -&gt; float tree
+val parses : float tree list -&gt; token list -&gt; float tree list * token list</PRE>
+<PRE>&gt; let tree = tokens |&gt; List.of_seq |&gt; parse;;
+val tree : float tree =
+  Node
+    [Node [Leaf 128.9; Leaf 128.9; Leaf 128.9];
+     Node
+       [Node
+          [Node [Leaf 38.65; Leaf 63.4938; Leaf 87.0147];
+           Node
+             [Node [Node [Leaf 0.0; Leaf 0.0; Leaf 0.0]; Leaf 39537.0];
+              Node [Node [Leaf 0.0; Leaf 0.0; Leaf 0.0]; Leaf 96608.0];
+              Node [Node [Leaf 0.0; Leaf 0.0; Leaf 0.0]; Leaf 95422.0];
+              Node [Node [Leaf 0.0; Leaf 0.0; Leaf 0.0]; Leaf 62044.0]]];</PRE>
+      <H2>Restructuring</H2>
+      <P>Rather than traverse the parsed tree in the rather weakly-typed         
+           <CODE>float tree</CODE> form, we shall convert it into the more 
+      strongly-typed              <CODE>system</CODE> type that will be more 
+      efficient in the upcoming traversals:           </P>
+<PRE>&gt; let rec get = function
+    | t, [] -&gt; t
+    | Node ts, i::is -&gt; get(Seq.nth i ts, is)
+    | _ -&gt; invalid_arg "get";;
+val get : 'a tree * int list -&gt; 'a tree</PRE>
+<PRE>&gt; let system =
+    let unLeaf = function Leaf x -&gt; x | _ -&gt; invalid_arg "unLeaf"
+    let unNode = function Node ts -&gt; ts | _ -&gt; invalid_arg "unNode"
+    let int x = int(unLeaf x)
+    let vector xs = vector(Seq.map unLeaf (unNode xs))
+    let mk tree =
+      { offset = vector(get(tree, [0])); index = int(get(tree, [1])) - 1 }
+    { supercell = vector(get(tree, [0]));
+      vertices =
+        [|for tree in get(tree, [1]) |&gt; unNode -&gt;
+            { position = vector(get(tree, [0]))
+              neighbors =
+                get(tree, [1])
+                |&gt; unNode
+                |&gt; Seq.map mk
+                |&gt; (fun xs -&gt; HashSet xs) }|] };;
+val system : t =
+  {supercell = vector [|128.9; 128.9; 128.9|];
+   vertices =
+    [|{position = vector [|38.65; 63.4938; 87.0147|];
+       neighbors = &lt;seq&gt;;}; {position = vector [|34.6537; 44.005; 50.7888|];
+                             neighbors = &lt;seq&gt;;};
+      {position = vector [|57.3966; 124.282; 112.005|];
+       neighbors = &lt;seq&gt;;}; {position = vector [|100.671; 70.6459; 107.934|];</PRE>
+<PRE>&gt; printf "Loaded %d vertices\n" system.vertices.Length;;
+Loaded 100000 vertices
+val it : unit = ()</PRE>
+      <H2>Main program</H2>
+      <P>The following function offsets atoms in different supercells:</P>
+<PRE>&gt; let displace i j =
+    { j with offset = i.offset + j.offset };;
+val displace : coord -&gt; coord -&gt; coord</PRE>
+      <P>The following function computes the union of a sequence of hash 
+      sets:</P>
+<PRE>&gt; let unions (xss: seq&lt;HashSet&lt;coord&gt;&gt;) =
+    let s = HashSet()
+    for xs in xss do
+      for x in xs do
+        s.Add x
+    s;;
+val unions : seq&lt;HashSet&lt;coord&gt;&gt; -&gt; HashSet&lt;coord&gt;</PRE>
+      <P>The following              <CODE>memoize</CODE> combinator will be used 
+      to accelerate this dynamic programming problem by avoiding the 
+      recalculation of intermediate values:           </P>
+<PRE>&gt; let memoize f =
+    let m = HashMultiMap()
+    fun x y -&gt;
+      let k = x, y
+      match m.TryFind k with
+      | Some f_x_y -&gt; f_x_y
+      | None -&gt;
+          let f_x_y = f x y
+          m.[k] &lt;- f_x_y
+          f_x_y;;
+val memoize : ('a -&gt; 'b -&gt; 'c) -&gt; ('a -&gt; 'b -&gt; 'c)</PRE>
+      <P>The following              <CODE>nn</CODE> function returns the 
+      neighbors of the given atom in the network:           </P>
+<PRE>&gt; let nn i =
+    let ns = system.vertices.[i.index].neighbors
+    if i.offset.[0] = 0. &amp;&amp; i.offset.[1] = 0. &amp;&amp; i.offset.[2] = 0. then ns else
+      HashSet(seq { for n in ns -&gt; displace i n });;
+val nn : coord -&gt; HashSet&lt;coord&gt;</PRE>
+      <P>The following              <CODE>nth</CODE> function is the core of the 
+      whole program and computes the recurrence relation given at the beginning 
+      of this article:           </P>
+<PRE>&gt; let rec nth =
+    memoize (fun n i -&gt;
+      match n with
+      | 0 -&gt; HashSet[i]
+      | 1 -&gt; nn i
+      | n -&gt;
+          let s1, s2 = nth (n-1) i, nth (n-2) i
+          let s = HashSet()
+          for xs in s1 do
+            for x in nn xs do
+              if not(s1.Contains x) &amp;&amp; not(s2.Contains x) then
+                s.Add x
+          s);;
+Program.fsx(185,22): warning FS0040: This and other recursive references to the object(s)
+being defined will be checked for initialization-soundness at runtime through the use
+of a delayed reference. This is because you are defining one or more recursive objects,
+rather than recursive functions. This warning may be suppressed by using #nowarn "40" or
+--nowarn 40.</PRE>
+<PRE>val nth : (int -&gt; coord -&gt; HashSet&lt;coord&gt;)</PRE>
+      <P>Finally, we can run the program to compute the number of 50             
+      <SUP>th</SUP> -nearest neighbors on a 100,000-atom model of amorphous 
+      silicon as follows:           </P>
+<PRE>&gt; do
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    nth 50 { offset = vector [0.; 0.; 0.]; index = 0 }
+    |&gt; Seq.length
+    |&gt; printf "%d\n"
+    printf "Took %dms\n" t.ElapsedMilliseconds;;
+8834
+Took 2442ms
+val it : unit = ()</PRE>
+      <P>The results may also be visualized using a variety of different 
+      techniques. For example, the 150             <SUP>th</SUP> -nearest 
+      neighbor shell of any atom in an amorphous material is roughly spherical:  
+               </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/nn.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has described a simple technique for computing the         
+           <I>n</I>             <SUP>th</SUP> -nearest neighbour shells of atoms 
+      in an atomic model. Future OCaml Journal articles will revisit the same 
+      subject using different techniques.           </P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Traversing%20networks%20the%20nth-nearest%20neighbor_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

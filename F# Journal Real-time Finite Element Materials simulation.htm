@@ -1,0 +1,413 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/soft_fems.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Real-time Finite Element Materials simulation</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Real-time Finite Element Materials 
+simulation</TITLE>     <LINK href="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Real-time Finite Element Materials simulation</H1>
+      <P>Finite Element Materials simulations (FEMs) model a continuous volume 
+      of material by breaking it down into a discrete representation with many 
+      finite parts. This article describes a simple but fun program that 
+      simulates the dynamics of a 2D system of particles and springs in 
+      real-time. The program includes an interactive GUI visualization based 
+      upon Windows Presentation Foundation.</P>
+      <H2>Introduction</H2>
+      <P>FEMs is a widely used technique found in many areas of science and 
+      engineering, from the modelling of stresses in screwdriver heads to the 
+      simulation of fluid dynamics in oil fields. This article takes a more 
+      relaxed approach to FEMs and builds a simple toy that is very educational 
+      in elucidating how the technique works and, in particular, how fragile 
+      they can be.</P>
+      <P>Dynamical systems are typically simulated using discrete-time numerical 
+      integrators to integrate the equations of motion as a function of time. 
+      This application is no exception and we shall apply the Euler method for 
+      numerically integrating ordinary differential equations to Newton's 
+      equations of motion:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/euler.gif"> 
+                  </P>
+      <P></P>
+      <P>At a given time step, the acceleration of each particle is accumulated 
+      starting with the acceleration due to gravity and adding the acceleration 
+      due to forces from springs that act between particles. The springs simply 
+      obey Hooke's law, exerting a force proportional to their extension from 
+      their equilibrium length.</P>
+      <H2>Simulation</H2>
+      <P>This "simulator.ml" file contains the definitions responsible for the 
+      adaptive real-time simulation of the dynamics of the scene. This starts 
+      with the following preamble:</P>
+<PRE>#light</PRE>
+<PRE>module Simulator</PRE>
+<PRE>#I @"C:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0"
+#r @"WindowsBase.dll"
+#r @"PresentationCore.dll"
+#r @"PresentationFramework.dll"</PRE>
+<PRE>open System.Windows</PRE>
+      <P>The following function computes the length of a 2D vector represented 
+      as a value of the              <CODE>Vector</CODE> type from Windows 
+      Presentation Foundation:           </P>
+<PRE>let length (r : Vector) = sqrt(r*r)</PRE>
+      <P>The following constant vector is used to represent the acceleration due 
+      to gravity:</P>
+<PRE>let gravity = Vector(0., -1.)</PRE>
+      <P>The stiffness of the springs (the constant in Hooke's law) is a global 
+      value in this program:</P>
+<PRE>let mutable stiffness = 400000.</PRE>
+      <P>The              <CODE>point</CODE> and              
+      <CODE>spring</CODE> record types represent the two fundamental types in 
+      our dynamical system, which consists of particles and springs connecting 
+      them:           </P>
+<PRE>type point = { mutable position: Vector; mutable velocity: Vector }
+type spring = { mutable end1: int; mutable end2: int; mutable length: float }</PRE>
+      <P>Each point is quantified by its position and velocity. Each spring is 
+      quantified by the index of the start and end points in the point array of 
+      the system and its equilibrium length.</P>
+      <P>The following helper function builds a spring with a default length 
+      that is the current separation between the particles at the ends of the 
+      spring:</P>
+<PRE>let spring (points : _ array) i j =
+  { end1 = i; end2 = j;
+    length = length(points.[j].position - points.[i].position) }</PRE>
+      <P>Mouse interaction requires the current position of the mouse and a 
+      value representing the index of the point currently being grabbed, if 
+      any:</P>
+<PRE>let mutable mouse_position = Vector(0., 0.)
+let mutable mouse_grab = None</PRE>
+      <P>The following              <CODE>update_accelerations</CODE> function 
+      is the first of two stages required to update the dynamics of the scene. 
+      This function loops over the springs in the system and updates the 
+      accelerations of the particles at either end:           </P>
+<PRE>let update_accelerations dt (acceleration : _ array) (points : _ array) (springs : _ array) =
+  match mouse_grab with
+  | None -&gt; ()
+  | Some i -&gt;
+      let dr = points.[i].position - mouse_position
+      let separation = length dr
+      let force = 1000. * dr
+      acceleration.[i] &lt;- acceleration.[i] - force
+  for spring in springs do
+    if spring.end1 &lt;&gt; spring.end2 then
+      let p1 = points.[spring.end1]
+      let p2 = points.[spring.end2]
+      let dr = p2.position - p1.position
+      let separation = length dr
+      let elongation = spring.length / separation in
+      let max = 1.2
+      if abs elongation &gt; max then
+        spring.end2 &lt;- spring.end1
+      let force = (1.0 - spring.length / separation) * stiffness * dr
+      acceleration.[spring.end1] &lt;- acceleration.[spring.end1] + force
+      acceleration.[spring.end2] &lt;- acceleration.[spring.end2] - force
+      updates &lt;- updates + 1</PRE>
+      <P>Note that springs exceeding a maximum length are snapped by setting the 
+      end points to be the same. This allows the program to simulate the 
+      smashing of objects.</P>
+      <P>The mouse grabbing one of the points in the system is modeled via an 
+      invisible zero equilibrium-length spring connecting that point to the 
+      current mouse coordinate.</P>
+      <P>The second stage of updating is implemented by the following            
+        <CODE>update_positions</CODE> function that loops over the particles in 
+      the system and updates the position and velocity of each particle 
+      according to its acceleration (integrating over time using the Euler 
+      method):           </P>
+<PRE>let update_positions dt (acceleration : Vector array) (points : _ array) (springs : _ array) =
+  for i=0 to points.Length - 1 do
+    let r = points.[i].position
+    let dr = points.[i].velocity
+    let ddr = acceleration.[i]
+    let mutable dr : Vector = dr + dt * ddr
+    if r.Y &lt; 0.0 &amp;&amp; dr.Y &lt; 0.0 then
+      dr.X &lt;- 0.9 * dr.X
+      dr.Y &lt;- -0.9 * dr.Y
+    if r.X &lt; 0.0 &amp;&amp; dr.X &lt; 0. then
+      dr.X &lt;- -0.9 * dr.X
+      dr.Y &lt;- 0.9 * dr.Y
+    if r.X &gt; 1.0 &amp;&amp; dr.X &gt; 0. then
+      dr.X &lt;- -dr.X
+      dr.Y &lt;- 0.9 * dr.Y
+    let dr = 0.9 ** dt * dr
+    points.[i].position &lt;- r + dt * dr
+    points.[i].velocity &lt;- dr</PRE>
+      <P>Note that the velocity              <CODE>dr</CODE> is updated and then 
+      adjusted by impacts with the walls and floor              <I>before</I> it 
+      is used to update the position.           </P>
+      <P>The core function in this entire program is then the following          
+          <CODE>update</CODE> function:           </P>
+<PRE>let rec update dt (points : _ array) (springs : _ array) =
+  if dt &gt; 1e-4 then
+    update (0.5 * dt) points springs
+    update (0.5 * dt) points springs
+  else
+    let n = Array.length points
+    let acceleration = Array.create n gravity
+    update_accelerations dt acceleration points springs
+    update_positions dt acceleration points springs</PRE>
+      <P>The arguments to this function are the length of time it is to 
+      integrate over and the arrays of points and springs in the particle 
+      system. For large time spans, this function bisects the time span and 
+      calls itself twice. Numerical integration is inherently approximate and 
+      this subdivision helps to keep the error under control.</P>
+      <P>The              <CODE>update</CODE> function then creates an array of 
+      the accelerations of each particle in the system, initially with the 
+      acceleration due to gravity. In the              
+      <CODE>update_accelerations</CODE> function, each spring is then considered 
+      in turn and the force exerted by each spring is used to update the 
+      acceleration of the two particles at its ends. The force is calculated 
+      using Hooke's law which states that the force exerted by a spring is 
+      proportional to its displacement from equilibrium multiplied by the 
+      springs stiffness. We assume unit mass for each particle.           </P>
+      <P>Once the accelerations have been calculated, the particles are updated 
+      in-place by the              <CODE>update_positions</CODE> function using 
+      the Euler method augmented with some tests to ensure that velocities are 
+      reflected by collisions with the walls and floor. Also, as a primitive 
+      simulation of friction, any impact with the floor zeroes the horizontal 
+      component of the velocity. In particular, note that the velocity is 
+      updated with the current acceleration              <I>before</I> tests for 
+      collisions are performed. This ensures that the velocity is corrected 
+      before it is used to update the position. Collision with the floor (when 
+      both the position is below the floor and the velocity is directed 
+      downwards) damp the vertical component of the velocity. The velocity is 
+      also slightly damped every time step by a factor 0.9             
+      <SUP>dt</SUP> to prevent numerical errors from accumulating and increasing 
+      the total energy in the system.           </P>
+      <P>The following builds an example particle system starting with an 
+      H-shaped layout of particles and then placing springs between all 
+      sufficiently-close particles:</P>
+<PRE>let points, springs =
+  let n = 18
+  let s = 0.02
+  let points =
+    [|for i in 0 .. n-1
+        for j in 0 .. n-1
+            when (j&lt;2 || j&gt;(n-3)) || (i=n/2 || i=n/2-1) -&gt;
+          Vector(s * float i, s * float j)|]
+  let points =
+    points
+    |&gt; Array.map (( + ) (Vector(0.1, 0.)))
+    |&gt; Array.map (fun r -&gt; {position=r; velocity=Vector(0., 0.)})
+  let springs = ref []
+  let n = Array.length points
+  let limit = 1.5 * s
+  for i=0 to n-2 do
+    for j=i+1 to n-1 do
+      let p1 = points.[i].position
+      let p2 = points.[j].position
+      if length(p2 - p1) &lt; limit then
+        springs := spring points i j :: !springs;
+  let springs = Array.of_list !springs in
+  points, springs</PRE>
+      <P>The following function runs a dynamical simulation indefinitely, using 
+      the time span since the last iteration to call the              
+      <CODE>update</CODE> function repeatedly:           </P>
+<PRE>let simulate () =
+  let mutable past = ref None
+  let timer = System.Diagnostics.Stopwatch()
+  timer.Start()
+  let mutable passed = 0.
+  while true do
+    let dt =
+      let now = timer.ElapsedMilliseconds
+      let old =
+        match !past with
+        | None -&gt; now
+        | Some old -&gt; old
+      past := Some now
+      float(now - old) / 1e3
+    update dt points springs</PRE>
+      <P>This              <CODE>simulate</CODE> function is then started on a 
+      background thread in order to keep the simulation running as long as the 
+      GUI is open:           </P>
+<PRE>do
+  let thread = System.Threading.Thread(simulate)
+  thread.IsBackground &lt;- true
+  thread.Start()</PRE>
+      <P>The second half of the program is responsible for creating and 
+      animating the visualization of the results as they are simulated by this 
+      first half of the program.</P>
+      <H2>Visualization</H2>
+      <P>This section described the "visualization.fs" file that defined the     
+               <CODE>Visualization</CODE> module:           </P>
+<PRE>#light</PRE>
+<PRE>module Visualization</PRE>
+<PRE>#I @"C:\Program Files\Reference Assemblies\Microsoft\Framework\v3.0"
+#r @"WindowsBase.dll"
+#r @"PresentationCore.dll"
+#r @"PresentationFramework.dll"</PRE>
+<PRE>open System
+open System.Windows
+open System.Windows.Media
+open Simulator</PRE>
+      <P>In order to render 2D vector graphics using Windows Presentation 
+      Foundation, a host for a              <CODE>DrawingVisual</CODE> is 
+      created:           </P>
+<PRE>type VisualHost() as this =
+  inherit FrameworkElement() as base</PRE>
+<PRE>  let visual = new DrawingVisual()</PRE>
+<PRE>  do
+    this.AddVisualChild visual
+    this.AddLogicalChild visual
+    this.HorizontalAlignment &lt;- HorizontalAlignment.Stretch
+    this.VerticalAlignment &lt;- VerticalAlignment.Stretch</PRE>
+<PRE>  member this.RenderOpen f =
+    use dc = visual.RenderOpen()
+    f dc</PRE>
+<PRE>  override this.VisualChildrenCount = 1</PRE>
+<PRE>  override this.GetVisualChild _ = visual :&gt; Visual</PRE>
+      <P>The auxiliary higher-order              <CODE>RenderOpen</CODE> 
+      function provides an easy way to describe the vector graphic contents that 
+      are to be rendered.           </P>
+      <P>Animation is achieved by registering a callback function that is called 
+      repeatedly by WPF:</P>
+<PRE>let timer = System.Diagnostics.Stopwatch()</PRE>
+<PRE>let render (host : VisualHost) =
+  if not timer.IsRunning then timer.Start()
+  let s = min host.ActualWidth host.ActualHeight
+  host.RenderOpen(fun dc -&gt;
+    dc.PushTransform(TranslateTransform((host.ActualWidth - s) / 2., (host.ActualHeight - s) / 2.))
+    dc.PushTransform(ScaleTransform(s, s))
+    let pen = Pen(Brushes.Red, 0.001)
+    let point_of (r : Vector) = Point(r.X, 1. - r.Y)
+    for s in springs do
+      let e1 = points.[s.end1].position
+      let e2 = points.[s.end2].position
+      dc.DrawLine(pen, point_of e1, point_of e2)
+    for p in points do
+      let point_of (r : Vector) = Point(r.X, 1. - r.Y)
+      dc.DrawEllipse(Brushes.Blue, null, point_of p.position, 0.003, 0.003)
+    dc.Pop()
+    dc.Pop())</PRE>
+      <P>This              <CODE>render</CODE> function updates the vector 
+      graphics that will be rendered by the given              
+      <CODE>VisualHost</CODE> before invalidating it to force a redraw.          
+       </P>
+      <P>The GUI aspect of this program will require a function to find the 
+      nearest point to a mouse click:</P>
+<PRE>let nearest() =
+  let distance i =
+    length(points.[i].position - mouse_position)
+  let mutable i = 0
+  let mutable d = distance 0
+  for n=1 to Array.length points - 1 do
+    let d' = distance n
+    if d' &lt; d then
+      i &lt;- n
+      d &lt;- d'
+  i, d</PRE>
+      <P>Finally, the main program is as follows:</P>
+<PRE>[&lt;STAThread&gt;]
+do
+  let application = Application()
+  let host = VisualHost()
+  
+  let window = Window(Content=host, Title="Springies", Width=800., Height=800.)
+  
+  CompositionTarget.add_Rendering(fun o e -&gt; render host)
+  
+  window.KeyDown.Add(fun e -&gt; if e.Key = Input.Key.Escape then window.Close())
+  window.MouseDown.Add(fun e -&gt;
+    let i, d = nearest()
+    if d &lt; 0.015 then mouse_grab &lt;- Some i)
+  window.MouseMove.Add(fun e -&gt;
+    let p = e.GetPosition(host)
+    let s = min host.ActualWidth host.ActualHeight
+    mouse_position &lt;-
+      Vector((p.X + 0.5 * (s - host.ActualWidth)) / s,
+             1. - (p.Y + 0.5 * (s - host.ActualHeight)) / s))
+  window.MouseUp.Add(fun e -&gt;
+    mouse_grab &lt;- None)
+  window.Show()
+  application.Run window |&gt; ignore</PRE>
+      <P>The initial              <CODE>[&lt;STAThread&gt;]</CODE> ensures that 
+      the main thread of this program (which is used as the GUI thread) is 
+      started in single-threaded apartment mode, a requirement for GUI threads. 
+      An application,              <CODE>VisualHost</CODE> and              
+      <CODE>Window</CODE> are created. The              
+      <CODE>CompositionTarget.add_Rendering</CODE> function is used to register 
+      the              <CODE>render</CODE> callback. Then callbacks are 
+      registered to handle key presses (the escape key exits) and mouse 
+      interaction. Finally, the window is made visible and the application is 
+      run.           </P>
+      <P>This is a remarkably small amount of code considering the results that 
+      it produces.</P>
+      <H2>Results</H2>
+      <P>The Visual Studio 2005 project of this application may be downloaded    
+                <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/29/Springies.zip">here</A>
+       .           </P>
+      <P>Initially, the upper section of the object simply wobbles:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/springies1.gif"> 
+                  </P>
+      <P></P>
+      <P>Grabbing any of the upper section and pulling it over with the mouse 
+      illustrates how unstable the shape is:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/springies2.gif"> 
+                  </P>
+      <P></P>
+      <P>A more stable configuration can be found by splaying the legs of the 
+      shape:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/springies3.gif"> 
+                  </P>
+      <P></P>
+      <P>Finally, flinging the shape against the walls violently causes the many 
+      springs to snap and the object effectively explodes:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/springies4.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has described a simple but effective real-time soft object 
+      simulator that uses a finite element methods for the simulation and 
+      Windows Presentation Foundation for visualization. The practical 
+      applications of this particular kind of simulation are primarily rag-doll 
+      models for computer games due to its real-time nature.</P>
+      <P>The computational complexity of this program is focused in a pair of 
+      loops that mutate the particle system in-place. The majority of the 
+      program is, therefore, free to benefit from the heavy use of functional 
+      programming as a means of abstraction to reduce code size without 
+      adversely affecting performance. Moreover, the performance intensive loops 
+      are also amenable to parallelization.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Real-time%20Finite%20Element%20Materials%20simulation_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

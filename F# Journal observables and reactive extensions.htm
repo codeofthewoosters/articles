@@ -1,0 +1,173 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0088)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/reactiveextensions.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20observables%20and%20reactive%20extensions_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20observables%20and%20reactive%20extensions_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20observables%20and%20reactive%20extensions_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20observables%20and%20reactive%20extensions_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20observables%20and%20reactive%20extensions_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Observables and Reactive Extensions</H1>
+      <P>Various recent additions to the .NET Framework have encouraged 
+      event-based programming, including observables and the recent Reactive 
+      Extensions (Rx) library. This article reviews the basic properties of 
+      observables and some of the core functionality in the Rx library before 
+      taking a look at a common problem in event-based programming: subscribing 
+      to a state machine.</P>
+      <H2>Introduction</H2>
+      <P>Observables are a simple extension to the concept of events. An event 
+      maintains a set of subscribed handlers and invokes each of them whenever 
+      the event is triggered. Observables extend this by making subscriptions 
+      disposable, reusing the <CODE>IDisposable</CODE> design pattern to handle 
+      unsubscription reliably.</P>
+      <H2>Reactive extensions</H2>
+      <P>We begin by referencing the Reactive Extensions DLL:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;#r&nbsp;"System.Reactive.dll";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;--&gt;&nbsp;Referenced&nbsp;'C:\Program&nbsp;Files\Microsoft&nbsp;Reactive&nbsp;Extensions&nbsp;SDK\v1.0.10621\Binaries\.NETFramework\v4.0\System.Reactive.dll'</CODE></P>
+      <P>F# already provides many useful functions over values of the 
+      <CODE>IObservable</CODE> interface in the <CODE>Observable</CODE> module. 
+      We can productively augment this with more functions from Rx using native 
+      F# types:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Observable&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;collect&nbsp;(f:&nbsp;_&nbsp;-&gt;&nbsp;#seq&lt;_&gt;)&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Reactive.Linq.Observable.SelectMany(xs,&nbsp;fun&nbsp;x&nbsp;-&gt;&nbsp;f&nbsp;x&nbsp;|&gt;&nbsp;seq)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;replayAll&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Reactive.Linq.Observable.Replay&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;replay&nbsp;(n:&nbsp;int)&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Reactive.Linq.Observable.Replay(xs,&nbsp;n);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Observable&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;collect&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;#seq&lt;'c&gt;)&nbsp;-&gt;&nbsp;System.IObservable&lt;'a&gt;&nbsp;-&gt;&nbsp;System.IObservable&lt;'c&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;replayAll&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.IObservable&lt;'a&gt;&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Reactive.Subjects.IConnectableObservable&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;replay&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.IObservable&lt;'a&gt;&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Reactive.Subjects.IConnectableObservable&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The <CODE>collect</CODE> function is a kind of map where each function 
+      application handles one event but triggers any number of consecutive 
+      events. The <CODE>replayAll</CODE> function creates a connectable 
+      observable that records event triggers after its connection and replays 
+      them to each new subscriber before relaying subsequent events. The 
+      <CODE>replay</CODE> function is similar but with a finite memory of 
+      <CODE>n</CODE> previous events.</P>
+      <P>For example, the <CODE>collect</CODE> function can be used to replace 
+      each event triggered with an integer <CODE>n</CODE> with <CODE>n</CODE> 
+      events from <CODE>1</CODE> to <CODE>n</CODE> as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;event&nbsp;=&nbsp;Event&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;obs1&nbsp;=&nbsp;event.Publish<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;obs2&nbsp;=&nbsp;Observable.collect&nbsp;(fun&nbsp;n&nbsp;-&gt;&nbsp;[1..n])&nbsp;obs1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;subscription&nbsp;=&nbsp;Observable.subscribe&nbsp;(printfn&nbsp;"%d")&nbsp;obs2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;event.Trigger&nbsp;[1..3]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;event.Trigger&nbsp;[1..3];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;3<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>Triggering the underlying event when the observable is subscribed with 
+      the numbers 1 to 3 generates the output 1, 1, 2, 1, 2, 3 as expected. Note 
+      that the subscription expires at the end of its scope due to the use of a 
+      <CODE>use</CODE> binding and, therefore, subsequent triggers of the event 
+      do not make it to the <CODE>obs2</CODE> observable.</P>
+      <P>The following example demonstrates the <CODE>replayAll</CODE> function 
+      defined above:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;event&nbsp;=&nbsp;Event&lt;_&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;obs1&nbsp;=&nbsp;event.Publish<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;obs2&nbsp;=&nbsp;Observable.replayAll&nbsp;obs1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;event.Trigger&nbsp;[1..3]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;connection&nbsp;=&nbsp;obs2.Connect()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;event.Trigger&nbsp;[4..6]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;subscription&nbsp;=&nbsp;Observable.subscribe&nbsp;(printfn&nbsp;"%d")&nbsp;obs2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Seq.iter&nbsp;event.Trigger&nbsp;[7..9];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;4<BR>&nbsp;&nbsp;&nbsp;&nbsp;5<BR>&nbsp;&nbsp;&nbsp;&nbsp;6<BR>&nbsp;&nbsp;&nbsp;&nbsp;7<BR>&nbsp;&nbsp;&nbsp;&nbsp;8<BR>&nbsp;&nbsp;&nbsp;&nbsp;9<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>The <CODE>replayAll</CODE> function returns an 
+      <CODE>IConnectableObservable</CODE> that implements a <CODE>Connect</CODE> 
+      method. Only events triggered after <CODE>Connect</CODE> is invoked are 
+      remembered by <CODE>replayAll</CODE>. In this case, the underlying event 
+      is triggered with the values 1 to 3 before the <CODE>Connect</CODE> method 
+      is invoked and, consequently, these values are not seen in the output. The 
+      event is then triggered with 4..5 which are replayed as soon as the 
+      observable is subscribed to. The numbers 7 to 9 are then triggered after 
+      the subscription and, therefore, are relayed to the display.</P>
+      <H2>Subscribable state machines</H2>
+      <P>An interesting problem that often arises in the context of observables 
+      is accumulating the state of a state machine and replaying the state 
+      changes required to get from an initial state to the current state when a 
+      new subscription is made.</P>
+      <P>The simplest way to accomplish this using observables and Rx is to 
+      accumulate the state of the state machine using a <CODE>scan</CODE> and 
+      use <CODE>replay&nbsp;1</CODE> to make the last state available to each 
+      subscriber before any new state changes are relayed. However, this 
+      requires the ability to treat the first trigger of an observable 
+      differently from all subsequent triggers. There is no elegant solution to 
+      this problem but perhaps the clearest solution is to tag the observed 
+      values using a union type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;decapitated&lt;'a,&nbsp;'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;First&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Rest&nbsp;of&nbsp;'b;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;decapitated&lt;'a,'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;First&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Rest&nbsp;of&nbsp;'b</CODE></P>
+      <P>The following <CODE>decapitate</CODE> function then acts as a 
+      <CODE>map</CODE> over the observable, applying the <CODE>first</CODE> 
+      function to the first observed value and the <CODE>rest</CODE> function to 
+      all subsequent observed values:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;decapitate&nbsp;first&nbsp;rest&nbsp;obs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;obs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Observable.scan&nbsp;(fun&nbsp;a&nbsp;x&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;a&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;Some(first&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;_&nbsp;-&gt;&nbsp;Some(rest&nbsp;x))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Observable.choose&nbsp;id;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;decapitate&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;System.IObservable&lt;'a&gt;&nbsp;-&gt;&nbsp;System.IObservable&lt;'b&gt;</CODE></P>
+      <P>We may now describe our state machine in terms of this 
+      <CODE>decapitate</CODE> function. We begin by defining a new class 
+      representing a subscribable state machine:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;StateMachine&lt;'a&gt;(instructions:&nbsp;System.IObservable&lt;'a&nbsp;-&gt;&nbsp;'a&gt;,&nbsp;initialState:&nbsp;'a,&nbsp;toInstructions:&nbsp;'a&nbsp;-&gt;&nbsp;seq&lt;'a&nbsp;-&gt;&nbsp;'a&gt;)&nbsp;=</CODE></P>
+      <P>Note that we are using a generic type variable <CODE>'a</CODE> to 
+      represent the state of the machine and the function type 
+      <CODE>'a&nbsp;-&gt;&nbsp;'a</CODE> to represent transitions. This 
+      genericity allows our solution to be reused in a wide variety of 
+      circumstances.</P>
+      <P>We shall use an active pattern to extract the state of the machine from 
+      its accumulator:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|State|)&nbsp;(First&nbsp;state&nbsp;|&nbsp;Rest(state,&nbsp;_))&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state</CODE></P>
+      <P>The following <CODE>apply</CODE> function applies the transition 
+      <CODE>change</CODE> to the state of the state machine, returning a new 
+      accumulator:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;apply&nbsp;(State&nbsp;state)&nbsp;change&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Rest(change&nbsp;state,&nbsp;change)</CODE></P>
+      <P>A <CODE>scan</CODE> followed by a <CODE>replay&nbsp;1</CODE> can then 
+      be used to create a connectable observable that replays the last state 
+      followed by all subsequent observed values when a subscription is 
+made:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;state&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;instructions<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Observable.scan&nbsp;apply&nbsp;(First&nbsp;initialState)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Observable.replay&nbsp;1</CODE></P>
+      <P>We connect this immediately in order to begin accumulating the results 
+      of observed transitions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;connection&nbsp;=&nbsp;state.Connect()</CODE></P>
+      <P>The <CODE>decapitate</CODE> function can then be used to emit many 
+      observed transitions when a subscription is first made and relay all 
+      subsequent observed transitions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;instructionsOut&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;state<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;decapitate<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(fun&nbsp;(State&nbsp;state)&nbsp;-&gt;&nbsp;toInstructions&nbsp;state)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;First&nbsp;_&nbsp;-&gt;&nbsp;Seq.empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Rest(_,&nbsp;change)&nbsp;-&gt;&nbsp;Seq.singleton&nbsp;change)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Observable.collect&nbsp;id</CODE></P>
+      <P>The <CODE>toInstructions</CODE> function is used to determine the state 
+      transitions required to get from the initial state to the current 
+      state.</P>
+      <P>Note how the <CODE>collect</CODE> function is used to trigger multiple 
+      observations when a single observation is made.</P>
+      <P>Our <CODE>StateMachine</CODE> class is an <CODE>IObservable</CODE>, 
+      exposing the <CODE>instructionsOut</CODE> observable that was created 
+      internally:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IObservable&lt;'a&nbsp;-&gt;&nbsp;'a&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Subscribe&nbsp;observer&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;instructionsOut.Subscribe&nbsp;observer</CODE></P>
+      <P>Finally, we implement the <CODE>IDisposable</CODE> interface and 
+      dispose of our connection to the replayable when our 
+      <CODE>StateMachine</CODE> is disposed of.</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Dispose()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;connection.Dispose();;</CODE></P>
+      <P>The compiler returns the type of our new <CODE>StateMachine</CODE> 
+      class:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;StateMachine&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IObservable&lt;('a&nbsp;-&gt;&nbsp;'a)&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;instructions:System.IObservable&lt;('a&nbsp;-&gt;&nbsp;'a)&gt;&nbsp;*&nbsp;initialState:'a&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toInstructions:('a&nbsp;-&gt;&nbsp;seq&lt;('a&nbsp;-&gt;&nbsp;'a)&gt;)&nbsp;-&gt;&nbsp;StateMachine2&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>For example, the following test applies 100,000 insertions and 
+      deletions to a set before subscribing to the state of the set and applying 
+      another 100,000 operations:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;ref&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;event&nbsp;=&nbsp;Event&lt;Set&lt;int&gt;&nbsp;-&gt;&nbsp;Set&lt;int&gt;&gt;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;obs&nbsp;=&nbsp;event.Publish&nbsp;:&gt;&nbsp;System.IObservable&lt;Set&lt;int&gt;&nbsp;-&gt;&nbsp;Set&lt;int&gt;&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i&nbsp;(xs:&nbsp;Set&lt;int&gt;)&nbsp;=&nbsp;Seq.map&nbsp;Set.add&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;stateMachine&nbsp;=&nbsp;new&nbsp;StateMachine&lt;Set&lt;int&gt;&gt;(obs,&nbsp;Set.empty,&nbsp;i)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;i&nbsp;=&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rand&nbsp;=&nbsp;System.Random&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..100000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i&nbsp;=&nbsp;rand.Next&nbsp;1000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(if&nbsp;i&nbsp;%&nbsp;2&nbsp;=&nbsp;0&nbsp;then&nbsp;Set.add&nbsp;else&nbsp;Set.remove)&nbsp;(i&nbsp;/&nbsp;2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;event.Trigger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;obs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;stateMachine<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Observable.subscribe&nbsp;(fun&nbsp;x&nbsp;-&gt;&nbsp;incr&nbsp;n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;_&nbsp;in&nbsp;1..100000&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i&nbsp;=&nbsp;rand.Next&nbsp;1000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(if&nbsp;i&nbsp;%&nbsp;2&nbsp;=&nbsp;0&nbsp;then&nbsp;Set.add&nbsp;else&nbsp;Set.remove)&nbsp;(i&nbsp;/&nbsp;2)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;event.Trigger<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Subscription&nbsp;received&nbsp;%d&nbsp;instruction"&nbsp;!n;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Subscription&nbsp;received&nbsp;100245&nbsp;instruction<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>The subscription received only 100,245 instructions in total because 
+      the first 100,000 operations resulted in a set containing 245 elements, 
+      each of which were then relayed upon subscription before the subsequent 
+      instructions were passed on.</P>
+      <H2>Summary</H2>
+      <P>This article has introduced event-based programming using 
+      <CODE>IObservable</CODE> and the built-in F# functions for events as well 
+      as some of the more exotic functions from the Rx library before walking 
+      through a practical application using this technique.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of event-based 
+      programming and Rx.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20observables%20and%20reactive%20extensions_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

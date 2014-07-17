@@ -1,0 +1,113 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0078)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/treemaps.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20drawing%20tree%20masp_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20drawing%20tree%20masp_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20drawing%20tree%20masp_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20drawing%20tree%20masp_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20drawing%20tree%20masp_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Drawing tree maps</H1>
+      <P>A tree map is a simple way to visualize the relative sizes of a 
+      collection of objects in 2D. The idea is to recursively subdivide a 
+      rectangle into non-overlapping rectangles that have areas proportional to 
+      the weights they represent.</P>
+      <P>We begin by opening the <CODE>System.Windows</CODE> namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>The following <CODE>tree</CODE> type can be used to represent a 
+      weight-balanced tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;tree&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf&nbsp;of&nbsp;float&nbsp;*&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch&nbsp;of&nbsp;tree&nbsp;*&nbsp;float&nbsp;*&nbsp;tree;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;tree&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf&nbsp;of&nbsp;float&nbsp;*&nbsp;string<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch&nbsp;of&nbsp;tree&nbsp;*&nbsp;float&nbsp;*&nbsp;tree</CODE></P>
+      <P>The <CODE>float</CODE> stored in each <CODE>Branch</CODE> is the sum of 
+      the weights of the leaves under it.</P>
+      <P>The following <CODE>weight</CODE> function extracts the weight of a 
+      leaf or branch:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;weight&nbsp;(Leaf(w,&nbsp;_)&nbsp;|&nbsp;Branch(_,&nbsp;w,_))&nbsp;=&nbsp;w;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;weight&nbsp;:&nbsp;tree&nbsp;-&gt;&nbsp;float</CODE></P>
+      <P>Note how the function parameter can be used as a pattern and, provided 
+      it covers all cases as it does here, can be used to extract the weight 
+      directly without requiring an explicit <CODE>match</CODE> or 
+      <CODE>function</CODE>.</P>
+      <P>Bugs can be avoided by superceding the <CODE>Branch</CODE> constructor 
+      with a function of the same name that automatically computes the total 
+      weight of the branch as the sum of the weights of its two children:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;Branch(l,&nbsp;r)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Branch(l,&nbsp;weight&nbsp;l&nbsp;+&nbsp;weight&nbsp;r,&nbsp;r);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;Branch&nbsp;:&nbsp;tree&nbsp;*&nbsp;tree&nbsp;-&gt;&nbsp;tree</CODE></P>
+      <P>The following <CODE>balance</CODE> function rotates the tree left or 
+      right if that is found to make the tree more balanced:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;balance&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch(Branch(ll,&nbsp;x,&nbsp;lr),&nbsp;y,&nbsp;r)&nbsp;when&nbsp;abs(x-weight&nbsp;r)&nbsp;&gt;&nbsp;abs(weight&nbsp;ll-(weight&nbsp;lr+weight&nbsp;r))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Branch(ll,&nbsp;Branch(lr,&nbsp;r)&nbsp;|&gt;&nbsp;balance)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch(l,&nbsp;x,&nbsp;Branch(rl,&nbsp;y,&nbsp;rr))&nbsp;when&nbsp;abs(weight&nbsp;l-y)&nbsp;&gt;&nbsp;abs(weight&nbsp;l+weight&nbsp;rl-weight&nbsp;rr)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Branch(Branch(l,&nbsp;rl)&nbsp;|&gt;&nbsp;balance,&nbsp;rr)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;t&nbsp;-&gt;&nbsp;t;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;balance&nbsp;:&nbsp;tree&nbsp;-&gt;&nbsp;tree</CODE></P>
+      <P>This is quite an aggressive rebalancing strategy and, consequently, is 
+      more computationally expensive than other rebalancing schemes but it does 
+      produce good results.</P>
+      <P>The following <CODE>add</CODE> function adds a new leaf to the 
+      far-right of the tree and rebalances the resulting tree accordingly:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;add&nbsp;t&nbsp;(w,&nbsp;s&nbsp;as&nbsp;x)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;t&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf&nbsp;_&nbsp;-&gt;&nbsp;Branch(t,&nbsp;Leaf(w,&nbsp;s))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch(l,&nbsp;_,&nbsp;r)&nbsp;-&gt;&nbsp;Branch(l,&nbsp;add&nbsp;r&nbsp;x)&nbsp;|&gt;&nbsp;balance;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;tree&nbsp;-&gt;&nbsp;float&nbsp;*&nbsp;string&nbsp;-&gt;&nbsp;tree</CODE></P>
+      <P>Let us extract file sizes from disk in order to provide some 
+      interesting data to visualize:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;dir&nbsp;=&nbsp;@"C:\Users\Jon\Documents\Work";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;dir&nbsp;:&nbsp;string&nbsp;=&nbsp;"C:\Users\Jon\Documents\Work"</CODE></P>
+      <P>The sizes and names of the files found in directories below may be 
+      extracted as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;files&nbsp;dir&nbsp;=&nbsp;seq&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;fileName&nbsp;in&nbsp;(try&nbsp;System.IO.Directory.GetFiles&nbsp;dir&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;[||])&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;float&nbsp;(System.IO.FileInfo&nbsp;fileName).Length,&nbsp;fileName<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;dir&nbsp;in&nbsp;(try&nbsp;System.IO.Directory.GetDirectories&nbsp;dir&nbsp;with&nbsp;_&nbsp;-&gt;&nbsp;[||])&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;files&nbsp;dir<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;files&nbsp;:&nbsp;string&nbsp;-&gt;&nbsp;(float&nbsp;*&nbsp;string)&nbsp;list</CODE></P>
+      <P>The following <CODE>treeMap</CODE> function converts a weight-balanced 
+      tree <CODE>t</CODE> into a sequence of coordinates defining a set of 
+      non-overlapping rectangles:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;treeMap&nbsp;x0&nbsp;y0&nbsp;x2&nbsp;y2&nbsp;t&nbsp;=&nbsp;seq&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;t&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf(_,&nbsp;name)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;x0,&nbsp;y0,&nbsp;x2,&nbsp;y2,&nbsp;name<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch&nbsp;_&nbsp;when&nbsp;x2-x0&nbsp;&lt;&nbsp;5.0&nbsp;||&nbsp;y2-y0&nbsp;&lt;&nbsp;5.0&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;x0,&nbsp;y0,&nbsp;x2,&nbsp;y2,&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch(l,&nbsp;_,&nbsp;r)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;p&nbsp;=&nbsp;weight&nbsp;l&nbsp;/&nbsp;(weight&nbsp;l&nbsp;+&nbsp;weight&nbsp;r)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;x2-x0&nbsp;&gt;&nbsp;y2-y0&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x1&nbsp;=&nbsp;x0&nbsp;+&nbsp;(x2&nbsp;-&nbsp;x0)&nbsp;*&nbsp;p<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;treeMap&nbsp;x0&nbsp;y0&nbsp;x1&nbsp;y2&nbsp;l<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;treeMap&nbsp;x1&nbsp;y0&nbsp;x2&nbsp;y2&nbsp;r<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y1&nbsp;=&nbsp;y0&nbsp;+&nbsp;(y2&nbsp;-&nbsp;y0)&nbsp;*&nbsp;p<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;treeMap&nbsp;x0&nbsp;y0&nbsp;x2&nbsp;y1&nbsp;l<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;treeMap&nbsp;x0&nbsp;y1&nbsp;x2&nbsp;y2&nbsp;r<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;treeMap&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;float&nbsp;-&gt;&nbsp;float&nbsp;-&gt;&nbsp;tree&nbsp;-&gt;&nbsp;seq&lt;float&nbsp;*&nbsp;float&nbsp;*&nbsp;float&nbsp;*&nbsp;float&nbsp;*&nbsp;string&gt;</CODE></P>
+      <P>Leaves are drawn directly. Branches are split along their longest axis 
+      recursively or skipped if they are too small.</P>
+      <P>The following <CODE>layout</CODE> function draws the set of 
+      non-overlapping rectangles returned by the <CODE>treeMap</CODE> function 
+      as a collection of polygons in a <CODE>Canvas</CODE> control:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;layout&nbsp;(canvas:&nbsp;Controls.Canvas)&nbsp;tree&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;width,&nbsp;height&nbsp;=&nbsp;canvas.ActualWidth,&nbsp;canvas.ActualHeight<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.Children.Clear()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;treeMap&nbsp;=&nbsp;treeMap&nbsp;-width&nbsp;-height&nbsp;width&nbsp;height&nbsp;tree<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x0,&nbsp;y0,&nbsp;x1,&nbsp;y1,&nbsp;name&nbsp;in&nbsp;treeMap&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;s&nbsp;x&nbsp;=&nbsp;(x&nbsp;+&nbsp;s)&nbsp;/&nbsp;2.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x0,&nbsp;y0,&nbsp;x1,&nbsp;y1&nbsp;=&nbsp;f&nbsp;width&nbsp;x0,&nbsp;f&nbsp;height&nbsp;y0,&nbsp;f&nbsp;width&nbsp;x1,&nbsp;f&nbsp;height&nbsp;y1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;control&nbsp;=&nbsp;Shapes.Polygon()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x,&nbsp;y&nbsp;in&nbsp;[x0,&nbsp;y0;&nbsp;x1,&nbsp;y0;&nbsp;x1,&nbsp;y1;&nbsp;x0,&nbsp;y1]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.Points.Add(Point(x,&nbsp;y))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.ToolTip&nbsp;&lt;-&nbsp;name<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.Fill&nbsp;&lt;-&nbsp;Media.Brushes.LightBlue<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.Stroke&nbsp;&lt;-&nbsp;Media.Brushes.DarkBlue<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control.StrokeThickness&nbsp;&lt;-&nbsp;1.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control&nbsp;|&gt;&nbsp;canvas.Children.Add&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;layout&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Windows.Controls.Canvas&nbsp;-&gt;&nbsp;tree&nbsp;option&nbsp;*&nbsp;float&nbsp;*&nbsp;float&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>Our weight-balanced tree may be computed by sorting the elements by 
+      size and then folding over them as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;tree&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;files&nbsp;dir<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.sortBy&nbsp;(fun&nbsp;(n,&nbsp;_)&nbsp;-&gt;&nbsp;-n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.fold&nbsp;add&nbsp;(Leaf(0.0,&nbsp;""));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;tree&nbsp;:&nbsp;tree&nbsp;=&nbsp;...</CODE></P>
+      <P>Finally, the main program creates a <CODE>Canvas</CODE> control, 
+      registers a callback on its <CODE>SizeChanged</CODE> event to lay the 
+      treemap out whenever the user resizes the control, creates a window 
+      containing the canvas and runs the application:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;canvas&nbsp;=&nbsp;Controls.Canvas()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.SizeChanged.Add(fun&nbsp;e&nbsp;-&gt;&nbsp;layout&nbsp;canvas&nbsp;tree)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;window&nbsp;=&nbsp;Window(Content=canvas,&nbsp;Title="Tree&nbsp;map")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.HorizontalAlignment&nbsp;&lt;-&nbsp;HorizontalAlignment.Stretch<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;canvas.VerticalAlignment&nbsp;&lt;-&nbsp;VerticalAlignment.Stretch<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(window)&nbsp;|&gt;&nbsp;ignore</CODE></P>
+      <H2>Results</H2>
+      <P>When run, this program produces a window containing a treemap that 
+      visualizes the relative sizes of files on disk:</P>
+      <P style="TEXT-ALIGN: center"><IMG 
+      src="F%23%20Journal%20drawing%20tree%20masp_files/TreeMap.png"></P>
+      <H2>Summary</H2>
+      <P>This article has described a simple but effective program for 
+      visualizing weightings as a tree map. The program includes a 
+      weight-balanced tree that uses rotations to spread the weights of the 
+      leaves out evenly before using the structure of this balanced tree to 
+      subdivide a canvas.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of 
+      visualization.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20drawing%20tree%20masp_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

@@ -1,0 +1,136 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0090)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/NumericalIntegration.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20numerical%20integration_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20numerical%20integration_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20numerical%20integration_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20numerical%20integration_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20numerical%20integration_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Numerical integration</H1>
+      <P>Definite integrals can be calculated approximately using a variety of 
+      techniques known collectively as numerical integration algorithms. The 
+      ability to calculate definite integrals has many practical applications 
+      including solving ordinary differential equations. This article describes 
+      several basic algorithms for numerical integration and a technique that 
+      allows these algorithms to be applied to both finite and infinite 
+      limits.</P>
+      <P>Basic numerical integration algorithms work on a sequence of samples 
+      taken over the limits of integration. The following <CODE>lerp</CODE> 
+      function linearly interpolates from <CODE>x0</CODE> to <CODE>x1</CODE> by 
+      a parameter <CODE>p</CODE> expected to be in the range 0..1:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;lerp&nbsp;(x0,&nbsp;x1)&nbsp;p&nbsp;=&nbsp;x0&nbsp;*&nbsp;(1.0&nbsp;-&nbsp;p)&nbsp;+&nbsp;x1&nbsp;*&nbsp;p;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;lerp&nbsp;:&nbsp;x0:float&nbsp;*&nbsp;x1:float&nbsp;-&gt;&nbsp;p:float&nbsp;-&gt;&nbsp;float</CODE></P>
+      <P>The following <CODE>sample</CODE> function creates a sequence of (x,y) 
+      coordinates of <CODE>n+1</CODE> samples of <CODE>f(x)</CODE> from 
+      <CODE>x0</CODE> to <CODE>x1</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;sample&nbsp;n&nbsp;x0&nbsp;x1&nbsp;(f:&nbsp;float&nbsp;-&gt;&nbsp;float)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;for&nbsp;i&nbsp;in&nbsp;0..n&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;lerp&nbsp;(x0,&nbsp;x1)&nbsp;(float&nbsp;i&nbsp;/&nbsp;float&nbsp;n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x,&nbsp;f&nbsp;x&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;sample&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;n:int&nbsp;-&gt;&nbsp;x0:float&nbsp;-&gt;&nbsp;x1:float&nbsp;-&gt;&nbsp;f:(float&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;&nbsp;seq&lt;float&nbsp;*&nbsp;float&gt;</CODE></P>
+      <P>The simplest way to approximate the value of a definite integral is to 
+      calculate the area of a rectangle of width between the limits and height 
+      of the average of the samples taken from within those limits. This may be 
+      implemented using the <CODE>Seq.averageBy</CODE> to average the heights of 
+      the samples as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;directSummation&nbsp;x0&nbsp;x1&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sample&nbsp;1000&nbsp;x0&nbsp;x1&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.averageBy&nbsp;snd<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;fun&nbsp;s&nbsp;-&gt;&nbsp;(x1&nbsp;-&nbsp;x0)&nbsp;*&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;directSummation&nbsp;:&nbsp;x0:float&nbsp;-&gt;&nbsp;x1:float&nbsp;-&gt;&nbsp;f:(float&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;&nbsp;float</CODE></P>
+      <P>For example, this <CODE>directSummation</CODE> function can be used to 
+      integrate a definite integral that is known to give the value of π 
+      (3.141592654):</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;f&nbsp;y&nbsp;=&nbsp;(16.0&nbsp;*&nbsp;y&nbsp;-&nbsp;16.0)/(pown&nbsp;y&nbsp;4&nbsp;-&nbsp;2.0&nbsp;*&nbsp;pown&nbsp;y&nbsp;3&nbsp;+&nbsp;4.0&nbsp;*&nbsp;y&nbsp;-&nbsp;4.0);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;f&nbsp;:&nbsp;y:float&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;directSummation&nbsp;0.0&nbsp;1.0&nbsp;f;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;=&nbsp;3.140450869</CODE></P>
+      <P>Even with 1,000 samples this gives the rather coarse approximation 
+      3.140450869, accurate to just 3 significant figures.</P>
+      <P>A slightly more sophisticated solution is to sum the areas of the 
+      trapeziums formed between each pair of samples. Again, this is easily 
+      implemented in F# using functions from the <CODE>Seq</CODE> module, 
+      specifically the <CODE>pairwise</CODE> function to obtain the sequence of 
+      pairs of adjacent elements from the original sequences and then the 
+      <CODE>sumBy</CODE> function to sum a function of those pairs of 
+      elements:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;trapeziumRule&nbsp;x0&nbsp;x1&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sample&nbsp;1000&nbsp;x0&nbsp;x1&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.pairwise<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.sumBy&nbsp;(fun&nbsp;((x0,&nbsp;f0),&nbsp;(x1,&nbsp;f1))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;0.5&nbsp;*&nbsp;(x1&nbsp;-&nbsp;x0)&nbsp;*&nbsp;(f0&nbsp;+&nbsp;f1));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;trapeziumRule&nbsp;:&nbsp;x0:float&nbsp;-&gt;&nbsp;x1:float&nbsp;-&gt;&nbsp;f:(float&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;trapeziumRule&nbsp;0.0&nbsp;1.0&nbsp;f;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;=&nbsp;3.14159132</CODE></P>
+      <P>This gives the more accurate approximation 3.14159132 which is accurate 
+      to 6 significant figures using 1,000 samples of <CODE>f</CODE>.</P>
+      <P>An even more accurate algorithm for smooth functions sums the areas 
+      under quadratic curves fitted to three samples at a time. This is most 
+      simply implemented by taking 500 samples and then taking another sample 
+      between each of them, as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;simpsonsRule&nbsp;x0&nbsp;x1&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sample&nbsp;500&nbsp;x0&nbsp;x1&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.pairwise<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.sumBy&nbsp;(fun&nbsp;((x0,&nbsp;f0),&nbsp;(x2,&nbsp;f2))&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x1&nbsp;=&nbsp;x0&nbsp;+&nbsp;0.5&nbsp;*&nbsp;(x2&nbsp;-&nbsp;x0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(x2&nbsp;-&nbsp;x0)&nbsp;/&nbsp;6.0&nbsp;*&nbsp;(f0&nbsp;+&nbsp;4.0&nbsp;*&nbsp;f&nbsp;x1&nbsp;+&nbsp;f2));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;simpsonsRule&nbsp;:&nbsp;x0:float&nbsp;-&gt;&nbsp;x1:float&nbsp;-&gt;&nbsp;f:(float&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;simpsonsRule&nbsp;0.0&nbsp;1.0&nbsp;f;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;=&nbsp;3.141592654</CODE></P>
+      <P>This gives 3.141592654 which is accurate to all 10 significant 
+      figures.</P>
+      <P>A trickier test is to use a less smooth function. For example, the 
+      value of π can also be obtained by integrating the area of a circle but 
+      the derivative of this function is infinite at the limits of the 
+      integral:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;g&nbsp;x&nbsp;=&nbsp;2.0&nbsp;*&nbsp;sqrt(1.0&nbsp;-&nbsp;x&nbsp;*&nbsp;x);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;g&nbsp;:&nbsp;x:float&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;directSummation&nbsp;-1.0&nbsp;1.0&nbsp;g,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;trapeziumRule&nbsp;-1.0&nbsp;1.0&nbsp;g,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;simpsonsRule&nbsp;-1.0&nbsp;1.0&nbsp;g,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Math.PI;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;*&nbsp;float&nbsp;*&nbsp;float&nbsp;*&nbsp;float&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(3.138349128,&nbsp;3.141487477,&nbsp;3.14157813,&nbsp;3.141592654)</CODE></P>
+      <P>In this case, direct summation gives 3.138349128, the trapezium rule 
+      gives 3.141487477 and Simpson's rule gives 3.14157813 so even the most 
+      accurate approximation is only correct to 5 significant figures.</P>
+      <P>Another technique is to compute a series of increasingly-accurate 
+      approximations and apply a convergence-acceleration algorithm to the 
+      series in order to better estimate its final value. *Romberg's method* is 
+      one such approach, typically expressed as a recurrence relation containing 
+      a sum. The recurrence relation is a *dynamic programming* algorithm, i.e. 
+      one that divides a large problem into smaller problems that overlap. 
+      Therefore, redundant computations can be avoided by memoizing the function 
+      that implements the recurrence relation, i.e. caching previous return 
+      values. Consequently, the following implementation of Romberg's method 
+      begins with a <CODE>sum</CODE> function that computes the sum of a 
+      function over a range of consecutive integers and a <CODE>memoize</CODE> 
+      function that creates a function that caches the results of the given 
+      function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;sum&nbsp;i0&nbsp;i1&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;t&nbsp;=&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;i0..i1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t&nbsp;&lt;-&nbsp;t&nbsp;+&nbsp;f&nbsp;i<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;t;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;sum&nbsp;:&nbsp;i0:int&nbsp;-&gt;&nbsp;i1:int&nbsp;-&gt;&nbsp;f:(int&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;memoize&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;d&nbsp;=&nbsp;System.Collections.Generic.Dictionary(HashIdentity.Structural)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;k&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;v&nbsp;=&nbsp;Unchecked.defaultof&lt;_&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;d.TryGetValue(k,&nbsp;&amp;v)&nbsp;then&nbsp;v&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;v&nbsp;=&nbsp;f&nbsp;k<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;d.[k]&nbsp;&lt;-&nbsp;v<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;v;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;memoize&nbsp;:&nbsp;f:('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rombergMethod&nbsp;x0&nbsp;x1&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;h&nbsp;n&nbsp;=&nbsp;(x1&nbsp;-&nbsp;x0)&nbsp;*&nbsp;pown&nbsp;2.0&nbsp;-n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;R&nbsp;=&nbsp;memoize(function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0,&nbsp;0&nbsp;-&gt;&nbsp;0.5&nbsp;*&nbsp;(x1&nbsp;-&nbsp;x0)&nbsp;*&nbsp;(f&nbsp;x0&nbsp;+&nbsp;f&nbsp;x1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;n,&nbsp;0&nbsp;-&gt;&nbsp;0.5&nbsp;*&nbsp;R(n-1,&nbsp;0)&nbsp;+&nbsp;h&nbsp;n&nbsp;*&nbsp;sum&nbsp;1&nbsp;(pown&nbsp;2&nbsp;(n-1))&nbsp;(fun&nbsp;k&nbsp;-&gt;&nbsp;f(x0&nbsp;+&nbsp;float(2*k-1)&nbsp;*&nbsp;h&nbsp;n))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;n,&nbsp;m&nbsp;-&gt;&nbsp;(pown&nbsp;4.0&nbsp;m&nbsp;*&nbsp;R(n,&nbsp;m-1)&nbsp;-&nbsp;R(n-1,&nbsp;m-1))&nbsp;/&nbsp;(pown&nbsp;4.0&nbsp;m&nbsp;-&nbsp;1.0))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;R(10,&nbsp;10);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;rombergMethod&nbsp;:&nbsp;x0:float&nbsp;-&gt;&nbsp;x1:float&nbsp;-&gt;&nbsp;f:(float&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;rombergMethod&nbsp;0.0&nbsp;1.0&nbsp;f;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;=&nbsp;3.141592654<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;rombergMethod&nbsp;-1.0&nbsp;1.0&nbsp;g;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;=&nbsp;3.141559175</CODE></P>
+      <P>We obtain the results 3.141592654 and 3.141559175 which are accurate to 
+      10 and 5 significant figures, respectively, the same as Simpson's 
+rule.</P>
+      <H2>Infinite limits</H2>
+      <P>Floating point numbers can represent a variety of special cases 
+      including positive and negative infinities. This allows us to write 
+      functions for numerical integration that can handle infinite limits.</P>
+      <P>Attempting to use our existing implementations with infinite limits 
+      results in the special value <CODE>nan</CODE> meaning "not a number":</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;gaussian&nbsp;x&nbsp;=&nbsp;exp(-0.5&nbsp;*&nbsp;x&nbsp;*&nbsp;x)&nbsp;/&nbsp;sqrt(2.0&nbsp;*&nbsp;System.Math.PI);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;gaussian&nbsp;:&nbsp;x:float&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;simpsonsRule&nbsp;-infinity&nbsp;infinity&nbsp;gaussian;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;=&nbsp;nan</CODE></P>
+      <P>The easiest way to handle infinite limits is to include a new 
+      preprocessing step that uses a substitution of variables to replace 
+      infinite limits with a different integral over finite limits. This may be 
+      accomplished as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;handleInfiniteLimits&nbsp;x0&nbsp;x1&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x0,&nbsp;x1,&nbsp;f&nbsp;=&nbsp;if&nbsp;x0&lt;=x1&nbsp;then&nbsp;x0,&nbsp;x1,&nbsp;f&nbsp;else&nbsp;x1,&nbsp;x0,&nbsp;fun&nbsp;x&nbsp;-&gt;&nbsp;-f&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;delta&nbsp;=&nbsp;1e-5<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;g1&nbsp;t&nbsp;=&nbsp;f(x1&nbsp;-&nbsp;(1.0&nbsp;-&nbsp;t)&nbsp;/&nbsp;t)&nbsp;/&nbsp;(t*t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;g2&nbsp;t&nbsp;=&nbsp;f(x0&nbsp;+&nbsp;t&nbsp;/&nbsp;(1.0&nbsp;-&nbsp;t))&nbsp;/&nbsp;pown&nbsp;(1.0&nbsp;-&nbsp;t)&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;g3&nbsp;t&nbsp;=&nbsp;(1.0&nbsp;+&nbsp;t*t)&nbsp;/&nbsp;pown&nbsp;(1.0&nbsp;-&nbsp;t*t)&nbsp;2&nbsp;*&nbsp;f(t&nbsp;/&nbsp;(1.0&nbsp;-&nbsp;t*t))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;x0&nbsp;=&nbsp;-infinity,&nbsp;x1&nbsp;=&nbsp;infinity&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;false,&nbsp;false&nbsp;-&gt;&nbsp;x0,&nbsp;x1,&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;false&nbsp;-&gt;&nbsp;delta,&nbsp;1.0&nbsp;-&nbsp;delta,&nbsp;g1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;false,&nbsp;true&nbsp;-&gt;&nbsp;delta,&nbsp;1.0&nbsp;-&nbsp;delta,&nbsp;g2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;true,&nbsp;true&nbsp;-&gt;&nbsp;-1.0&nbsp;+&nbsp;delta,&nbsp;1.0&nbsp;-&nbsp;delta,&nbsp;g3;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;handleInfiniteLimits&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x0:float&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x1:float&nbsp;-&gt;&nbsp;f:(float&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;&nbsp;float&nbsp;*&nbsp;float&nbsp;*&nbsp;(float&nbsp;-&gt;&nbsp;float)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;integrate1D&nbsp;x0&nbsp;x1&nbsp;f&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x0,&nbsp;x1,&nbsp;f&nbsp;=&nbsp;handleInfiniteLimits&nbsp;x0&nbsp;x1&nbsp;f<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;simpsonsRule&nbsp;x0&nbsp;x1&nbsp;f;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;integrate1D&nbsp;:&nbsp;x0:float&nbsp;-&gt;&nbsp;x1:float&nbsp;-&gt;&nbsp;f:(float&nbsp;-&gt;&nbsp;float)&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;integrate1D&nbsp;-infinity&nbsp;infinity&nbsp;gaussian;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;float&nbsp;=&nbsp;1.0</CODE></P>
+      <P>In this case, we find that the integral under the Gaussian is 
+      <CODE>1.0</CODE> as expected.</P>
+      <H2>Summary</H2>
+      <P>This article has described several functions that handle numerical 
+      integration including a function that converts infinite limits into finite 
+      limits via substitution. The ability to use higher-order functions makes 
+      these solutions particularly simple.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of numerical 
+      methods.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>� Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20numerical%20integration_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

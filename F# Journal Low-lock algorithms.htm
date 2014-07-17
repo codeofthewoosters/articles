@@ -1,0 +1,334 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0077)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/lowlock.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Low-lock algorithms</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Low-lock%20algorithms_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Low-lock%20algorithms_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Low-lock%20algorithms_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Low-lock algorithms</TITLE>     <LINK href="F%23%20Journal%20Low-lock%20algorithms_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Low-lock%20algorithms_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Low-lock%20algorithms_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Low-lock%20algorithms_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Low-lock%20algorithms_files/left.gif">      
+         </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Low-lock algorithms</H1>
+      <P>Locks are the defacto-standard approach to concurrent programming. With 
+      locks, shared mutable resources are protected using mutual exclusion to 
+      ensure consistency of the shared state from the point of view of different 
+      threads. However, locks are slow and, consequently, many situations can 
+      benefit from the avoidance of locks in favor of lower-level solutions. 
+      Much research has gone into non-blocking (obstruction-free, lock-free and 
+      wait-free) algorithms. This article introduces the concepts that underpin 
+      the implementation of non-blocking algorithms, including the .NET memory 
+      model, and explains how this can be leveraged to avoid locks with the 
+      simple example of lazy evaluation.</P>
+      <H2>Introduction</H2>
+      <P>From the programmer's point of view, the ideal memory model for a 
+      multicore machine would be writes and reads to and from memory that 
+      propagate to other cores in the sequence they were written in the source 
+      code and affect arbitrarily-large data structures instantaneously. This 
+      ideal memory model is conceptually simple and would, therefore, be easy to 
+      program. Unfortunately, this memory model would also be extremely 
+      inefficient in practice because it requires far more synchronization than 
+      necessary to ensure that operations do not appear out of order.</P>
+      <P>In reality, programs are mangled beyond all recognition first by the 
+      compiler and then by the CPU itself. Provided such programs are evaluated 
+      only in a single threaded fashion (which has been convention for decades 
+      but is no longer feasible for many programs in the multicore era), the 
+      rearrangements performed by the compiler and CPU are guaranteed to be 
+      invisible. However, multithreaded programs expose this complexity because 
+      threads observe not only the order of reads and writes by other threads as 
+      the (potentially inconsistent) values stored in memory but even partially 
+      written values. The combinatorial explosion of the sets of possible values 
+      that might be found in memory in the presence of uncontrolled reordering 
+      of reads and writes makes low-level concurrent programming difficult. 
+      However, locks are expensive and, consequently, the performance gains to 
+      be had from low-lock or lock-free programming can be significant. This is 
+      especially true in the context of scalability across multicore 
+      machines.</P>
+      <P>Low-level sychronization is made possible by an atomic compare-and-swap 
+      (CAS) instruction and memory barriers. The CAS instruction reads a memory 
+      location, compares its value to a given value and, if equal, writes 
+      another value to that location. A memory barrier ensures that neither the 
+      compiler nor the hardware will move reads or writes across the barrier, 
+      making it possible to ensure that values are not speculatively read 
+      prematurely or written retrospectively.</P>
+      <H2>The .NET memory model</H2>
+      <P>The              <A href="http://netframework/ecma/">.NET Framework 
+      ECMA Standard</A> describes a relaxed memory model that allows both reads 
+      and writes to be reordered with respect to each other. Specifically, this 
+      model divides memory accesses into ordinary memory accesses and those that 
+      are specially marked as "volatile". Volatile memory accesses cannot be 
+      created, deleted, or moved. Ordinary memory accesses are constrained only 
+      by the three fundamental rules for all memory models and the following two 
+      rules.           </P>
+      <P>
+      <UL>
+        <LI>Reads and writes cannot move before a volatile read.</LI>
+        <LI>Reads and writes cannot move after a volatile write.</LI></UL>
+      <P></P>
+      <P>This gives compilers and hardware a lot of freedom to do optimization. 
+      They only have to respect the boundaries formed by locks and volatile 
+      accesses. For program fragments without locks or volatile use, optimizing 
+      compilers can do any optimization that is legal for a sequential program. 
+      It also means that the memory system only needs to do relatively expensive 
+      cache invalidation and flushing at locks and volatile accesses. This model 
+      is very efficient, but requires that programs follow the locking protocol 
+      or explicitly mark volatile accesses when using low-lock techniques.</P>
+      <P>The most common .NET architecture, x86, is currently implemented as a 
+      write queue with read snooping into that queue. This ensures that writes 
+      are never reordered with respect to each other by the hardware but the 
+      ECMA standard still allows a compiler to reorder writes.</P>
+      <P>The .NET Framework 2.0 and later are available on other architectures 
+      with weaker memory models than x86 and, due to the problems introduced 
+      into legacy .NET 1.1 code by this discrepancy, the .NET Framework now 
+      enforces a stronger memory model. Thus, we can assume that writes will not 
+      be reordered.</P>
+      <H2>Laziness with locks</H2>
+      <P>Many functional languages including F# provide a type representing a 
+      lazily evaluated expression. In F#, this is provided by the              
+      <CODE>Microsoft.FSharp.Control.Lazy&lt;'T&gt;</CODE> class. The remainder 
+      of this article considers how this class might be implemented.           
+      </P>
+      <P>The simplest implementation uses a lock to mutually exclude threads 
+      from accessing (reading or writing) any given lazy value. This may be 
+      implemented as follows:</P>
+<PRE>&gt; type LazyAux&lt;'T&gt; =
+    | Value of 'T
+    | Exception of exn
+    | Thunk of (unit -&gt; 'T);;
+type LazyAux&lt;'T&gt; =
+  | Value of 'T
+  | Exception of exn
+  | Thunk of (unit -&gt; 'T)</PRE>
+<PRE>&gt; type Lazy&lt;'T&gt;(value: LazyAux&lt;'T&gt;) =
+    let mutable value = value
+    let sync = box 0</PRE>
+<PRE>    member private this.Value
+      with get() =
+        let x = value
+        System.Threading.Thread.MemoryBarrier()
+        x
+      and set v =
+        System.Threading.Thread.MemoryBarrier()
+        value &lt;- v</PRE>
+<PRE>    member x.Force() =
+      lock sync (fun () -&gt;
+        match x.Value with
+        | Value x -&gt; x
+        | Exception e -&gt; raise e
+        | Thunk f -&gt;
+            try
+              let v = f()
+              x.Value &lt;- Value v
+              v
+            with e -&gt;
+              x.Value &lt;- Exception e
+              raise e);;
+type Lazy&lt;'T&gt; =
+  class
+    new : value:LazyAux&lt;'T&gt; -&gt; Lazy&lt;'T&gt;
+    member Force : unit -&gt; 'T
+    member private Value : LazyAux&lt;'T&gt;
+    member private Value : LazyAux&lt;'T&gt; with set
+  end</PRE>
+      <P>The unevaluated expression (thunk), evaluated value or exception are 
+      stored in a value              <CODE>value</CODE> of the union type        
+            <CODE>LazyAux</CODE> inside the              <CODE>Lazy</CODE> 
+      class. The private              <CODE>Value</CODE> property reads and 
+      writes              <CODE>value</CODE> with a memory barrier after a read 
+      and before a write. This is known as acquire and release semantics and is 
+      conventionally automated through the use of              
+      <CODE>volatile</CODE> fields. However, the current (May 2009 CTP) release 
+      of F# does not yet support              <CODE>volatile</CODE> fields so we 
+      use explicit memory barriers instead.           </P>
+      <P>The              <CODE>Force</CODE> function locks the local            
+        <CODE>sync</CODE> value to ensure that only one thread can evaluate the 
+      thunk at a time. If one thread is already evaluating the thunk then any 
+      other threads that attempt to do so are blocked waiting for completion of 
+      the first before they read the result.           </P>
+      <P>Note that we are careful to lock on a private              
+      <CODE>sync</CODE> value rather than the              <CODE>Lazy</CODE> 
+      object itself because user code might also lock on the              
+      <CODE>Lazy</CODE> object.           </P>
+      <P>This implementation is correct but inefficient because it continues to 
+      take out a lock at every read even after the lazy value has been 
+      initialized.</P>
+      <P>We can test this implementation by building a balanced binary tree 
+      where the left and right branches are the same lazy value. Consequently, 
+      traversing both branches evaluates the lazy value only once.</P>
+      <P>We can also count the number of locks taken by superceding the built-in 
+                   <CODE>lock</CODE> function with one that increments a global  
+                  <CODE>locks</CODE> counter:           </P>
+<PRE>&gt; let mutable locks = 0;;
+val mutable locks : int = 0</PRE>
+<PRE>&gt; let lock x f =
+    locks &lt;- locks + 1
+    lock x f;;
+val lock : 'a -&gt; (unit -&gt; 'b) -&gt; 'b when 'a : not struct</PRE>
+      <P>The following defines and constructs a lazy balanced binary tree:</P>
+<PRE>&gt; type t =
+    | Leaf
+    | Branch of Lazy&lt;t&gt; * Lazy&lt;t&gt;;;
+type t =
+  | Leaf
+  | Branch of Lazy&lt;t&gt; * Lazy&lt;t&gt;</PRE>
+<PRE>&gt; let rec mk = function
+    | 0 -&gt; Lazy(Thunk(fun () -&gt; Leaf))
+    | n -&gt;
+        Lazy(Thunk(fun () -&gt;
+          let t = mk(n-1)
+          Branch(t, t)));;
+val mk : int -&gt; Lazy&lt;t&gt;</PRE>
+      <P>The following              <CODE>count</CODE> function counts the 
+      number of branches in a lazy tree:           </P>
+<PRE>&gt; let rec count (t: Lazy&lt;_&gt;) =
+    match t.Force() with
+    | Leaf -&gt; 0
+    | Branch(l, r) -&gt; count l + 1 + count r;;
+val count : Lazy&lt;t&gt; -&gt; int</PRE>
+      <P>Finally, we can build a suitable tree, count the number of branches and 
+      the number of locks that were taken out during the computation and time 
+      the results for comparison with more optimized techniques later:</P>
+<PRE>&gt; let depth = 25;;
+val depth : int = 25</PRE>
+<PRE>&gt; do
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    printf "Locking: %A\n" (mk depth |&gt; count)
+    printf "%d locks taken\n" locks
+    locks &lt;- 0
+    printf "Took %gs\n" t.Elapsed.TotalSeconds;;
+Locking: 33554431
+67108863 locks taken
+Took 12.7724s
+val it : unit = ()</PRE>
+      <P>Note the large number of locks taken.</P>
+      <H2>Low-lock implementation</H2>
+      <P>The simplest way to avoid taking a lock on every read is to 
+      speculatively test the lazy value, returning immediately if it has already 
+      been evaluated, and then taking out a lock only if the speculative test 
+      indicated that it had not yet been evaluated. This is accomplished using 
+      the double-checked locking design pattern:</P>
+<PRE>&gt; type Lazy&lt;'T&gt;(value: LazyAux&lt;'T&gt;) =
+    let mutable value = value
+    let sync = box 0</PRE>
+<PRE>    member private this.Value
+      with get() =
+        let x = value
+        System.Threading.Thread.MemoryBarrier()
+        x
+      and set v =
+        //System.Threading.Thread.MemoryBarrier()
+        value &lt;- v</PRE>
+<PRE>    member x.Force() =
+      match x.Value with
+      | Value x -&gt; x
+      | Exception e -&gt; raise e
+      | Thunk f -&gt;
+          lock sync (fun () -&gt;
+            match x.Value with
+            | Value x -&gt; x
+            | Exception e -&gt; raise e
+            | Thunk f -&gt;
+                try
+                  let v = f()
+                  x.Value &lt;- Value v
+                  v
+                with e -&gt;
+                  x.Value &lt;- Exception e
+                  raise e);;
+type Lazy&lt;'T&gt; =
+  class
+    new : value:LazyAux&lt;'T&gt; -&gt; Lazy&lt;'T&gt;
+    member Force : unit -&gt; 'T
+    member private Value : LazyAux&lt;'T&gt;
+    member private Value : LazyAux&lt;'T&gt; with set
+  end</PRE>
+      <P>Note that the .NET 2.0 design allows us to comment out the memory 
+      barrier from the simulated volatile write because the absence of write 
+      reordering ensures that other threads can only ever see the evaluated 
+      value once it has been fully created.</P>
+      <P>Repeating the same benchmark as before gives the following results:</P>
+<PRE>&gt; do
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    printf "Boxed: %A\n" (mk depth |&gt; count)
+    printf "%d locks taken\n" locks
+    locks &lt;- 0
+    printf "Took %gs\n" t.Elapsed.TotalSeconds;;
+Boxed: 33554431
+26 locks taken
+Took 5.0688s
+val it : unit = ()</PRE>
+      <P>Note that the same answer is obtained using far fewer locks (26 vs 
+      67,108,863) and in less than half the time (5.07s vs 12.77s).</P>
+      <P>This substantial performance improvement is clearly a valuable 
+      optimization but the real benefit is in the scalability of the low-lock 
+      design. Specifically, the low-lock design allows concurrent readers to 
+      proceed simultaneously whereas the previous blocking design introduces 
+      unnecessary mutual exclusion between readers.</P>
+      <P>Run several instances of the benchmark in parallel gives the following 
+      results:</P>
+<PRE>&gt; do
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    let tree = mk depth
+    seq { for i in 1..8 -&gt;
+            async { return count tree } }
+    |&gt; Async.Parallel
+    |&gt; Async.RunSynchronously
+    |&gt; printf "Boxed: %A\n"
+    locks &lt;- 0
+    printf "Took %gs\n" t.Elapsed.TotalSeconds;;
+Boxed: [|33554431; 33554431; 33554431; 33554431; 33554431; 33554431; 33554431; 33554431|]
+460824159 locks taken
+Took 148.983s
+val it : unit = ()</PRE>
+      <P>whereas the new low-lock design gives the following result:</P>
+<PRE>Boxed: [|33554431; 33554431; 33554431; 33554431; 33554431; 33554431; 33554431; 33554431|]
+Took 5.4897s
+val it : unit = ()</PRE>
+      <P>Note that the heavily contended lock-based design sees parallel 
+      performance worsen significantly whereas the low-lock design gets within 
+      9% of optimal speedup. Overall, the low-lock design is a whopping 27× 
+      faster than the lock-based design on this 8-core machine.</P>
+      <H2>Summary</H2>
+      <P>This article has described how programmers can reduce the number of 
+      locks in thread-safe code by using memory barriers and knowledge of the 
+      .NET 2.0 memory model.</P>
+      <P>Future articles will revisit the subject of low-lock and lock-free 
+      programming in the context of high-performance scalable parallelism and 
+      the practical applications of these techniques.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Low-lock%20algorithms_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

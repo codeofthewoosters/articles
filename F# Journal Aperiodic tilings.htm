@@ -1,0 +1,380 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0076)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/tiling.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Aperiodic tilings</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Aperiodic%20tilings_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Aperiodic%20tilings_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Aperiodic%20tilings_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Aperiodic tilings</TITLE>     <LINK href="F%23%20Journal%20Aperiodic%20tilings_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Aperiodic%20tilings_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Aperiodic%20tilings_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Aperiodic%20tilings_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Aperiodic%20tilings_files/left.gif">        
+     </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Aperiodic tilings</H1>
+      <P>Many sets of polygons can be used to tile an infinite 2D plane. The 
+      term "aperiodic tilings" is used informally to refer to tilings that are 
+      not periodic. Such tilings are not only of mathematical and scientific 
+      interest because they give rise to unexpected diffraction patterns when 
+      they appear in quasicrystalline materials but also because they are often 
+      beautiful and, consequently, have been used in ornamental decorations for 
+      centuries. This article describes a simple program that visualizes tilings 
+      using Windows Presentation Foundation where the tilings are described 
+      using generic rewrite rules implemented in terms of a .NET interface.</P>
+      <H2>Introduction</H2>
+      <P>Previous F#.NET Journal articles have presented the concept of 
+      rule-based rewriting in the context of term rewriting for computer algebra 
+      and rewriting in graphical systems. This article describes the related 
+      approach of representing tilings in terms of rewrite rules that allow a 
+      "seed" to be grown into an arbitrarily-large tiling.</P>
+      <H2>Implementation</H2>
+      <P>We begin by defining the              <CODE>Tiling</CODE> module that 
+      provides the ground work for representing tilings including vector-matrix 
+      functions, an              <CODE>ITiling</CODE> interface that will be 
+      implemented by all tilings and the tilings themselves.           </P>
+      <P>The WPF DLLs may be loaded into an F# interactive session as 
+      follows:</P>
+<PRE>&gt; #r "PresentationCore.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\Framework
+ \v3.0\PresentationCore.dll'
+&gt; #r "PresentationFramework.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\Framework
+ \v3.0\PresentationFramework.dll'
+&gt; #r "WindowsBase.dll";;
+--&gt; Referenced 'C:\Program Files\Reference Assemblies\Microsoft\Framework
+ \v3.0\WindowsBase.dll'</PRE>
+      <P>We open the namespaces where WPF's vector- and matrix-related 
+      definitions are found:</P>
+<PRE>&gt; open System.Windows;;
+&gt; open System.Windows.Media;;</PRE>
+      <H3>Vector-Matrix definitions</H3>
+      <P>The definitions of tilings benefits from some general-purpose vector- 
+      and matrix-related definitions. These are most easily written using 
+      homogeneous 2D coordinates. Windows Presentation Foundation already 
+      provides precisely this functionality so we only need to augment its 
+      definitions with some of our own.</P>
+      <P>There is a slight impedance mismatch between F# and .NET libraries like 
+      WPF due to a conflict between overloading and type inference. Rather than 
+      using overloaded definitions directly with type annotations we choose to 
+      write native F# shim functions that can be called directly and, of course, 
+      partially applied if they are curried.</P>
+      <P>The following              <CODE>points</CODE> function converts a 
+      sequence of coordinates represented as              <CODE>float</CODE> 
+      pairs into a list of the WPF type              <CODE>Point</CODE> :        
+         </P>
+<PRE>&gt; let points ps = [ for x, y in ps -&gt; Point(x, y) ];;
+val points : seq&lt;float * float&gt; -&gt; Point list</PRE>
+      <P>We shall use the identity matrix:</P>
+<PRE>&gt; let identity = Matrix.Identity;;
+val identity : Matrix</PRE>
+      <P>A matrix that flips across the vertical:</P>
+<PRE>&gt; let flipv = Matrix(-1.0, 0.0, 0.0, 1.0, 0.0, 0.0);;
+val flipv : Matrix</PRE>
+      <P>A matrix that reflects in the line x=y:</P>
+<PRE>&gt; let reflect = Matrix(-1.0, 0.0, 0.0, -1.0, 0.0, 0.0);;
+val reflect : Matrix</PRE>
+      <P>Uniform scale matrices:</P>
+<PRE>&gt; let scale s = Matrix(s, 0.0, 0.0, s, 0.0, 0.0);;
+val scale : float -&gt; Matrix</PRE>
+      <P>Translation matrices:</P>
+<PRE>&gt; let translate (x, y) = Matrix(1.0, 0.0, 0.0, 1.0, x, y);;
+val translate : float * float -&gt; Matrix</PRE>
+      <P>Rotation matrices:</P>
+<PRE>&gt; let rotate a =
+    let a = a * System.Math.PI / 180.0
+    let s, c = sin a, cos a in
+    Matrix(c, s, -s, c, 0.0, 0.0);;
+val rotate : float -&gt; Matrix</PRE>
+      <P>The              <CODE>Transform</CODE> member of the              
+      <CODE>Matrix</CODE> class is overloaded to transform several different 
+      data structures. We only require the ability to transform object of the    
+                <CODE>Point</CODE> class so we write another F# shim function 
+      that uses type annotations to pick out this specific overload:           
+      </P>
+<PRE>&gt; let apply (m: Matrix) (x: Point) =
+    m.Transform x;;
+val apply : Matrix -&gt; Point -&gt; Point</PRE>
+      <P>Thanks to currying, this              <CODE>apply</CODE> function can 
+      have the matrix partially applied in order to create a function that 
+      transforms by a specific matrix. We shall use that functionality when 
+      transforming sequences of points.           </P>
+      <H3>The ITiling interface</H3>
+      <P>One of the most interesting aspects of the design of this program is 
+      the use of a .NET interface for the generic description of a tiling. The 
+      generic interface is defined as follows in F#:</P>
+<PRE>&gt; type ITiling&lt;'tile&gt; =
+    abstract shape : 'tile -&gt; Point list
+    abstract color : 'tile -&gt; Color
+    abstract seed : ('tile * Matrix) list
+    abstract rules : 'tile * Matrix -&gt; ('tile * Matrix) list;;
+type ITiling&lt;'tile&gt; =
+  interface
+    abstract member color : 'tile -&gt; Color
+    abstract member seed : ('tile * Matrix) list
+    abstract member rules : 'tile * Matrix -&gt; ('tile * Matrix) list
+    abstract member shape : 'tile -&gt; Point list
+  end</PRE>
+      <P>This interface requires the presence of four members:              
+      <CODE>color</CODE> to obtain the color of a give type of tile,             
+       <CODE>seed</CODE> defining the initial configuration of tiles from which 
+      all others are grown,              <CODE>rules</CODE> is the set of rules 
+      governing how the tiles in one generation are "inflated" to form the tiles 
+      in the next generation and the              <CODE>shape</CODE> function 
+      gives the coordinates of the vertices around the perimeter of each tile.   
+              </P>
+      <P>However, an interesting aspect of this interface is that it is 
+      parameterized over the generic type variable              
+      <CODE>'tile</CODE> and, consequently, different tilings may use different 
+      types to represent the tiles that they contain. In F#, the set of tiles 
+      will be a simple variant type for each kind of tiling.           </P>
+      <H3>Penrose Rhomb tiling</H3>
+      <P>The definitions of different tilings differ only in the numbers and 
+      rules that they contain so we shall describe only one tiling explicitly in 
+      this article: the Penrose tiling.</P>
+      <P>We begin by defining the set of tiles used by this tiling and, in this 
+      case, there are only two:</P>
+<PRE>&gt; type Tile = R0 | R1;;
+type Tile =
+  | R0
+  | R1</PRE>
+      <P>This              <CODE>Tile</CODE> type is used as the              
+      <CODE>'tile</CODE> type variable for this particular tiling.           
+</P>
+      <P>Next, we define a              <CODE>Tiling</CODE> class that contains 
+      some internal numeric values defined using              <CODE>let</CODE> 
+      bindings before giving the implementations of the members in the           
+         <CODE>ITiling&lt;Tile&gt;</CODE> interface:           </P>
+<PRE>&gt; type Tiling() =
+    let phi  = (sqrt 5.0 + 1.0) / 4.0
+    let phi' = (sqrt 5.0 - 1.0) / 4.0
+    let eta  = sqrt ((5.0 + sqrt 5.0) / 8.0)
+    let eta' = sqrt ((5.0 - sqrt 5.0) / 8.0)</PRE>
+<PRE>    interface ITiling&lt;Tile&gt; with
+      member T.color t =
+        match t with
+        | R0 -&gt; Colors.BurlyWood
+        | R1 -&gt; Colors.Bisque</PRE>
+<PRE>      member T.seed =
+        [
+          R0, identity;
+          R0, rotate 72.0;
+          R0, rotate 144.0;
+          R0, rotate 216.0;
+          R0, rotate 288.0;
+        ]</PRE>
+<PRE>      member T.rules(t, x) =
+        let x' = scale (2.0 * phi') * x in
+        match t with
+          | R0 -&gt;
+              [
+                R0, reflect * translate (0.0, -2.0 * phi) * x';
+                R1, rotate 36.0 * translate (eta', - phi) * x';
+                R0, rotate 144.0 * translate (0.0, -1.0 - 2.0 * phi) * x';
+                R0, rotate -144.0 * translate (0.0, -1.0 - 2.0 * phi) * x';
+                R1, rotate -36.0 * translate (-eta', -phi) * x';
+              ]
+          | R1 -&gt;
+              [
+                R1, rotate 108.0 * translate (-eta', phi' - 0.5) * x';
+                R1, rotate -108.0 * translate (eta', phi' - 0.5) * x';
+                R0, rotate 108.0 * translate (0.0, -1.0) * x';
+                R0, rotate -108.0 * translate (0.0, -1.0) * x';
+              ]
+      
+      member T.shape t =
+        match t with
+        | R0 -&gt;
+            points
+              [ 0.0, 0.0; eta', -phi; 0.0, -2.0 * phi;
+                -eta', -phi; 0.0, 0.0 ]
+        | R1 -&gt;
+            points
+              [ 0.0, 0.0; eta , -phi'; 0.0, -2.0 * phi';
+                -eta , -phi'; 0.0, 0.0 ];;
+type Tiling =
+  class
+    interface ITiling&lt;Tile&gt;
+    new : unit -&gt; Tiling
+  end</PRE>
+      <P>This nicely-factored code is all that is required to implement a 
+      tiling.</P>
+      <H3>Visualization</H3>
+      <P>The visualization part of this program applies the rewrite rules of a 
+      tiling in order to obtain a flat sequence of polygons to draw and then 
+      draws these polygons into a WPF              <CODE>DrawingBrush</CODE> 
+      that is easily stretched to fill a window. We also provide a minimal GUI 
+      that allows different tilings to be chosen using a context menu by 
+      right-clicking on the window.           </P>
+      <P>The rewrite rules are most easily applied using the              
+      <CODE>nest</CODE> combinator:           </P>
+<PRE>&gt; let rec nest n f x =
+    if n=0 then x else nest (n-1) f (f x);;
+val nest : int -&gt; ('a -&gt; 'a) -&gt; 'a -&gt; 'a</PRE>
+      <P>The visualization part of this program uses WPF controls so we open the 
+      relevant namespace.</P>
+<PRE>&gt; open System.Windows.Controls;;</PRE>
+      <P>We assume that the tiling was described in a separate              
+      <CODE>Tilings</CODE> module and open that:           </P>
+<PRE>open Tilings</PRE>
+      <P>The following polymorphic              <CODE>draw</CODE> function takes 
+      a tiling using any tile type and a number that dictates the how many 
+      levels of rewrites will be performed and returns a              
+      <CODE>DrawingBrush</CODE>           </P>
+<PRE>&gt; let draw(tiling: ITiling&lt;_&gt;, level) =
+    let state =
+      nest level (List.map_concat tiling.rules) tiling.seed
+    let group = DrawingGroup()
+    for t, m in state do
+      let brush = Media.SolidColorBrush(tiling.color t)
+      let geometry = StreamGeometry()
+      use context = geometry.Open()
+      match List.map (apply m) (tiling.shape t) with
+      | [] -&gt; ()
+      | p::ps -&gt;
+          context.BeginFigure(p, true, true)
+          for p in ps do
+            context.LineTo(p, true, true)
+      let drawing =
+        GeometryDrawing(brush, Pen(Brushes.White, 0.003), geometry)
+      group.Children.Add drawing
+    DrawingBrush(group, Stretch=Stretch.Uniform);;
+val draw : ITiling&lt;'a&gt; * int -&gt; DrawingBrush</PRE>
+      <P>This              <CODE>draw</CODE> function begins by nesting several 
+      applications of the              <CODE>List.map_concat</CODE> function 
+      using the tilings rewrite rules to the tilings seed. This generates an 
+      arbitrarily-large tiling and the larger              <CODE>level</CODE> is 
+      the larger the tiling.           </P>
+      <P>This              <CODE>draw</CODE> function then builds a              
+      <CODE>DrawingGroup</CODE> that will be used as the contents of the         
+           <CODE>DrawingBrush</CODE> . Each polygon is added to the group as a 
+      separate              <CODE>StreamGeometry</CODE> .           </P>
+      <P>The color of the tile is used to create a              
+      <CODE>SolidColorBrush</CODE> . The coordinates of each tile are obtained 
+      by mapping the partial application              <CODE>apply m</CODE> (a 
+      closure that transforms by the matrix              <CODE>m</CODE> ) over 
+      the              <CODE>Point list</CODE> returned by the              
+      <CODE>shape</CODE> member from the              <CODE>ITiling</CODE> 
+      interface.           </P>
+      <P>A              <CODE>GeometryDrawing</CODE> is created by filling the 
+      polygon with the brush and stroking it using a thin white pen to highlight 
+      the borders between the tiles. The              
+      <CODE>GeometryDrawing</CODE> is then added to the group.           </P>
+      <P>Finally, the              <CODE>DrawingBrush</CODE> containing the      
+              <CODE>DrawingGroup</CODE> is returned after having its             
+       <CODE>Stretch</CODE> property set to              
+      <CODE>Uniform.Stretch</CODE> in order to make it fill the available space. 
+                </P>
+      <P>The              <CODE>DrawingBrush</CODE> is most easily visualized as 
+      the background of an otherwise-blank window. Thus, we can derive our       
+             <CODE>View</CODE> class directly from WPF's              
+      <CODE>Window</CODE> instead of deriving a control and placing that in a 
+      window:           </P>
+<PRE>&gt; type View(Tilings: (string * DrawingBrush) list) as this =
+    inherit Window()
+    
+    let visual = DrawingVisual()
+    
+    do
+      this.Title &lt;- "Aperiodic Tilings"
+      let menu = Controls.ContextMenu()
+      menu.ItemsSource &lt;-
+        [ for name, brush in Tilings -&gt;
+            let item = Controls.MenuItem(Header=name)
+            item.Click.Add(fun _ -&gt; this.Background &lt;- brush)
+            item ]
+      this.ContextMenu &lt;- menu
+      this.Background &lt;- snd Tilings.[0];;
+type View =
+  class
+    inherit Window
+    new : Tilings:(string * DrawingBrush) list -&gt; View&lt;'a&gt;
+  end</PRE>
+      <P>Note that the              <CODE>View</CODE> class deals only with the  
+                  <CODE>DrawingBrush</CODE> that results from the use of a 
+      tiling and, therefore, is oblivious to the tile type and does not need to 
+      be polymorphic.           </P>
+      <P>The              <CODE>View</CODE> class is constructed from a list of 
+      names and generated tilings and uses the names to create a context menu 
+      that allows the user to choose between several tilings.           </P>
+      <P>Finally, the main program uses the              <CODE>View</CODE> class 
+      to create a window that is run inside a WPF application:           </P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    View
+      [
+        "Penrose rhomb", draw(PenroseRhomb.Tiling(), 5);
+        "Amman-Beenker rhomb triangle",
+        draw(AmmanBeenkerRhombTriangle.Tiling(), 5);
+        "Pythagoras-3-2", draw(Pythagoras32.Tiling(), 16);
+        "Robinson triangle", draw(RobinsonTriangle.Tiling(), 7)
+      ]
+    |&gt; (System.Windows.Application()).Run
+    |&gt; ignore;;</PRE>
+      <H2>Results</H2>
+      <P>A Visual Studio 2008 solution containing the full source code is 
+      available              <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/48/AperiodicTilings.zip">here</A>
+       . This program implements four different tilings.           </P>
+      <P>The              <A href="http://tilings.math.uni-bielefeld.de/substitution_rules/penrose_rhomb">Penrose 
+      rhomb</A> tiling described explicitly in this article:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Aperiodic%20tilings_files/Penrose.gif"> 
+                  </P>
+      <P></P>
+      <P>An              <A href="http://tilings.math.uni-bielefeld.de/substitution_rules/ammann_beenker_rhomb_triangle">Amman-Beenker 
+      rhomb triangle</A> tiling:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Aperiodic%20tilings_files/AmmanBeenker.gif"> 
+                  </P>
+      <P></P>
+      <P>A              <A href="http://tilings.math.uni-bielefeld.de/substitution_rules/pythagoras_3_2">Pythagoras 
+      3-2 tiling</A> :           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Aperiodic%20tilings_files/Pythagoras.gif"> 
+                  </P>
+      <P></P>
+      <P>And a              <A href="http://tilings.math.uni-bielefeld.de/substitution_rules/robinson_triangle">Robinson 
+      triangle</A> tiling:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Aperiodic%20tilings_files/Robinson.gif"> 
+                  </P>
+      <P></P>
+      <H2>Summary</H2>
+      <P>This article has demonstrated how techniques for encapsulation from 
+      .NET can be combined with elegant functional idioms to produce powerful 
+      programs that can be used for anything from scientific study to 
+  art.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Aperiodic%20tilings_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

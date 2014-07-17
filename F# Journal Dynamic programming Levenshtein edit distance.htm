@@ -1,0 +1,454 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0081)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/levenshtein.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Dynamic programming: Levenshtein edit distance</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Dynamic programming: Levenshtein edit 
+distance</TITLE>     <LINK href="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Dynamic programming: Levenshtein edit distance</H1>
+      <P>Levenshtein distance is a metric used to measure the amount of 
+      difference between a pair of sequences in terms of the number of 
+      insertions, deletions and substitutions required to get from one sequence 
+      to the other. Computing the Levenshtein distance is an interesting problem 
+      in dynamic programming with many practical applications including spell 
+      checkers and the study of DNA in bioinformatics. This article describes 
+      how the basic algorithm may be implemented and then optimized, including 
+      the use of both generic and specialized memoization.</P>
+      <H2>Introduction</H2>
+      <P>Levenshtein distance is named after Vladimir Levenshtein, who described 
+      this metric in 1965. The metric is most easily described in terms of a 
+      recurrence relation:</P>
+<PRE>d(i, 0) = i
+d(i, j) = j
+d(i, j) = 1 + min(d(i-1, j), d(i, j-1), d(i-1, j-1) + if u(i) = v(j) then -1 else 0)</PRE>
+      <P>where              <CODE>u(n)</CODE> is the n             <SUP>th</SUP> 
+      character of the first string and              <CODE>v(n)</CODE> is the n  
+                 <SUP>th</SUP> character of the second string.           </P>
+      <P>This is easily implemented directly in F# as a recursive function:</P>
+<PRE>&gt; let min3(a, b, c) = min a (min b c);;
+val min3 : 'a * 'a * 'a -&gt; 'a</PRE>
+<PRE>&gt; let rec d u v = function
+    | i, 0 | 0, i -&gt; i
+    | i, j -&gt;
+        let d = d u v
+        1 + min3(d(i-1, j), d(i, j-1), d(i-1, j-1) + if u i = v j then -1 else 0);;
+val d : (int -&gt; 'a) -&gt; (int -&gt; 'a) -&gt; int * int -&gt; int</PRE>
+      <P>A version that handles strings may then be written:</P>
+<PRE>&gt; module String =
+    let levenshtein (s: string) (t: string) =
+      d (fun i -&gt; s.[i]) (fun i -&gt; t.[i]) (s.Length - 1, t.Length - 1);;
+module String = begin
+  val levenshtein : string -&gt; string -&gt; int
+end</PRE>
+      <P>For example, the Levenshtein distance between the words              
+      <CODE>Saturday</CODE> and              <CODE>Sunday</CODE> is:           
+      </P>
+<PRE>&gt; String.levenshtein "Saturday" "Sunday";;
+val it : int = 3</PRE>
+      <P>In fact, we can productively visualize the matrix              
+      <CODE>d(i, j)</CODE> that was used to find this final value. This is most 
+      easily done using              <A href="http://www.ffconsultancy.com/products/fsharp_for_visualization/?fsj">F# 
+      for Visualization</A> as follows:           </P>
+<PRE>&gt; #r "FSharp.PowerPack.dll";;
+--&gt; Referenced 'C:\Program Files\FSharp-1.9.6.16\bin\FSharp.PowerPack.dll'</PRE>
+<PRE>&gt; #r @"C:\Program Files\FlyingFrog\FSharpForVisualization.dll";;
+--&gt; Referenced 'C:\Program Files\FlyingFrog\FSharpForVisualization.dll'</PRE>
+<PRE>&gt; open FlyingFrog.Graphics;;</PRE>
+<PRE>&gt; open FlyingFrog.Graphics.Typeset;;</PRE>
+<PRE>&gt; let viz (s: string) (t: string) =
+    Math.Matrix.Generic.init (s.Length+1) (t.Length+1) (fun i j -&gt;
+      match i, j with
+      | 0, 0 -&gt; math ""
+      | i, 0 -&gt; math s.[i-1]
+      | 0, j -&gt; math t.[j-1]
+      | i, j -&gt; d (fun i -&gt; s.[i]) (fun i -&gt; t.[i]) (i-1, j-1) |&gt; math)
+    |&gt; View;;
+val viz : string -&gt; string -&gt; View</PRE>
+<PRE>&gt; viz "Sunday" "Saturday";;</PRE>
+      <P>This produces the following result:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/satsun.gif"> 
+                  </P>
+      <P></P>
+      <P>However, this implementation is wasteful because it recomputes values 
+      in the matrix              <CODE>d(i, j)</CODE> unnecessarily. 
+      Consequently, this implementation is unusably slow for many interesting 
+      problem sizes. For example, computing the edit distance between 
+      "Implementation" and "Innovate" takes the best part of a second:           
+      </P>
+<PRE>&gt; #time;;
+--&gt; Timing now on</PRE>
+<PRE>&gt; String.levenshtein "Implementation" "Innovate";;
+Real: 00:00:00.836, CPU: 00:00:00.904, GC gen0: 26, gen1: 4, gen2: 1
+val it : int = 11</PRE>
+      <P>The challenge of optimizing algorithms like this to avoid the 
+      unnecessary recomputation of intermediate values is known as              
+      <I>dynamic programming</I> .           </P>
+      <H2>Memoization</H2>
+      <P>One powerful and generic solution to dynamic programming is to simply 
+      record the values returned by previous calls as a function of the call's 
+      arguments. This technique is known as              <I>memoization</I> and, 
+      in particular, may be expressed elegantly as a              
+      <CODE>memoize</CODE> combinator:           </P>
+<PRE>&gt; let memoize f =
+    let m = HashMultiMap()
+    let rec f' x =
+      match m.TryFind x with
+      | Some f_x -&gt; f_x
+      | None -&gt;
+          let f_x = f f' x
+          m.[x] &lt;- f_x
+          f_x
+    f';;
+val memoize : (('a -&gt; 'b) -&gt; 'a -&gt; 'b) -&gt; ('a -&gt; 'b)</PRE>
+      <P>This              <CODE>memoize</CODE> combinator takes a function      
+              <CODE>f</CODE> that accepts a memoized version of itself as its 
+      first argument. The              <CODE>memoize</CODE> combinator uses a 
+      hash table for each function to record the previous return values of the 
+      function using the argument as the key. The function              
+      <CODE>f'</CODE> returned by the              <CODE>memoize</CODE> 
+      combinator tries to find a previous return value in its hash table         
+           <CODE>m</CODE> and invokes the original              <CODE>f</CODE> 
+      function (using              <CODE>f'</CODE> itself for recursive calls) 
+      if the return value for that argument has not already been computed. Note 
+      that we are careful to use the              <CODE>TryFind</CODE> member 
+      that returns an option type rather than using ordinary lookup that incurs 
+      an exception when a key is not found because exceptions are extremely slow 
+      on .NET.           </P>
+      <P>Thus, memoized functions avoid recomputation. This technique can be 
+      used to accelerate most dynamic programming problems including the 
+      computation of Levenshtein edit distances.</P>
+      <P>In order to leverage this              <CODE>memoize</CODE> combinator 
+      we must rewrite the              <CODE>d</CODE> function into an 
+      appropriate form:           </P>
+<PRE>&gt; let d u v d' = function
+    | i, 0 | 0, i -&gt; i
+    | i, j -&gt;
+        1 + min3(d'(i-1, j), d'(i, j-1), d'(i-1, j-1) + if u i = v j then -1 else 0);;
+val d : (int -&gt; 'a) -&gt; (int -&gt; 'a) -&gt; (int * int -&gt; int) -&gt; int * int -&gt; int</PRE>
+      <P>The reasons for this form of the              <CODE>d</CODE> function 
+      are quite subtle:           </P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>d</CODE> function is no longer recursive 
+        so the definition is no longer marked with the                  
+        <CODE>rec</CODE> keyword.               </LI>
+        <LI>The recursive calls in the body of the                  
+        <CODE>d</CODE> function have been replaced with calls to a function      
+                    <CODE>d'</CODE> that is passed in as an argument. This is 
+        more flexible and, in particular, allows the                  
+        <CODE>memoize</CODE> combinator to memoize these recursive calls which 
+        is essential to obtain a speedup in this case.               </LI>
+        <LI>For any given external invocation of the                  
+        <CODE>d</CODE> function, the arguments                  <CODE>u</CODE> 
+        and                  <CODE>v</CODE> are invariant between recursive 
+        calls whereas the arguments                  <CODE>i</CODE> and          
+                <CODE>j</CODE> are vary. In order to memoize using only          
+                <CODE>i</CODE> and                  <CODE>j</CODE> as the key, 
+        the arguments                  <CODE>u</CODE> and                  
+        <CODE>v</CODE> are hoisted to before                  <CODE>d'</CODE> in 
+        the sequence of curried arguments to the                  <CODE>d</CODE> 
+        function.               </LI>
+        <LI>The                  <CODE>memoize</CODE> combinator assumes a 
+        single argument (referred to as                  <CODE>x</CODE> inside 
+        the body of the                  <CODE>memoize</CODE> combinator) that 
+        is used as the key. Thus, the arguments                  <CODE>i</CODE> 
+        and                  <CODE>j</CODE> to the                  
+        <CODE>d</CODE> function are coalesced into a single tuple to ensure that 
+        the memoization is performed with respect to both                  
+        <CODE>i</CODE> and                  <CODE>j</CODE> and nothing else 
+        (e.g. neither                  <CODE>u</CODE> nor                  
+        <CODE>v</CODE> ).               </LI></UL>
+      <P></P>
+      <P>The              <CODE>String.levenshtein</CODE> function may then be 
+      written:           </P>
+<PRE>&gt; module String =
+    let levenshtein (s: string) (t: string) =
+      memoize (d (fun i -&gt; s.[i]) (fun i -&gt; t.[i])) (s.Length - 1, t.Length - 1);;
+module String = begin
+  val levenshtein : string -&gt; string -&gt; int
+end</PRE>
+      <P>Note the partial application of the              <CODE>d</CODE> 
+      function with the functions              <CODE>u</CODE> and              
+      <CODE>v</CODE>             <I>before</I> the resulting closure is passed 
+      to the              <CODE>memoize</CODE> combinator. This generates a 
+      memoized function specific to              <CODE>u</CODE> and              
+      <CODE>v</CODE> and, therefore, to the strings              <CODE>s</CODE> 
+      and              <CODE>t</CODE> passed to the              
+      <CODE>String.levenshtein</CODE> function in a particular invocation.       
+          </P>
+      <P>Repeating the previous benchmark using this new memoized Levenshtein 
+      implementation gives the same result over 1,000× faster:</P>
+<PRE>&gt; String.levenshtein "Implementation" "Innovate";;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val it : int = 11</PRE>
+      <P>In fact, this new implementation is asymptotically faster. 
+      Specifically, the recomputation of intermediate results              
+      <CODE>d(i, j)</CODE> in the original version resulted in exponential time 
+      complexity whereas this new implementation calculates only              
+      <I>m</I> ×             <I>n</I> values and, therefore, has only polynomial 
+                   <I>O(m×n)</I> complexity.           </P>
+      <P>Consequently, the new implementation may be used to compute the edit 
+      distance between much longer sequences. For example, computing the 
+      distance between a pair of 600-character strings takes 3.86s:</P>
+<PRE>&gt; let s = String.replicate 100 "foobar";;
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val s : string =
+  "foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarf"+[539 chars]</PRE>
+<PRE>&gt; String.levenshtein s s;;
+Real: 00:00:03.856, CPU: 00:00:03.931, GC gen0: 85, gen1: 30, gen2: 1
+val it : int = 0</PRE>
+      <P>This is correspondingly much more useful.</P>
+      <H2>Easier memoization in F#</H2>
+      <P>In fact, the idiomatic ML code presented in the previous section can be 
+      improved upon because F# offers more flexibility in recursive value 
+      definitions at the expense of possible run-time errors during their 
+      initialization. Specifically, an implementation of the              
+      <CODE>memoize</CODE> combinator that does not explicitly handle recursive 
+      functions that have been untied may still be used in F#:           </P>
+<PRE>&gt; let memoize f =
+    let m = HashMultiMap()
+    fun x -&gt;
+      match m.TryFind x with
+      | Some f_x -&gt; f_x
+      | None -&gt;
+          let f_x = f x
+          m.[x] &lt;- f_x
+          f_x;;
+val memoize : ('a -&gt; 'b) -&gt; ('a -&gt; 'b)</PRE>
+      <P>The call to the              <CODE>memoize</CODE> combinator may now be 
+      placed inside the body of the              <CODE>d</CODE> function:        
+         </P>
+<PRE>&gt; let d u v =
+    let rec d' =
+      memoize (function
+        | i, 0 | 0, i -&gt; i
+        | i, j -&gt;
+            1 + min3(d'(i-1, j), d'(i, j-1), d'(i-1, j-1) + if u i = v j then -1 else 0))
+    d';;
+Program.fsx(85,22): warning FS0040: This and other recursive references
+to the object(s) being defined will be checked for initialization-soundness
+at runtime through the use of a delayed reference. This is because you are
+defining one or more recursive objects, rather than recursive functions.
+This warning may be suppressed by using #nowarn "40" or --nowarn 40.
+val d : (int -&gt; 'a) -&gt; (int -&gt; 'a) -&gt; (int * int -&gt; int)</PRE>
+      <P>Note the warning.</P>
+      <P>The memoized Levenshtein implementation may then be written:</P>
+<PRE>&gt; module String =
+    let levenshtein (s: string) (t: string) =
+      d (fun i -&gt; s.[i]) (fun i -&gt; t.[i]) (s.Length - 1, t.Length - 1);;
+module String = begin
+  val levenshtein : string -&gt; string -&gt; int
+end</PRE>
+      <P>This is simpler but just as efficient as the previous 
+      implementation.</P>
+      <P>For example, computing the distance between a pair of 600-character 
+      strings takes 3.77s:</P>
+<PRE>&gt; String.levenshtein s s;;
+Real: 00:00:03.766, CPU: 00:00:03.775, GC gen0: 87, gen1: 29, gen2: 0
+val it : int = 0</PRE>
+      <H2>Specialized memoization</H2>
+      <P>The generic              <CODE>memoize</CODE> combinators described in 
+      the previous sections are asymptotically efficient but there is still 
+      plenty of room for optimization.           </P>
+      <P>There are two main performance bottlenecks in the previous 
+      implementations:</P>
+      <P>
+      <UL>
+        <LI>Heap allocation of tuples.</LI>
+        <LI>Hash table lookup.</LI></UL>
+      <P></P>
+      <P>The heap allocation of tuples may be avoided by replacing the           
+         <CODE>(i, j)</CODE> tuple with a dedicated struct type:           </P>
+<PRE>&gt; [&lt;Struct&gt;]
+  type intint = struct
+    val i : int
+    val j : int
+    new(i, j) = { i = i; j = j }
+  end;;
+type intint =
+  struct
+    new : i:int * j:int -&gt; intint
+    val i: int
+    val j: int
+  end</PRE>
+<PRE>&gt; let d u v =
+    let rec d' : intint -&gt; int =
+      memoize (function
+        | {i=i; j=0} | {i=0; j=i} -&gt; i
+        | {i=i; j=j} -&gt;
+            let d(i, j) = d'(intint(i, j))
+            1 + min3(d(i-1, j), d(i, j-1), d(i-1, j-1) + if u i = v j then -1 else 0))
+    d';;
+Program.fsx(121,22): warning FS0040: This and other recursive references
+to the object(s) being defined will be checked for initialization-soundness
+at runtime through the use of a delayed reference. This is because you are
+defining one or more recursive objects, rather than recursive functions.
+This warning may be suppressed by using #nowarn "40" or --nowarn 40.
+Real: 00:00:00.000, CPU: 00:00:00.000, GC gen0: 0, gen1: 0, gen2: 0
+val d : (int -&gt; 'a) -&gt; (int -&gt; 'a) -&gt; (intint -&gt; int)</PRE>
+<PRE>&gt; module String =
+    let levenshtein (s: string) (t: string) =
+      d (fun i -&gt; s.[i]) (fun i -&gt; t.[i]) (s.Length - 1, t.Length - 1);;
+module String = begin
+  val levenshtein : string -&gt; string -&gt; int
+end</PRE>
+<PRE>&gt; String.levenshtein s s;;
+Real: 00:00:01.571, CPU: 00:00:01.575, GC gen0: 56, gen1: 0, gen2: 0
+val it : int = 0</PRE>
+      <P>This is 2.4× faster, reducing the time taken to compute the Levenshtein 
+      distance between a pair of 600-character strings from 3.77s down to 
+      1.57s.</P>
+      <P>Hash table lookup is inherently slow but can be optimized by providing  
+                  <CODE>Equals</CODE> and              <CODE>GetHashCode</CODE> 
+      members for our custom              <CODE>intint</CODE> type:           
+      </P>
+<PRE>&gt; [&lt;Struct&gt;]
+  [&lt;StructuralEquality(false)&gt;]
+  [&lt;StructuralComparison(false)&gt;]
+  type intint = struct
+    val i : int
+    val j : int
+    new(i, j) = { i = i; j = j }
+    override x.Equals y =
+      let y = y :?&gt; intint
+      x.i = y.i &amp;&amp; x.j = y.j
+    override x.GetHashCode() =
+      x.i + x.j * 65536
+  end;;
+type intint =
+  struct
+    new : i:int * j:int -&gt; intint
+    val i: int
+    val j: int
+    override Equals : y:obj -&gt; bool
+    override GetHashCode : unit -&gt; int
+  end</PRE>
+<PRE>...</PRE>
+<PRE>&gt; String.levenshtein s s;;
+Real: 00:00:00.822, CPU: 00:00:00.826, GC gen0: 25, gen1: 0, gen2: 0
+val it : int = 0</PRE>
+      <P>This is over 90% faster, reducing the time taken to compute the 
+      Levenshtein distance between a pair of 600-character strings from 1.57s 
+      down to 0.822s.</P>
+      <P>The simplest way to avoid hash table lookup is to use a more 
+      specialized structure such as a matrix that does not require the 
+      computation and handling of hashes:</P>
+<PRE>&gt; let memoize m n f =
+    let m = Array2D.create m n (-1)
+    fun (i, j) -&gt;
+      let f_x = m.[i, j]
+      if f_x &gt;= 0 then f_x else
+        let f_ij = f (i, j)
+        m.[i, j] &lt;- f_ij
+        f_ij;;
+val memoize : int -&gt; int -&gt; (int * int -&gt; int) -&gt; (int * int -&gt; int)</PRE>
+<PRE>&gt; module String =
+    let levenshtein (s: string) (t: string) =
+      let u i = s.[i]
+      let v i = t.[i]
+      let m, n = s.Length, t.Length
+      let rec d =
+        memoize m n (function
+          | i, 0 | 0, i -&gt; i
+          | i, j -&gt;
+              1 + min3(d(i-1, j), d(i, j-1), d(i-1, j-1) + if u i = v j then -1 else 0))
+      d(m-1, n-1);;
+module String = begin
+  val levenshtein : string -&gt; string -&gt; int
+end</PRE>
+<PRE>&gt; String.levenshtein s s;;
+Real: 00:00:00.240, CPU: 00:00:00.249, GC gen0: 13, gen1: 1, gen2: 0
+val it : int = 0</PRE>
+      <P>This specialized form of lookup is over 3.4× faster, reducing the time 
+      taken to compute the Levenshtein distance between a pair of 600-character 
+      strings from 0.822s down to 0.240s.</P>
+      <H2>Optimized graph reduction</H2>
+      <P>An even more efficient alternative to the elegantly-factored            
+        <CODE>memoize</CODE> combinator is to exploit the nature of the graph 
+      reduction problem directly. Specifically, we know that the matrix elements 
+      can be filled out in an order that ensures that previous computations have 
+      already been completed. Consequently, there is no need for costly lookup.  
+               </P>
+      <P>This is most easily written as follows:</P>
+<PRE>&gt; let d (m, u) (n, v) =
+    let d = Array2D.init m n max
+    for i=1 to m-1 do
+      for j=1 to n-1 do
+        d.[i, j] &lt;-
+          1 + min3(d.[i-1, j], d.[i, j-1], d.[i-1, j-1] + if u i = v j then -1 else 0)
+    d.[m-1, n-1];;
+val d : int * (int -&gt; 'a) -&gt; int * (int -&gt; 'a) -&gt; int</PRE>
+<PRE>&gt; module String =
+    let levenshtein (s: string) (t: string) =
+      d (s.Length, fun i -&gt; s.[i]) (t.Length, fun i -&gt; t.[i]);;
+module String = begin
+  val levenshtein : string -&gt; string -&gt; int
+end</PRE>
+      <P>Finally, the memory requirements may be reduced from              
+      <I>O(m×n)</I> to              <I>O(n)</I> by maintaining only the current 
+      and previous rows in the matrix at any given time:           </P>
+<PRE>&gt; let d (m, u) (n, v) =
+    let d1 = Array.init n id
+    let d0 = Array.create n 0
+    for i=1 to m-1 do
+      d0.[0] &lt;- i
+      let ui = u i
+      for j=1 to n-1 do
+        d0.[j] &lt;- 1 + min3(d1.[j], d0.[j-1], d1.[j-1] + if ui = v j then -1 else 0)
+      Array.blit d0 0 d1 0 n
+    d0.[n-1];;
+val d : int * (int -&gt; 'a) -&gt; int * (int -&gt; 'a) -&gt; int</PRE>
+      <P>This reduces the time taken from 0.240s to 0.222s.</P>
+      <H2>Summary</H2>
+      <P>This article has shown how a simple algorithm expressed mathematically 
+      as a recurrence relation may be computed directly using a recursive 
+      function in F# and then optimized using dynamic programming techniques in 
+      order to avoid recomputing intermediate results. The resulting optimized 
+      implementation was over 17× faster than the original generically memoized 
+      implementation.</P>
+      <P>Future F#.NET Journal articles will revisit the topic of dynamic 
+      programming in the context of other algorithms than reduce a problem into 
+      smaller but overlapping subproblems.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Dynamic%20programming%20Levenshtein%20edit%20distance_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

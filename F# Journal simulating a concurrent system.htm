@@ -1,0 +1,191 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0090)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/SimulatedConcurrency.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20simulating%20a%20concurrent%20system_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20simulating%20a%20concurrent%20system_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20simulating%20a%20concurrent%20system_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20simulating%20a%20concurrent%20system_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20simulating%20a%20concurrent%20system_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Simulating a concurrent system</H1>
+      <P>Distributed concurrency can be complicated and, consequently, there can 
+      be great value in having a complete working prototype to study. The 
+      simplicity of asynchronous agents in F# makes them ideal for writing 
+      simulation code. This article describes the design of a simple concurrent 
+      system that distributes incoming messages between two separate concurrent 
+      systems in order to duplicate subsequent processing in order to provide 
+      fault tolerance.</P>
+      <H2>Architecture</H2>
+      <P>Fault tolerance has traditionally been attained using a hot-cold 
+      architecture where a primary system processes incoming messages and logs 
+      its results on disk so that a secondary system can reload the current 
+      state and continue in the event of the primary system failing. Although 
+      common, this approach to fault tolerance has several drawbacks. Firstly, 
+      the input and output points are single points of failure. Secondly, hard 
+      disks are increasingly unreliable, e.g. in guaranteeing to have actually 
+      persisted data. Thirdly, reliable databases like SQL Server can be 
+      expensive. Fourthly, databases are comparatively high latency and 
+      applications increasingly pursue low latency solutions.</P>
+      <P>These problems can all be addressed by a simple change in architecture. 
+      An alternative approach to fault tolerance is to run two machines in 
+      parallel processing the same stream of messages. In the event of either 
+      machine failing the other machine simply continues to process all incoming 
+      messages by itself. With this architecture there are two input points and 
+      two output points, eliminating the tricky single points of failure in the 
+      traditional system. As this architecture has no need to persist data to 
+      disk it evades the reliability and latency issues of doing so. Finally, 
+      this fault tolerant design can be implemented quickly and simply using 
+      asynchronous agents in F#, evading the need for expensive commercial 
+      products like reliable databases.</P>
+      <P>The simplest way to distribute two separate streams of incoming 
+      messages into two identical streams is to introduce a scatter-gather stage 
+      in the pipeline. When either machine receives an incoming message it sends 
+      a copy of the message to the other machine and enqueues the message on a 
+      local message queue. When either machine receives a message from its twin 
+      it dequeues a message from its local queue and processes both 
+messages.</P>
+      <P>The resulting stream of messages then contains all messages received 
+      but the pairs of messages may appear either way around. This problem is 
+      most simply solved by simply sorting the pairs of messages before 
+      processing them.</P>
+      <H2>A real twin engine</H2>
+      <P>We refer to the two communicating concurrent systems as "twin engines" 
+      as an analogy to a twin engine aircraft capable of flying on just one 
+      engine. Incoming messages go in the "intake" of an engine and results 
+      leave the "exhaust".</P>
+      <P>Our design requires the ability to tell whether a message received by a 
+      twin engine came from the intake or from its twin so we create the 
+      following <CODE>IntakeMessage</CODE> union type to convey this 
+      distinction:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;IntakeMessage&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromIntake&nbsp;of&nbsp;'T<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromTwin&nbsp;of&nbsp;'T&nbsp;option;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;IntakeMessage&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromIntake&nbsp;of&nbsp;'T<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromTwin&nbsp;of&nbsp;'T&nbsp;option</CODE></P>
+      <P>In addition to processing incoming messages, our twin engines will also 
+      obey a shutdown command so the following 
+      <CODE>TwinEngineInstruction</CODE> union type represents the two different 
+      kinds of instruction:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;TwinEngineInstruction&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Shutdown&nbsp;of&nbsp;AsyncReplyChannel&lt;unit&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Execute&nbsp;of&nbsp;'T;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;TwinEngineInstruction&lt;'T&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Shutdown&nbsp;of&nbsp;AsyncReplyChannel&lt;unit&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Execute&nbsp;of&nbsp;'T</CODE></P>
+      <P>The following <CODE>TwinEngine</CODE> class uses an internal 
+      asynchronous agent to handle messages from its intake and from its twin, 
+      applying the given <CODE>Exhaust</CODE> function to each message in the 
+      resulting stream in order to process it:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;TwinEngine&lt;'T&nbsp;when&nbsp;'T:&nbsp;comparison&gt;(Exhaust:&nbsp;'T&nbsp;-&gt;&nbsp;unit)&nbsp;=</CODE></P>
+      <P>We cannot tie the two twin engines together directly so we leave the 
+      function used to send a message to the other twin engine as a mutable and 
+      set it during initialization:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;postToTwin&nbsp;:&nbsp;'T&nbsp;option&nbsp;-&gt;&nbsp;unit&nbsp;=&nbsp;ignore</CODE></P>
+      <P>The core logic of a twin engine is encapsulated in the following 
+      <CODE>scatterGather</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;scatterGather&nbsp;msg&nbsp;queue&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;msg,&nbsp;queue&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromIntake&nbsp;msg,&nbsp;queue&nbsp;-&gt;&nbsp;Some(Some&nbsp;msg),&nbsp;[],&nbsp;queue&nbsp;@&nbsp;[msg]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromTwin(Some&nbsp;msg),&nbsp;[]&nbsp;-&gt;&nbsp;Some&nbsp;None,&nbsp;[msg],&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromTwin&nbsp;None,&nbsp;msg::queue&nbsp;-&gt;&nbsp;None,&nbsp;[msg],&nbsp;queue<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromTwin(Some&nbsp;msg1),&nbsp;msg2::queue&nbsp;-&gt;&nbsp;None,&nbsp;[msg1;&nbsp;msg2],&nbsp;queue<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;FromTwin&nbsp;None,&nbsp;[]&nbsp;-&gt;&nbsp;failwith&nbsp;"Internal&nbsp;error"</CODE></P>
+      <P>The first match case handles a message from the intake by posting it to 
+      the other twin engine and enqueuing it locally. Note that we have chosen 
+      to append to the end of a linked list in order to mimic a queue. This will 
+      be inefficient if the queue gets long but that is not expected to happen 
+      because the engines should process messages very quickly.</P>
+      <P>The second match case handles a message received from the twin when our 
+      local message queue is empty. In this case, we send an empty message back 
+      to our twin and process the single message that we just received.</P>
+      <P>The third match case handles an empty message from the twin when we do 
+      have a message enqueued locally. In this case, we do not post to our twin, 
+      do process the single message from our queue and continue to process the 
+      remaining messages in our queue.</P>
+      <P>The fourth match case handles a message received from our twin when we 
+      do have a message in our queue. In this case, we do not post to our twin, 
+      process both the message from the twin and the message from our queue and 
+      continue using the remaining queue.</P>
+      <P>Finally, the queue should never be empty when we receive a message from 
+      our twin. If this event does occur then we raise an exception.</P>
+      <P>Note how pattern matching allows this core logic to be expressed very 
+      simply.</P>
+      <P>The asynchronous agent responsible for processing instructions may then 
+      be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;agent&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor&lt;_&gt;.Start(fun&nbsp;inbox&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;queue&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;msg&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;msg&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Shutdown&nbsp;reply&nbsp;-&gt;&nbsp;reply.Reply()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Execute&nbsp;msg&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;toPost,&nbsp;toExecute,&nbsp;queue&nbsp;=&nbsp;scatterGather&nbsp;msg&nbsp;queue<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Option.iter&nbsp;postToTwin&nbsp;toPost<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List.sort&nbsp;toExecute&nbsp;|&gt;&nbsp;List.iter&nbsp;Exhaust<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return!&nbsp;loop&nbsp;queue<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;[])</CODE></P>
+      <P>The <CODE>Shutdown</CODE> instruction carries a <CODE>reply</CODE> that 
+      is used to block the caller until the twin engine has actually shutdown. 
+      The <CODE>Execute</CODE> instruction uses the <CODE>scatterGather</CODE> 
+      function to determine the course of action and then posts a message to the 
+      twin engine (if necessary), sorts the messages that are to be processed 
+      and uses the <CODE>Exhaust</CODE> function to process them before looping 
+      back.</P>
+      <P>Note that we use <CODE>return!</CODE> for the recursive call to 
+      <CODE>loop</CODE> and not <CODE>do!</CODE> to ensure that we have tail 
+      recursion and do not leak memory.</P>
+      <P>Our agent handles the concurrency for us but we can present a more 
+      elegant API in the form of traditional object methods. The 
+      <CODE>Intake</CODE> member posts a message to our agent from the intake 
+      for processing:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Intake&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.Post(Execute(FromIntake&nbsp;msg))</CODE></P>
+      <P>The <CODE>PostFromTwin</CODE> member posts a message to our agent from 
+      the other twin engine:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.PostFromTwin&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.Post(Execute(FromTwin&nbsp;msg))</CODE></P>
+      <P>The <CODE>SetPostToTwin</CODE> function sets the function used to post 
+      to the other twin engine:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.SetPostToTwin&nbsp;post&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;postToTwin&nbsp;&lt;-&nbsp;post</CODE></P>
+      <P>Finally, we implement the <CODE>IDisposable</CODE> interface by 
+      executing the <CODE>Shutdown</CODE> instruction and, after the engine has 
+      shut itself down, disposing of the asynchronous agent itself:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Dispose()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agent.PostAndReply(fun&nbsp;reply&nbsp;-&gt;&nbsp;Shutdown&nbsp;reply)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(agent&nbsp;:&gt;&nbsp;System.IDisposable).Dispose();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;TwinEngine&lt;'T&nbsp;when&nbsp;'T&nbsp;:&nbsp;comparison&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;Exhaust:('T&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;TwinEngine&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Intake&nbsp;:&nbsp;msg:'T&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;PostFromTwin&nbsp;:&nbsp;msg:'T&nbsp;option&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;SetPostToTwin&nbsp;:&nbsp;post:('T&nbsp;option&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <H2>Simulating a pair of twin engines</H2>
+      <P>The section above described the implementation of a single twin engine 
+      using an asynchronous agent. Despite the simplicity of the design there is 
+      always room for error in concurrent systems. Consequently, it is valuable 
+      to be able to simulate a pair of connected twin engines to vindicate our 
+      design and implementation.</P>
+      <P>The following <CODE>TwinEnginePair</CODE> class creates two twin 
+      engines and connects them:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;TwinEnginePair&lt;'T&nbsp;when&nbsp;'T:&nbsp;comparison&gt;(exhaust)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;twin1&nbsp;=&nbsp;new&nbsp;TwinEngine&lt;'T&gt;(exhaust&nbsp;0)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;twin2&nbsp;=&nbsp;new&nbsp;TwinEngine&lt;'T&gt;(exhaust&nbsp;1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twin1.SetPostToTwin&nbsp;twin2.PostFromTwin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twin2.SetPostToTwin&nbsp;twin1.PostFromTwin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Twin1&nbsp;=&nbsp;twin1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Twin2&nbsp;=&nbsp;twin2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;__.Dispose()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;twin&nbsp;in&nbsp;[twin1;&nbsp;twin2]&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(twin&nbsp;:&gt;&nbsp;System.IDisposable).Dispose();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;TwinEnginePair&lt;'T&nbsp;when&nbsp;'T&nbsp;:&nbsp;comparison&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;class<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.IDisposable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;exhaust:(int&nbsp;-&gt;&nbsp;'T&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;TwinEnginePair&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Twin1&nbsp;:&nbsp;TwinEngine&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Twin2&nbsp;:&nbsp;TwinEngine&lt;'T&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following <CODE>loadGenerator</CODE> function accepts a sequence of 
+      messages, creates two twin engines and then feeds the messages into one 
+      and then the other twin engine in turn, recording the outputs from the 
+      twin engine exhausts in a pair of resizeable arrays:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;loadGenerator&nbsp;(inputMessages:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;inputMessages.Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;outputs&nbsp;=&nbsp;Array.init&nbsp;2&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;ResizeArray())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;barrier&nbsp;=&nbsp;new&nbsp;System.Threading.Barrier(3)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;exhaust&nbsp;id&nbsp;msg&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outputs.[id].Add&nbsp;msg<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;outputs.[id].Count&nbsp;=&nbsp;2*n&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;barrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;twinEngines&nbsp;=&nbsp;new&nbsp;TwinEnginePair&lt;_&gt;(exhaust)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;msg&nbsp;in&nbsp;inputMessages&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twinEngines.Twin1.Intake(0,&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;msg&nbsp;in&nbsp;inputMessages&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;twinEngines.Twin2.Intake(1,&nbsp;msg)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;barrier.SignalAndWait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;outputs.[0].ToArray(),&nbsp;outputs.[1].ToArray();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;loadGenerator&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;(int&nbsp;*&nbsp;'a)&nbsp;[]&nbsp;*&nbsp;(int&nbsp;*&nbsp;'a)&nbsp;[]&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>Finally, we can test and benchmark the twin engines as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;3000<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;inputs&nbsp;=&nbsp;Array.init&nbsp;n&nbsp;id<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;timer&nbsp;=&nbsp;System.Diagnostics.Stopwatch.StartNew()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;outputs1,&nbsp;outputs2&nbsp;=&nbsp;loadGenerator&nbsp;inputs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"%0.0f&nbsp;msgs/s"&nbsp;(float&nbsp;n&nbsp;/&nbsp;timer.Elapsed.TotalSeconds)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;outputs1&nbsp;=&nbsp;outputs2&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;outputs&nbsp;=&nbsp;outputs1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;from&nbsp;n&nbsp;=&nbsp;outputs&nbsp;|&gt;&nbsp;Array.choose&nbsp;(fun&nbsp;(i,&nbsp;msg)&nbsp;-&gt;&nbsp;if&nbsp;i=n&nbsp;then&nbsp;Some&nbsp;msg&nbsp;else&nbsp;None)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;inputs&nbsp;&lt;&gt;&nbsp;from&nbsp;0&nbsp;||&nbsp;inputs&nbsp;&lt;&gt;&nbsp;from&nbsp;1&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;failwith&nbsp;"ERROR:&nbsp;Exhausts&nbsp;contain&nbsp;incorrect&nbsp;data"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;failwith&nbsp;"ERROR:&nbsp;Exhausts&nbsp;differ";;<BR>&nbsp;&nbsp;&nbsp;&nbsp;1600&nbsp;msgs/s<BR>&nbsp;&nbsp;&nbsp;&nbsp;1815&nbsp;msgs/s<BR>&nbsp;&nbsp;&nbsp;&nbsp;2106&nbsp;msgs/s<BR>&nbsp;&nbsp;&nbsp;&nbsp;2221&nbsp;msgs/s<BR>&nbsp;&nbsp;&nbsp;&nbsp;2246&nbsp;msgs/s<BR>&nbsp;&nbsp;&nbsp;&nbsp;...</CODE></P>
+      <P>We find that the exhausts of the twin engines satisfy three tests. 
+      Firstly, the two exhaust streams were identical. Secondly, the outputs 
+      tagged as being from the first intake match the input messages and those 
+      from the second intake also match the input messages. So the twin engines 
+      successfully multiplexes the two input streams into two identical streams. 
+      This simple implementation is able to sustain around 2k msgs/s.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a simple 
+      system that converts a pair of input streams into a pair of identical 
+      output streams where each output stream contains all of the input messages 
+      from both input streams.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of distributed 
+      concurrency and fault tolerance.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20simulating%20a%20concurrent%20system_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

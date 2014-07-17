@@ -1,0 +1,174 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0084)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/cacheoblivious.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+     <TITLE>F# Journal</TITLE>     
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20matrix%20multiply_files/style.css" rel="stylesheet" type="text/css"> 
+    <LINK href="F%23%20Journal%20matrix%20multiply_files/style(1).css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20matrix%20multiply_files/individual.css" 
+rel="stylesheet" type="text/css">   
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>   
+<BODY>
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20matrix%20multiply_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20matrix%20multiply_files/left.gif">         
+    </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Cache oblivious algorithms: Matrix multiply</H1>
+      <P>The widespread adoption of CPU caches around two decades ago forced a 
+      change in the way programmers traverse data structures when performance is 
+      of interest. The classic style was to iterate directly using 
+      <CODE>for</CODE> loops. Two new styles have emerged: either a cache aware 
+      set of loops that tile the dataset into fixed-size subsets that fit into a 
+      cache of a known size, or a cache oblivious style that uses divide and 
+      conquer to subdivide the problem until it fits into the cache regardless 
+      its size. This article describes the revolutionary idea of cache oblivious 
+      algorithms via the elegant and efficient implementation of a matrix 
+      multiply in F#. In particular, we demonstrate the importance of these 
+      techniques in the context of multicore programming.</P>
+      <H2>Introduction</H2>
+      <P>In 1999, Harold Prokop of the Massachusetts Institute of Technology 
+      wrote a seminal thesis for his masters degree titled "Cache Oblivious 
+      Algorithms" that popularized this approach and gave it a formal 
+      foundation. In his thesis, Harold introduced a simple theoretical model 
+      for a CPU with a cache and, in particular, introduces the concept of cache 
+      complexity as an asymptotic approximation of the expected number of cache 
+      misses an algorithm will suffer as a function of problem size. This simple 
+      model turned out to be a remarkably powerful predictor of real-world 
+      performance and led to the development of a wide variety of 
+      production-quality cache oblivious algorithms.</P>
+      <P>This article skips over the theoretical foundations and focuses on the 
+      translation of some famous cache oblivious designs to F# and the basic 
+      style that leads to cache obliviousness. This is particularly interesting 
+      in the context of F# because cache oblivious algorithms always use a 
+      divide-and-conquer strategy that naturally lends itself to recursion. The 
+      use of an impure functional programming language such as F# is essential 
+      because cache obliviousness relies upon the ability to exploit locality by 
+      reusing data structures, mutating them in-place.</P>
+      <H2>Matrix multiply</H2>
+      <P>The pedagogical example of a cache oblivious algorithm is a matrix 
+      multiply.</P>
+      <H3>Cache unaware</H3>
+      <P>The classic style of matrix multiply is written as three nested 
+      loops:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;DO&nbsp;I&nbsp;=&nbsp;1,&nbsp;M<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DO&nbsp;K&nbsp;=&nbsp;1,&nbsp;M<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DO&nbsp;J&nbsp;=&nbsp;1,&nbsp;M<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Z(J,&nbsp;I)&nbsp;=&nbsp;Z(J,&nbsp;I)&nbsp;+&nbsp;X(K,&nbsp;I)&nbsp;*&nbsp;Y(J,&nbsp;K)</CODE></P>
+      <P>This may be written in F# as:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;matmul&nbsp;n&nbsp;(a:&nbsp;_&nbsp;[])&nbsp;(b:&nbsp;_&nbsp;[])&nbsp;=&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;Array.create&nbsp;(n*n)&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i&nbsp;=&nbsp;i&nbsp;*&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.[i&nbsp;+&nbsp;j]&nbsp;&lt;-&nbsp;c.[i&nbsp;+&nbsp;j]&nbsp;+&nbsp;a.[i&nbsp;+&nbsp;k]&nbsp;*&nbsp;b.[k*n&nbsp;+&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;matmul&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;-&gt;&nbsp;float&nbsp;[]</CODE></P>
+      <P>Note that we have been careful to optimize this 
+      fundamentally-inefficient function in order to draw strong conclusions 
+      about the performance advantages of the forthcoming cache oblivious 
+      algorithm. Specifically, we avoid 2D arrays because they incur a 
+      substantial overhead and we encode as a single array rather than an array 
+      of arrays because this is slightly faster.</P>
+      <P>This cache unaware implementation takes 1.275s to square a 600×600 
+      matrix and 3.066s to square an 800×800 matrix on this 8-core 2× 2.0GHz 
+      E5405 quadcore Xeon workstation:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;n&nbsp;=&nbsp;600;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;n&nbsp;:&nbsp;int&nbsp;=&nbsp;600<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;f&nbsp;i&nbsp;j&nbsp;=&nbsp;1.0&nbsp;/&nbsp;(1.0&nbsp;+&nbsp;float&nbsp;i&nbsp;+&nbsp;float&nbsp;j);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;f&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;float<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;a&nbsp;=&nbsp;Array.init&nbsp;(n*n)&nbsp;(fun&nbsp;i&nbsp;-&gt;&nbsp;f&nbsp;(i&nbsp;/&nbsp;n)&nbsp;(i&nbsp;%&nbsp;n));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;...<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;a2'&nbsp;=&nbsp;matmul&nbsp;n&nbsp;a&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:01.275,&nbsp;CPU:&nbsp;00:00:01.279,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;...</CODE></P>
+      <P>We can test the correctness of this result as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;a2&nbsp;=&nbsp;(fun&nbsp;a&nbsp;-&gt;&nbsp;a&nbsp;*&nbsp;a)&nbsp;(Matrix.init&nbsp;n&nbsp;n&nbsp;f);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;...<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;a2&nbsp;=&nbsp;a2';;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;bool&nbsp;=&nbsp;true</CODE></P>
+      <P>The challenge is to try to improve upon this performance by making 
+      better use of the cache.</P>
+      <H3>Cache aware</H3>
+      <P>A cache aware implementation of matrix multiplication may be written by 
+      tiling the loops:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;DO&nbsp;K2&nbsp;=&nbsp;1,&nbsp;M,&nbsp;B<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DO&nbsp;J2&nbsp;=&nbsp;1,&nbsp;M,&nbsp;B<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DO&nbsp;I&nbsp;=&nbsp;1,&nbsp;M<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DO&nbsp;K1&nbsp;=&nbsp;K2,&nbsp;MIN(K2&nbsp;+&nbsp;B&nbsp;-&nbsp;1,&nbsp;M)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DO&nbsp;J1&nbsp;=&nbsp;J2,&nbsp;MIN(J2&nbsp;+&nbsp;B&nbsp;-&nbsp;1,&nbsp;M)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Z(J1,&nbsp;I)&nbsp;=&nbsp;Z(J1,&nbsp;I)&nbsp;+&nbsp;X(K1,&nbsp;I)&nbsp;*&nbsp;Y(J1,&nbsp;K1)</CODE></P>
+      <P>For some tile size <CODE>B</CODE> appropriate for the given machine's 
+      cache size.</P>
+      <P>This may be written in F# as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;matmul&nbsp;z&nbsp;n&nbsp;(a:&nbsp;_&nbsp;[])&nbsp;(b:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;Array.create&nbsp;(n&nbsp;*&nbsp;n)&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i'=0&nbsp;to&nbsp;(n&nbsp;-&nbsp;1)/z&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j'=0&nbsp;to&nbsp;(n&nbsp;-&nbsp;1)/z&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i',&nbsp;j'&nbsp;=&nbsp;i'*z,&nbsp;j'*z<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=0&nbsp;to&nbsp;n-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=i'&nbsp;to&nbsp;min&nbsp;(i'&nbsp;+&nbsp;z&nbsp;-&nbsp;1)&nbsp;(n&nbsp;-&nbsp;1)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i&nbsp;=&nbsp;i&nbsp;*&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=j'&nbsp;to&nbsp;min&nbsp;(j'&nbsp;+&nbsp;z&nbsp;-&nbsp;1)&nbsp;(n&nbsp;-&nbsp;1)&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.[i&nbsp;+&nbsp;j]&nbsp;&lt;-&nbsp;c.[i&nbsp;+&nbsp;j]&nbsp;+&nbsp;a.[i&nbsp;+&nbsp;k]&nbsp;*&nbsp;b.[k*n&nbsp;+&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;matmul&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;-&gt;&nbsp;float&nbsp;[]</CODE></P>
+      <P>Experimental tests show that a tile size of 50 matrix elements in each 
+      dimension is ideal. The result may be tested for correctness as 
+      follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;a2'&nbsp;=&nbsp;matmul&nbsp;50&nbsp;n&nbsp;a&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:01.262,&nbsp;CPU:&nbsp;00:00:01.248,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;...<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;a2&nbsp;=&nbsp;a2';;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;bool&nbsp;=&nbsp;true</CODE></P>
+      <P>Repeating the previous benchmark we find this cache aware algorithm 
+      solves the same problems in 1.262s and 3.012s, respectively. These 
+      marginal performance improvements over the naive cache unaware algorithm 
+      make the extra effort seem like a complete waste of time and, indeed, many 
+      people make the mistake of ignoring these techniques because they do not 
+      show up on such simple tests.</P>
+      <P>However, the machine is working quite differently in the two cases. 
+      Specifically, the cache unaware algorithm is silently incurring a a huge 
+      number of L2 cache misses that go to all the way to main memory whereas 
+      the cache aware algorithm is incurring fewer L2 cache misses and only goes 
+      to main memory between tiles. Performance was unaffected on our 
+      preliminary tests because this machine has enough memory bandwidth to let 
+      one core thrash main memory to this extent without degrading its 
+      performance. However, if multiple cores attempt to thrash main memory then 
+      there will be significant contention and performance will be degraded.</P>
+      <P>The following <CODE>doN</CODE> function performs the same operation 
+      redundantly in parallel the given number of times:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;doN&nbsp;n&nbsp;f&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;fs&nbsp;=&nbsp;Array.init&nbsp;n&nbsp;(fun&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;System.Threading.Tasks.Task.Factory.StartNew(fun&nbsp;()&nbsp;-&gt;&nbsp;f&nbsp;x))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;f&nbsp;in&nbsp;fs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f.Wait()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fs.[0].Result;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;doN&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;('a&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'b</CODE></P>
+      <P>Repeating the benchmark using all 8 cores as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;a2'&nbsp;=&nbsp;doN&nbsp;8&nbsp;(matmul&nbsp;50&nbsp;n&nbsp;a)&nbsp;a;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:01.615,&nbsp;CPU:&nbsp;00:00:10.748,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;...</CODE></P>
+      <P>we obtain quite different results. Specifically, the naive cache 
+      unaware algorithm takes 1.315s to square a 600×600 matrix, which is only 
+      slightly slower than before, but it takes a whopping 8.386s on a 800×800 
+      matrix. The larger problem does not fit in the L2 cache so it incurs many 
+      cache misses with the cache unaware algorithm, resulting in contention for 
+      main memory that degrades parallel scalability because main memory is a 
+      shared resource. In this case, that cache unaware algorithm becomes 2.7× 
+      slower than ideal when used in parallel. This is illustrated in the 
+      following graph of the time taken per FLOP for the serial (red) and 
+      parallel (green) case:</P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20matrix%20multiply_files/MatMulUnawareSerPar.png"></P>
+      <P>In contrast, the cache aware algorithm that uses tiles tuned for this 
+      particular machine takes 1.436s and 3.763s. This still represents a slight 
+      25% performance degradation in the parallel case but that is nowhere near 
+      as severe as the cache unaware algorithm.</P>
+      <H3>Cache oblivious</H3>
+      <P>A cache oblivious implementation of this algorithm may be written by 
+      recursively subdividing every loop until its range falls under a 
+      threshold, at which point the cache unaware triple loop is used:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;matmul&nbsp;threshold&nbsp;n&nbsp;(a:&nbsp;_&nbsp;[])&nbsp;(b:&nbsp;_&nbsp;[])&nbsp;=&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;c&nbsp;=&nbsp;Array.create&nbsp;(n&nbsp;*&nbsp;n)&nbsp;0.0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop(i0,&nbsp;i1,&nbsp;j0,&nbsp;j1,&nbsp;k0,&nbsp;k1)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;di,&nbsp;dj,&nbsp;dk&nbsp;=&nbsp;i1&nbsp;-&nbsp;i0,&nbsp;j1&nbsp;-&nbsp;j0,&nbsp;k1&nbsp;-&nbsp;k0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;di&nbsp;&gt;=&nbsp;dj&nbsp;&amp;&amp;&nbsp;di&nbsp;&gt;=&nbsp;dk&nbsp;&amp;&amp;&nbsp;di&nbsp;&gt;=&nbsp;threshold&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mi&nbsp;=&nbsp;i0&nbsp;+&nbsp;di&nbsp;/&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(i0,&nbsp;mi,&nbsp;j0,&nbsp;j1,&nbsp;k0,&nbsp;k1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(mi,&nbsp;i1,&nbsp;j0,&nbsp;j1,&nbsp;k0,&nbsp;k1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dj&nbsp;&gt;=&nbsp;dk&nbsp;&amp;&amp;&nbsp;dj&nbsp;&gt;=&nbsp;threshold&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mj&nbsp;=&nbsp;j0&nbsp;+&nbsp;dj&nbsp;/&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(i0,&nbsp;i1,&nbsp;j0,&nbsp;mj,&nbsp;k0,&nbsp;k1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(i0,&nbsp;i1,&nbsp;mj,&nbsp;j1,&nbsp;k0,&nbsp;k1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;dk&nbsp;&gt;=&nbsp;threshold&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mk&nbsp;=&nbsp;k0&nbsp;+&nbsp;dk&nbsp;/&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop(i0,&nbsp;i1,&nbsp;j0,&nbsp;j1,&nbsp;k0,&nbsp;mk)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop(i0,&nbsp;i1,&nbsp;j0,&nbsp;j1,&nbsp;mk,&nbsp;k1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;k=k0&nbsp;to&nbsp;k1-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=i0&nbsp;to&nbsp;i1-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i&nbsp;=&nbsp;i&nbsp;*&nbsp;n<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j=j0&nbsp;to&nbsp;j1-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c.[i+j]&nbsp;&lt;-&nbsp;c.[i+j]&nbsp;+&nbsp;a.[i+k]&nbsp;*&nbsp;b.[k*n&nbsp;+&nbsp;j]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop(0,&nbsp;n,&nbsp;0,&nbsp;n,&nbsp;0,&nbsp;n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;c;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;matmul&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;-&gt;&nbsp;float&nbsp;[]&nbsp;-&gt;&nbsp;float&nbsp;[]</CODE></P>
+      <P>When run on every core, this function takes 1.319s to square a 600×600 
+      matrix and 3.047s to square a 800×800 matrix which correspond to 3% 
+      slowdown and 0.6% speedup compared to the single-core cache unaware 
+      implementation, respectively.</P>
+      <P>So the poor 3× speedup in the parallel case obtained by the cache 
+      unaware algorithm has been improved to an optimal 8× speedup by the cache 
+      oblivious algorithm. The poor performance of the cache unaware algorithm 
+      in the case of large matrices with parallelism has been completely 
+      remedied through the use of a cache oblivious algorithm with the serial 
+      performance (red) now matched by the parallel performance (green):</P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20matrix%20multiply_files/MatMulObliviousSerPar.png"></P>
+      <H2>Summary</H2>
+      <P>This articled has examined the performance characteristics of cache 
+      unaware, aware and oblivious implementations of a dense matrix-matrix 
+      multiply. Interpretation of the results proved tricky because no advantage 
+      appears when running on a single core but performing the same operation 
+      simultaneously on every core demonstrates how cache misses can degrade 
+      parallel performance. In this case, we found that the cache oblivious 
+      algorithm runs 2.7× faster than the cache unaware algorithm in a parallel 
+      setting. The same basic design can be applied to a wide range of problems 
+      in order to improve locality and, consequently, scalability when 
+      parallelized.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of caching and 
+      parallelism in the context of other algorithms and generic design 
+      patterns.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20matrix%20multiply_files/urchin.js" type="text/javascript">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+   </BODY></HTML>

@@ -1,0 +1,392 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0079)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/HashTries.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20hash%20tries_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20hash%20tries_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20hash%20tries_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20hash%20tries_files/title.gif"> 
+    </TD>
+    <TD><IMG src="F%23%20Journal%20hash%20tries_files/left.gif"> 
+</TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Hash tries</H1>
+      <P>Purely functional data structures such as the Set and Map collections 
+      provided by the F# standard library have many advantages over traditional 
+      imperative collections, particularly clarity due to the absence of 
+      mutation, but their performance can be much worse. Benchmarks have shown 
+      the F# Set and Map running up to 40x slower than the imperative HashSet 
+      and Dictionary collections provided by .NET. This article describes the 
+      design and implementation of a hash trie implementation of a set that is 
+      up to 7x faster to construct and up to 4.5x faster to search than the F# 
+      set.</P>
+      <H2>Introduction</H2>
+      <P>The <CODE>Set</CODE> and <CODE>Map</CODE> collections provided by the 
+      F# standard library are optimized implementations of immutable 
+      depth-balanced binary trees derived from the OCaml implementations. This 
+      is classic functional programming as taught in universities around the 
+      world. Immutable binary trees are simple and elegant solutions to the 
+      problem of creating extensible purely functional collections. Each element 
+      in a <CODE>Set</CODE> is stored in the branch of such a tree and each 
+      branch is heap allocated. Consequently, such binary trees require a great 
+      many allocations. Each insertion and deletion can require rebalancing 
+      which can incur several heap allocations. The fundamental immutability of 
+      such trees makes it impossible to mutate them in place even. Research has 
+      focussed on immutable trees with slightly higher branching factors, such 
+      as 2-3 finger trees, but their implementations are substantially more 
+      complicated and benchmarks indicate that their performance is not 
+      significantly better than immutable binary trees in practice.</P>
+      <P>For example, the following type defines a binary tree where each branch 
+      contains a single element:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;BinaryTree&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch&nbsp;of&nbsp;BinaryTree&lt;'a&gt;&nbsp;*&nbsp;'a&nbsp;*&nbsp;BinaryTree&lt;'a&gt;;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;BinaryTree&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch&nbsp;of&nbsp;BinaryTree&lt;'a&gt;&nbsp;*&nbsp;'a&nbsp;*&nbsp;BinaryTree&lt;'a&gt;</CODE></P>
+      <P>The following function creates a perfectly-balanced binary tree of the 
+      given depth:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;genBinaryTree&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0&nbsp;-&gt;&nbsp;Leaf<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;n&nbsp;-&gt;&nbsp;Branch(genBinaryTree(n-1),&nbsp;n,&nbsp;genBinaryTree(n-1));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;genBinaryTree&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;BinaryTree&lt;int&gt;</CODE></P>
+      <P>Creating a binary tree with 1,048,575 elements takes 0.47s:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;genBinaryTree&nbsp;20&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.472,&nbsp;CPU:&nbsp;00:00:00.483,&nbsp;GC&nbsp;gen0:&nbsp;3,&nbsp;gen1:&nbsp;2,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>The performance costs of the heavy allocation requirements of binary 
+      trees are exacerbated on traditional platforms such as .NET that have been 
+      optimized for the less-intense allocation requirements of imperative 
+      languages like C#. Conversely, the write barriers employed in platforms 
+      such as .NET are substantially faster than those found in standalone 
+      implementations of functional programming languages. Consequently, 
+      languages like F# have an advantage over languages like OCaml and Haskell 
+      in that they can manipulate arrays more efficiently.</P>
+      <P>Trees with high branching factors, where branches are stored as arrays, 
+      can leverage the advantages of a VM that has been optimized for imperative 
+      languages. Moreover, the use of arrays makes it possible to implement 
+      destructive updates that mutate the tree in-place. These destructive 
+      updates can be used internally to perform batch operations (such as 
+      constructing a dictionary from an array of key-value pairs) more 
+      efficiently.</P>
+      <P>Ordinary dictionaries (such as the F# <CODE>Map</CODE> and .NET 
+      <CODE>Dictionary</CODE>) map individual keys to corresponding values. A 
+      tree of such dictionaries can be used to map keys that are sequences to 
+      values. Such trees are known as tries.</P>
+      <P>Consider a trie for keys that are sequences of small integers. The 
+      dictionaries used inside the trie could be represented by small arrays 
+      indexed by the small integers. If the small integers encode a single bit 
+      (0 or 1) then the trie has a branching factor of 2 and is a binary tree. 
+      In general, the number of small integers can be the branching factor of 
+      the trie.</P>
+      <P>Now, consider using such a trie to map from a 32-bit int to a value. If 
+      we treat the int as a sequence of four bytes then each of the dictionaries 
+      with the trie may be represented by a 256-element array indexed by a 
+      single byte. Thus, the maximum depth of our tree required to store 2^32 
+      elements is just four. A binary tree of depth 4 can store just 15 
+      elements. However, a branch containing a single element will also contain 
+      255 empty tries which is extremely wasteful. This waste can be amortized 
+      by allowing leaves to contain an array of key-value pairs rather than a 
+      single pair. Such "fat" leaves are only split into trie nodes when they 
+      reach a certain size.</P>
+      <P>How fast might this be? Well, the following type defines our trie:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;WideTree&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf&nbsp;of&nbsp;'a&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch&nbsp;of&nbsp;WideTree&lt;'a&gt;&nbsp;[];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;WideTree&lt;'a&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Leaf&nbsp;of&nbsp;'a&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Branch&nbsp;of&nbsp;WideTree&lt;'a&gt;&nbsp;[]</CODE></P>
+      <P>The following function can be used to create a such a tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;genWideTree&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;n&lt;8&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Leaf(Array.init&nbsp;(1&nbsp;&lt;&lt;&lt;&nbsp;n)&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;0))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Branch(Array.init&nbsp;256&nbsp;(fun&nbsp;_&nbsp;-&gt;&nbsp;genWideTree&nbsp;(n-8)));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;genWideTree&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;WideTree&lt;int&gt;</CODE></P>
+      <P>Running this function such that it generates leaves with 16 elements in 
+      them we find that it takes just 0.022s to create a tree with 1,048,576 
+      elements:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;genWideTree&nbsp;20&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.022,&nbsp;CPU:&nbsp;00:00:00.015,&nbsp;GC&nbsp;gen0:&nbsp;2,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;unit&nbsp;=&nbsp;()</CODE></P>
+      <P>So we can potentially construct trees with higher branching factors 
+      over 20x faster than binary trees. Moreover, balanced binary trees require 
+      rebalancing upon insertion and removal whereas tries do not and this 
+      rebalancing is expensive in practice because it requires branches to be 
+      allocated.</P>
+      <P>A hash trie is exactly this kind of data structure used to map the hash 
+      of a value onto the value itself.</P>
+      <H2>Hash tries</H2>
+      <P>Let us begin by defining the log to the base two of the branching 
+      factor of our trie in terms of the number of bits of hash consumed at each 
+      level:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;logBranchingFactor&nbsp;=&nbsp;6;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;logBranchingFactor&nbsp;:&nbsp;int&nbsp;=&nbsp;6</CODE></P>
+      <P>In order to conserve space, we shall accumulate several hash-value 
+      pairs in a <CODE>Small</CODE> node before it is split into a deeper hash 
+      trie. The threshold at which <CODE>Small</CODE> nodes will be split 
+is:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;threshold&nbsp;=&nbsp;4;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;threshold&nbsp;:&nbsp;int&nbsp;=&nbsp;4</CODE></P>
+      <P>Cache misses are expensive so locality is very important in 
+      collections. Locality can be improved by unboxing hash-value pairs which 
+      can be accomplished on .NET using a struct:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;HashEntry&lt;'a&nbsp;when&nbsp;'a:&nbsp;equality&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;h&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;x&nbsp;:&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(h,&nbsp;x)&nbsp;=&nbsp;{&nbsp;h&nbsp;=&nbsp;h;&nbsp;x&nbsp;=&nbsp;x&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Hash&nbsp;=&nbsp;this.h<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;this.Value&nbsp;=&nbsp;this.x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;HashEntry&lt;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;h:int&nbsp;*&nbsp;x:'a&nbsp;-&gt;&nbsp;HashEntry&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;h:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;private&nbsp;x:&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Hash&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;Value&nbsp;:&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following <CODE>eq</CODE> function can be used to compare a given 
+      hash and value with a <CODE>HashEntry</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;eq&nbsp;h&nbsp;y&nbsp;(x:&nbsp;HashEntry&lt;_&gt;)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;h&nbsp;=&nbsp;x.Hash&nbsp;&amp;&amp;&nbsp;y&nbsp;=&nbsp;x.Value;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;eq&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;HashEntry&lt;'a&gt;&nbsp;-&gt;&nbsp;bool&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>A quick experiment shows that it is faster to pass two separate values 
+      by argument than it is to pass a struct containing two value. Therefore, 
+      we write the whole implementation in this style, precomputing the hash of 
+      the given value upon entry and passing both the hash and its value around 
+      as separate arguments, deferring the creation of a <CODE>HashEntry</CODE> 
+      as long as possible. Hence the <CODE>eq</CODE> function is written in this 
+      style.</P>
+      <P>Let us replace some of the array functions with <CODE>inline</CODE> 
+      versions and augment the <CODE>Array</CODE> module with some more 
+      functions:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Array&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;inline&nbsp;iter&nbsp;f&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;f&nbsp;xs.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;inline&nbsp;fold&nbsp;f&nbsp;a&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;a&nbsp;=&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a&nbsp;&lt;-&nbsp;f&nbsp;a&nbsp;xs.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;inline&nbsp;append&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;x&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.init&nbsp;(xs.Length&nbsp;+&nbsp;1)&nbsp;(fun&nbsp;i&nbsp;-&gt;&nbsp;if&nbsp;i&lt;xs.Length&nbsp;then&nbsp;xs.[i]&nbsp;else&nbsp;x)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;remove&nbsp;x&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Array.filter&nbsp;((&lt;&gt;)&nbsp;x)&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Array&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;iter&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;fold&nbsp;:&nbsp;('a&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;[]&nbsp;-&gt;&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;append&nbsp;:&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;remove&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;'a&nbsp;[]&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Our hash trie will be represented by values of the following type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[&lt;NoEquality;&nbsp;NoComparison&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;HashTrie&lt;'a&nbsp;when&nbsp;'a:&nbsp;equality&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small&nbsp;of&nbsp;int&nbsp;*&nbsp;'a&nbsp;*&nbsp;HashEntry&lt;'a&gt;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;of&nbsp;HashTrie&lt;'a&gt;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.Collections.Generic.IEnumerable&lt;'a&gt;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;s.GetEnumerator()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;toSeq&nbsp;s&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;seq&nbsp;{&nbsp;match&nbsp;s&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small(_,&nbsp;x,&nbsp;xs)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;hx&nbsp;in&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;hx.Value<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;ss&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;s&nbsp;in&nbsp;ss&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield!&nbsp;toSeq&nbsp;s&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(toSeq&nbsp;s).GetEnumerator()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.Collections.IEnumerable&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;member&nbsp;s.GetEnumerator()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(s&nbsp;:&gt;&nbsp;System.Collections.IEnumerable).GetEnumerator();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;HashTrie&lt;'a&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small&nbsp;of&nbsp;int&nbsp;*&nbsp;'a&nbsp;*&nbsp;HashEntry&lt;'a&gt;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;of&nbsp;HashTrie&lt;'a&gt;&nbsp;[]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.Collections.IEnumerable<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;interface&nbsp;System.Collections.Generic.IEnumerable&lt;'a&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The first attribute allows F# to represent the first union type 
+      constructor that has no arguments (<CODE>Empty</CODE> in our case) as 
+      <CODE>null</CODE>. This is significantly more efficient that representing 
+      <CODE>Empty</CODE> as an object, largely because writing a null pointer 
+      into an array need not incur the write barrier whereas writing a reference 
+      to an array requires the write barrier to record the potential change to 
+      the topology of the heap. Interestingly, the class hierarchy equivalent to 
+      this union type could not represent <CODE>Empty</CODE> as null 
+      uninvasively because every caller of any virtual method would have to 
+      check for null and implement the required logic.</P>
+      <P>The second attribute asks F# not to generate structural equality and 
+      comparison functions for this type.</P>
+      <P>The first union case, <CODE>Empty</CODE>, allows us to represent the 
+      empty hash trie efficiently. The equivalent is important in balanced 
+      binary tree implementations and can be seen in the F# standard library but 
+      is more important in this context because the sparsity of a hash tries 
+      means a much higher proportion of <CODE>Empty</CODE> hash tries in the 
+      complete structure.</P>
+      <P>The <CODE>Small</CODE> union case is designed to represent small sets 
+      efficiently as an array of structs containing the hash and value of each 
+      element in the set. This gives optimal memory locality and, with most such 
+      small sets fitting in a single cache line, allows small sets to be created 
+      and searched efficiently. Due to the <CODE>Empty</CODE> case the 
+      <CODE>Small</CODE> case will only ever be used to handle one or more 
+      elements. In the spirit of typeful programming and for performance 
+      benefits we have unpacked one of the hash and value pairs into the 
+      <CODE>Small</CODE> case itself with the remaining pairs (if any) stored in 
+      the array.</P>
+      <P>The third and final union case <CODE>Node</CODE> represents a node of 
+      the hash trie with an array of child hash tries. These arrays will be 
+      indexed by <CODE>logBranchingFactor</CODE> bits of the hash to obtain a 
+      smaller hash trie until an <CODE>Empty</CODE> or <CODE>Small</CODE> branch 
+      is reached.</P>
+      <P>Let us create an idiomatic alias called <CODE>empty</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;empty&nbsp;=&nbsp;Empty;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;empty&nbsp;:&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The following function creates a singleton hash trie containing the 
+      given hash and value:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mkSingleton&nbsp;h&nbsp;x&nbsp;=&nbsp;Small(h,&nbsp;x,&nbsp;[||]);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mkSingleton&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The following <CODE>singleton</CODE> function creates a hash trie 
+      containing a single value, using the built-in <CODE>hash</CODE> function 
+      to compute the structural hash of the given value <CODE>x</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;singleton&nbsp;x&nbsp;=&nbsp;mkSingleton&nbsp;(hash&nbsp;x)&nbsp;x;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;singleton&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>We shall often require the ability to test for membership in a small 
+      hash trie. The following function searches for the hash <CODE>hx</CODE> 
+      and value <CODE>x</CODE> in the <CODE>Small</CODE> branch that contains a 
+      value <CODE>y</CODE> and its hash <CODE>hy</CODE> and an array of 
+      <CODE>HashEntry</CODE> values:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;Small&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;contains&nbsp;hx&nbsp;x&nbsp;hy&nbsp;y&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(hy=hx&nbsp;&amp;&amp;&nbsp;y=x)&nbsp;||&nbsp;Array.exists&nbsp;((=)&nbsp;(HashEntry(hx,&nbsp;x)))&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;Small&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;contains&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;HashEntry&lt;'a&gt;&nbsp;[]&nbsp;-&gt;&nbsp;bool&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Nodes in the hash trie are indexed by a hash <CODE>h</CODE> right 
+      shifted by <CODE>b</CODE> bits before a bitwise AND is used to extract 
+      <CODE>logBranchingFactor</CODE> bits:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;nodeIndex&nbsp;b&nbsp;h&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(h&nbsp;&gt;&gt;&gt;&nbsp;b)&nbsp;&amp;&amp;&amp;&nbsp;((1&nbsp;&lt;&lt;&lt;&nbsp;logBranchingFactor)&nbsp;-&nbsp;1);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;nodeIndex&nbsp;:&nbsp;int32&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>A <CODE>contains</CODE> function analogous to <CODE>Set.contains</CODE> 
+      may be written for a hash trie in terms of the following recursive 
+      function <CODE>containsLoop</CODE> that traverses the tree:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;containsLoop&nbsp;b&nbsp;hx&nbsp;x&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty&nbsp;-&gt;&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small(hy,&nbsp;y,&nbsp;xs)&nbsp;-&gt;&nbsp;Small.contains&nbsp;hx&nbsp;x&nbsp;hy&nbsp;y&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;xs&nbsp;-&gt;&nbsp;containsLoop&nbsp;(b&nbsp;+&nbsp;logBranchingFactor)&nbsp;hx&nbsp;x&nbsp;xs.[nodeIndex&nbsp;b&nbsp;hx];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;containsLoop&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int32&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;bool&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>If the hash trie is <CODE>Empty</CODE> then it does not contain any 
+      element. If the branch is <CODE>Small</CODE> then we defer to the 
+      <CODE>contains</CODE> function in the <CODE>Small</CODE> module we wrote 
+      earlier. If the branch is a <CODE>Node</CODE> then we index it by a few 
+      bits in <CODE>h</CODE> and recurse into the resulting hash trie with 
+      <CODE>b</CODE> increased by the log of the branching factor.</P>
+      <P>A <CODE>contains</CODE> function may then be written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;contains&nbsp;x&nbsp;s&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;containsLoop&nbsp;0&nbsp;(hash&nbsp;x)&nbsp;x&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;contains&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;bool&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>This precomputes <CODE>hash&nbsp;x</CODE> and then invokes the 
+      <CODE>containsLoop</CODE> function.</P>
+      <P>The following higher-order <CODE>addAndSplitSmall</CODE> function 
+      converts a <CODE>Small</CODE> branch into a <CODE>Node</CODE> branch by 
+      creating an empty <CODE>Node</CODE> and adding each of the hash-value 
+      pairs to it using the given <CODE>addToNode</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;addAndSplitSmall&nbsp;addToNode&nbsp;b&nbsp;hx&nbsp;x&nbsp;hy&nbsp;y&nbsp;(xs:&nbsp;HashEntry&lt;_&gt;&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ys&nbsp;=&nbsp;Array.create&nbsp;(1&nbsp;&lt;&lt;&lt;&nbsp;logBranchingFactor)&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;addToNode&nbsp;b&nbsp;hx&nbsp;x&nbsp;ys<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;addToNode&nbsp;b&nbsp;hy&nbsp;y&nbsp;ys<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;hx&nbsp;in&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;addToNode&nbsp;b&nbsp;hx.Hash&nbsp;hx.Value&nbsp;ys<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node&nbsp;ys;;</CODE></P>
+      <P>val inline addAndSplitSmall :</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;HashTrie&lt;'c&gt;&nbsp;[]&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'a&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;HashEntry&lt;'b&gt;&nbsp;[]&nbsp;-&gt;&nbsp;HashTrie&lt;'c&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'b&nbsp;:&nbsp;equality&nbsp;and&nbsp;'c&nbsp;:&nbsp;equality</CODE></P>
+      <P>We use <CODE>inline</CODE> on this higher-order function to ensure the 
+      function call overhead is eliminated.</P>
+      <P>This function has been parameterized over the <CODE>addToNode</CODE> 
+      function that it invokes because we shall use this 
+      <CODE>addAndSplitSmall</CODE> function from both destructive and 
+      non-destructive <CODE>add</CODE> functions.</P>
+      <P>The following <CODE>applyToNode</CODE> function obtains the appropriate 
+      index in a node of a hash trie and uses it to update the subtree at that 
+      index using the given function <CODE>f</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;applyToNode&nbsp;f&nbsp;b&nbsp;h&nbsp;x&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;i&nbsp;=&nbsp;nodeIndex&nbsp;b&nbsp;h<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs.[i]&nbsp;&lt;-&nbsp;f&nbsp;(b&nbsp;+&nbsp;logBranchingFactor)&nbsp;h&nbsp;x&nbsp;xs.[i];;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;applyToNode&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(int32&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;'b)&nbsp;-&gt;&nbsp;int32&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'b&nbsp;[]&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The <CODE>addLoop</CODE> function recursively searches a hash trie 
+      until it finds an <CODE>Empty</CODE> or <CODE>Small</CODE> branch where 
+      the given element can be inserted:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;addLoop&nbsp;b&nbsp;hx&nbsp;x&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty&nbsp;-&gt;&nbsp;mkSingleton&nbsp;hx&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small(hy,&nbsp;y,&nbsp;xs)&nbsp;as&nbsp;s&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Small.contains&nbsp;hx&nbsp;x&nbsp;hy&nbsp;y&nbsp;xs&nbsp;then&nbsp;s&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;xs.Length&nbsp;&gt;=&nbsp;threshold&nbsp;&amp;&amp;&nbsp;b&nbsp;&lt;&nbsp;32&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;addAndSplitSmall&nbsp;(applyToNode&nbsp;addLoop)&nbsp;b&nbsp;hx&nbsp;x&nbsp;hy&nbsp;y&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Small(hy,&nbsp;y,&nbsp;Array.append&nbsp;xs&nbsp;(HashEntry(hx,&nbsp;x)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;xs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ys&nbsp;=&nbsp;Array.copy&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;applyToNode&nbsp;addLoop&nbsp;b&nbsp;hx&nbsp;x&nbsp;ys<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node&nbsp;ys;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;addLoop&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>An <CODE>Empty</CODE> branch is turned into a singleton hash trie. A 
+      <CODE>Small</CODE> branch is returned as-is if it already contains the 
+      element being added, otherwise if the number of elements in the 
+      <CODE>Small</CODE> branch has reached the threshold and there are more 
+      bits left in the hash that can be productively harvested then the 
+      <CODE>Small</CODE> branch is split into a hash trie node and the new 
+      element added. In the general case of a hash trie branch, the array in the 
+      branch is copied and then mutated in-place using the 
+      <CODE>applyToNode</CODE> function calling <CODE>addLoop</CODE> 
+      recursively.</P>
+      <P>The <CODE>add</CODE> function precomputes <CODE>hash&nbsp;x</CODE> and 
+      then invokes the <CODE>addLoop</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;add&nbsp;x&nbsp;s&nbsp;=&nbsp;addLoop&nbsp;0&nbsp;(hash&nbsp;x)&nbsp;x&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>Similarly, the following <CODE>removeLoop</CODE> function recursively 
+      searches a hash trie looking for an element to remove:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;removeLoop&nbsp;b&nbsp;hx&nbsp;x&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty&nbsp;-&gt;&nbsp;Empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small(hy,&nbsp;y,&nbsp;xs)&nbsp;as&nbsp;s&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;hx=hy&nbsp;&amp;&amp;&nbsp;x=y&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;xs.Length=0&nbsp;then&nbsp;empty&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;y&nbsp;=&nbsp;xs.[0]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Small(y.Hash,&nbsp;y.Value,&nbsp;Array.sub&nbsp;xs&nbsp;1&nbsp;(xs.Length&nbsp;-&nbsp;1))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Small(hy,&nbsp;y,&nbsp;Array.remove&nbsp;(HashEntry(hx,&nbsp;x))&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;xs&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;ys&nbsp;=&nbsp;Array.copy&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;applyToNode&nbsp;removeLoop&nbsp;b&nbsp;hx&nbsp;x&nbsp;ys<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node&nbsp;ys;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;removeLoop&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int32&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>And the <CODE>remove</CODE> function precomputes 
+      <CODE>hash&nbsp;x</CODE> and invokes <CODE>removeLoop</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;remove&nbsp;x&nbsp;s&nbsp;=&nbsp;removeLoop&nbsp;0&nbsp;(hash&nbsp;x)&nbsp;x&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;remove&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>A function to count the number of elements in a hash trie may be 
+      written as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;count&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty&nbsp;-&gt;&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small(_,&nbsp;_,&nbsp;xs)&nbsp;-&gt;&nbsp;1&nbsp;+&nbsp;xs.Length<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;xs&nbsp;-&gt;&nbsp;Array.sumBy&nbsp;count&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;count&nbsp;:&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;int&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>We are now in a position to do some quick testing. The following 
+      creates an empty hash trie and adds four elements with one duplicate and 
+      converts the result into an array:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add&nbsp;2<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add&nbsp;3<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add&nbsp;1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Array.ofSeq;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;[]&nbsp;=&nbsp;[|1;&nbsp;2;&nbsp;3|]</CODE></P>
+      <P>As expected, the hash trie removes the duplicate element.</P>
+      <P>Now we implement turn our attention to the set-theoretic operations 
+      union, intersection and difference. Set union may be performed recursively 
+      as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;unionLoop&nbsp;b&nbsp;s1&nbsp;s2&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;s1,&nbsp;s2&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty,&nbsp;s&nbsp;|&nbsp;s,&nbsp;Empty&nbsp;-&gt;&nbsp;s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small(hx,&nbsp;x,&nbsp;xs),&nbsp;s&nbsp;|&nbsp;s,&nbsp;Small(hx,&nbsp;x,&nbsp;xs)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs&nbsp;|&gt;&nbsp;Array.fold&nbsp;(fun&nbsp;s&nbsp;hx&nbsp;-&gt;&nbsp;addLoop&nbsp;b&nbsp;hx.Hash&nbsp;hx.Value&nbsp;s)&nbsp;(addLoop&nbsp;b&nbsp;hx&nbsp;x&nbsp;s)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;xs,&nbsp;Node&nbsp;ys&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node(Array.map2&nbsp;(unionLoop&nbsp;(b&nbsp;+&nbsp;logBranchingFactor))&nbsp;xs&nbsp;ys);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;unionLoop&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The union of any set <CODE>s</CODE> with the empty set is 
+      <CODE>s</CODE>. The union of a small branch of a set with another set can 
+      be computed by adding each of the elements from the small set to the 
+      larger set and returning the result. This leaves the final match case to 
+      handle the union of two hash tries which is given by mapping the union 
+      function over all pairs of subtries.</P>
+      <P>The public interface is a <CODE>union</CODE> function that accepts two 
+      sets and is implemented by invoking <CODE>unionLoop</CODE> with 
+      <CODE>b=0</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;union&nbsp;s1&nbsp;s2&nbsp;=&nbsp;unionLoop&nbsp;0&nbsp;s1&nbsp;s2;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;union&nbsp;:&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>Set difference (subtraction) is slightly more complicated and may be 
+      implemented as follows:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;diffLoop&nbsp;b&nbsp;s1&nbsp;s2&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;s1,&nbsp;s2&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty,&nbsp;s&nbsp;-&gt;&nbsp;Empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;s,&nbsp;Empty&nbsp;-&gt;&nbsp;s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small(hx,&nbsp;x,&nbsp;xs)&nbsp;as&nbsp;t,&nbsp;s&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;filter&nbsp;h&nbsp;x&nbsp;t&nbsp;=&nbsp;if&nbsp;containsLoop&nbsp;b&nbsp;h&nbsp;x&nbsp;s&nbsp;then&nbsp;removeLoop&nbsp;b&nbsp;h&nbsp;x&nbsp;t&nbsp;else&nbsp;t<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;xs&nbsp;|&gt;&nbsp;Array.fold&nbsp;(fun&nbsp;t&nbsp;hx&nbsp;-&gt;&nbsp;filter&nbsp;hx.Hash&nbsp;hx.Value&nbsp;t)&nbsp;(filter&nbsp;hx&nbsp;x&nbsp;t)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;s,&nbsp;Small(hx,&nbsp;x,&nbsp;xs)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(removeLoop&nbsp;b&nbsp;hx&nbsp;x&nbsp;s,&nbsp;xs)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;||&gt;&nbsp;Array.fold&nbsp;(fun&nbsp;s&nbsp;hx&nbsp;-&gt;&nbsp;removeLoop&nbsp;b&nbsp;hx.Hash&nbsp;hx.Value&nbsp;s)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;xs,&nbsp;Node&nbsp;ys&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Node(Array.map2&nbsp;(diffLoop&nbsp;(b&nbsp;+&nbsp;logBranchingFactor))&nbsp;xs&nbsp;ys);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;diffLoop&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int32&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>Subtracting any set from the empty set leaves the empty set. 
+      Subtracting the empty set from any set leaves the original set. 
+      Subtracting any set (either a <CODE>Small</CODE> or <CODE>Node</CODE> 
+      branch) from a <CODE>Small</CODE> branch may be implemented by removing 
+      elements from the small set that appear in the other set. Subtracting a 
+      small set from another set may be implemented by removing each element of 
+      the small set from the larger set. Subtracting one hash trie from another 
+      may be implemented by mapping the diff function over the subtries.</P>
+      <P>The public interface again invokes the internal <CODE>diffLoop</CODE> 
+      function with <CODE>b=0</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;diff&nbsp;s1&nbsp;s2&nbsp;=&nbsp;diffLoop&nbsp;0&nbsp;s1&nbsp;s2;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;diff&nbsp;:&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <H2>Using mutation to accelerate construction</H2>
+      <P>If a set or dictionary is initialized and then used only for searching 
+      and not insertion or deletion then it is more efficient to use an 
+      imperative collection such as a <CODE>HashSet</CODE> or 
+      <CODE>Dictionary</CODE>. However, if a set or dictionary is initially 
+      populated but still requires persistent updates then it can be beneficial 
+      to use mutation to accelerate the construction of the initial version. 
+      Mutation is safe in this case because it is never externally visible.</P>
+      <P>The following function inserts an element into a hash trie without 
+      copying the arrays in the <CODE>Node</CODE> branches and, therefore, 
+      destroys the original hash trie:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;addInPlaceLoop&nbsp;b&nbsp;hx&nbsp;x&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Empty&nbsp;-&gt;&nbsp;mkSingleton&nbsp;hx&nbsp;x<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Small(hy,&nbsp;y,&nbsp;xs)&nbsp;as&nbsp;s&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;Small.contains&nbsp;hx&nbsp;x&nbsp;hy&nbsp;y&nbsp;xs&nbsp;then&nbsp;s&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;xs.Length&nbsp;&gt;=&nbsp;threshold&nbsp;&amp;&amp;&nbsp;b&nbsp;&lt;&nbsp;32&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;addAndSplitSmall&nbsp;(applyToNode&nbsp;addInPlaceLoop)&nbsp;b&nbsp;hx&nbsp;x&nbsp;hy&nbsp;y&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Small(hy,&nbsp;y,&nbsp;Array.append&nbsp;xs&nbsp;(HashEntry(hx,&nbsp;x)))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Node&nbsp;xs&nbsp;as&nbsp;s&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;applyToNode&nbsp;(addInPlaceLoop&nbsp;)&nbsp;b&nbsp;hx&nbsp;x&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;addInPlaceLoop&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>The following <CODE>ofArray</CODE> function takes advantage of this 
+      destructive <CODE>addInPlaceLoop</CODE> function in order to construct a 
+      hash trie from an array efficiently:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ofArray&nbsp;(xs:&nbsp;_&nbsp;[])&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;s&nbsp;=&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;xs.Length-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;x&nbsp;=&nbsp;xs.[i]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;&lt;-&nbsp;addInPlaceLoop&nbsp;0&nbsp;(hash&nbsp;x)&nbsp;x&nbsp;s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ofArray&nbsp;:&nbsp;'a&nbsp;[]&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <P>And the following function uses mutation to construct a hash trie 
+      efficiently from a sequence:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ofSeq&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;s&nbsp;=&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;x&nbsp;in&nbsp;xs&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s&nbsp;&lt;-&nbsp;addInPlaceLoop&nbsp;0&nbsp;(hash&nbsp;x)&nbsp;x&nbsp;s<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;s;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ofSeq&nbsp;:&nbsp;seq&lt;'a&gt;&nbsp;-&gt;&nbsp;HashTrie&lt;'a&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;equality</CODE></P>
+      <H2>Performance</H2>
+      <P>The performance of construction is the simplest to measure. Let us 
+      create an array of 100,000 pairs of integers:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;xs&nbsp;=&nbsp;Array.init&nbsp;100000&nbsp;(fun&nbsp;i&nbsp;-&gt;&nbsp;i&nbsp;&gt;&gt;&gt;&nbsp;16,&nbsp;i&nbsp;&amp;&amp;&amp;&nbsp;0xffff);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;xs&nbsp;:&nbsp;(int&nbsp;*&nbsp;int)&nbsp;[]&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[|(0,&nbsp;0);&nbsp;(0,&nbsp;1);&nbsp;(0,&nbsp;2);&nbsp;(0,&nbsp;3);&nbsp;(0,&nbsp;4);&nbsp;(0,&nbsp;5);&nbsp;(0,&nbsp;6);&nbsp;(0,&nbsp;7);&nbsp;(0,&nbsp;8);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(0,&nbsp;9);&nbsp;(0,&nbsp;10);&nbsp;(0,&nbsp;11);&nbsp;(0,&nbsp;12);&nbsp;(0,&nbsp;13);&nbsp;(0,&nbsp;14);&nbsp;(0,&nbsp;15);&nbsp;(0,&nbsp;16);<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(0,&nbsp;17);&nbsp;(0,&nbsp;18);&nbsp;(0,&nbsp;19);&nbsp;(0,&nbsp;20);&nbsp;(0,&nbsp;21);&nbsp;(0,&nbsp;22);&nbsp;(0,&nbsp;23);&nbsp;(0,&nbsp;24);&nbsp;...</CODE></P>
+      <P>We can construct a set from these pairs and count the cardinality of 
+      the set in 4.6s:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;Set.ofArray&nbsp;xs&nbsp;|&gt;&nbsp;Set.count;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:04.623,&nbsp;CPU:&nbsp;00:00:04.617,&nbsp;GC&nbsp;gen0:&nbsp;391,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;100000</CODE></P>
+      <P>Note that counting the number of elements in the set is very fast.</P>
+      <P>Creating a hash trie using our <CODE>ofArray</CODE> function is almost 
+      10x faster than using the built-in F# Set:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;ofArray&nbsp;xs&nbsp;|&gt;&nbsp;count;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.471,&nbsp;CPU:&nbsp;00:00:00.468,&nbsp;GC&nbsp;gen0:&nbsp;2,&nbsp;gen1:&nbsp;1,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;100000</CODE></P>
+      <P>So our use of mutation to construct hash tries efficiently has 
+      certainly paid off!</P>
+      <P>For comparison, creating an imperative .NET <CODE>HashSet</CODE> is 
+      almost 20x faster again:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;(System.Collections.Generic.HashSet(xs,&nbsp;HashIdentity.Structural)).Count;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.026,&nbsp;CPU:&nbsp;00:00:00.031,&nbsp;GC&nbsp;gen0:&nbsp;0,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;100000</CODE></P>
+      <P>We can benchmark our set theoretic operations using a program that was 
+      described in the nth-nearest neighbors F#.NET Journal article. This 
+      program computes shells of first nearest neighbors, second, third and so 
+      on using a recurrence relation written as a recursive function that 
+      performs set theoretic union and difference operations. Positions on a 2D 
+      lattice may be represented by values of the following value type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;Struct&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Posn&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;x&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;y&nbsp;:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new(x,&nbsp;y)&nbsp;=&nbsp;{x=x;&nbsp;y=y};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;Posn&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;struct<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;new&nbsp;:&nbsp;x:int&nbsp;*&nbsp;y:int&nbsp;-&gt;&nbsp;Posn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;x:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;y:&nbsp;int<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>The following higher-order <CODE>nth</CODE> function computes the 
+      nth-nearest neighbor shell from a given origin <CODE>i</CODE> via repeated 
+      use of a <CODE>neighbors</CODE> function to find the set of neighbors to a 
+      given point:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;nth&nbsp;diff&nbsp;union&nbsp;empty&nbsp;singleton&nbsp;neighbors&nbsp;i&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;loop&nbsp;s0&nbsp;s1&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;0&nbsp;-&gt;&nbsp;s0<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;1&nbsp;-&gt;&nbsp;s1<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;n&nbsp;-&gt;&nbsp;loop&nbsp;s1&nbsp;(diff&nbsp;(diff&nbsp;(Seq.fold&nbsp;union&nbsp;empty&nbsp;(Seq.map&nbsp;neighbors&nbsp;s1))&nbsp;s1)&nbsp;s0)&nbsp;(n-1)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;loop&nbsp;(singleton&nbsp;i)&nbsp;(neighbors&nbsp;i)&nbsp;n;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;nth&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;('b&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;('b&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;'b&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;when&nbsp;'a&nbsp;:&gt;&nbsp;seq&lt;'b&gt;</CODE></P>
+      <P>The two base cases are the 0th shell which is the singleton set 
+      containing the origin position itself and the 1st shell which is the 
+      result given by the <CODE>neighbors</CODE> function. The general case is 
+      given by computing the union of the neighbors of the last shell and then 
+      using set difference to remove the last two shells.</P>
+      <P>Parameterizing our <CODE>nth</CODE> function over the set-theoretic 
+      operations it uses allows us to use any set implementation and marking our 
+      <CODE>nth</CODE> function as <CODE>inline</CODE> removes most of the 
+      performance overhead associated with doing this.</P>
+      <P>The following higher-order <CODE>manhattan</CODE> function constructs a 
+      set containing the four neighbors (above, below, left and right) of a 
+      given 2D lattice coordinate, again parameterized over the 
+      <CODE>singleton</CODE> and <CODE>add</CODE> functions provided by the 
+      set:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;inline&nbsp;manhattan&nbsp;singleton&nbsp;add&nbsp;(p:&nbsp;Posn)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;singleton&nbsp;(Posn(p.x-1,&nbsp;p.y))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add&nbsp;(Posn(p.x+1,&nbsp;p.y))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add&nbsp;(Posn(p.x,&nbsp;p.y-1))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;add&nbsp;(Posn(p.x,&nbsp;p.y+1));;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;inline&nbsp;manhattan&nbsp;:&nbsp;(Posn&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;(Posn&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a)&nbsp;-&gt;&nbsp;Posn&nbsp;-&gt;&nbsp;'a</CODE></P>
+      <P>Using the built-in F# <CODE>Set</CODE>, which uses an AVL-balanced 
+      binary tree internally, we find that it takes 0.5s to compute the 
+      50th-nearest neighbors:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;nth&nbsp;Set.difference&nbsp;Set.union&nbsp;Set.empty&nbsp;Set.singleton&nbsp;(manhattan&nbsp;Set.singleton&nbsp;Set.add)&nbsp;(Posn(0,&nbsp;0))&nbsp;50<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Set.count;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.503,&nbsp;CPU:&nbsp;00:00:00.483,&nbsp;GC&nbsp;gen0:&nbsp;86,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;200</CODE></P>
+      <P>Using our set implementation, which uses a hash trie internally, we 
+      find that it is 2.5&amp;#215; faster in this case:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;nth&nbsp;diff&nbsp;union&nbsp;empty&nbsp;singleton&nbsp;(manhattan&nbsp;singleton&nbsp;add)&nbsp;(Posn(0,&nbsp;0))&nbsp;50<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;count;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Real:&nbsp;00:00:00.202,&nbsp;CPU:&nbsp;00:00:00.202,&nbsp;GC&nbsp;gen0:&nbsp;42,&nbsp;gen1:&nbsp;0,&nbsp;gen2:&nbsp;0<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;it&nbsp;:&nbsp;int&nbsp;=&nbsp;200</CODE></P>
+      <P>Plotting the performance of our set implementations as a function of 
+      <CODE>n</CODE> we find that the hash trie is consistently much faster:</P>
+      <P style="TEXT-ALIGN: center"><IMG src=""></P>
+      <P>However, we should note that the hash trie may not be faster for all 
+      applications. On the other hand, there is still some room for improvement 
+      in our implementation. A <CODE>unionMany</CODE> function could use 
+      destructive updates to accelerate the <CODE>union</CODE> operation when 
+      many sets are involved. It could also choose the order of union operations 
+      in order to minimize the size of the intermediate steps. A few 
+      measurements indicate that the trade-off between construction speed and 
+      search speed can be controlled via the branching factor but we have not 
+      done an exhaustive study. The set theoretic operations also stand to 
+      benefit from parallelism as the outermost <CODE>map2</CODE> can be 
+      parallelized. Finally, the relative performance of balanced binary trees 
+      and hash tries is likely to be heavily dependent upon the element 
+type.</P>
+      <H2>Summary</H2>
+      <P>We have described the design and implementation of a simple data 
+      structure that can be used as a set and demonstrated that it can be 
+      substantially faster than the built-in <CODE>Set</CODE>. The data 
+      structure is a hash trie, a tree of dictionaries where each dictionary is 
+      a small array used to key on a few bits of the hash.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of data 
+      structures.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2012</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20hash%20tries_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

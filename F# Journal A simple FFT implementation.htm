@@ -1,0 +1,311 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0073)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/fft.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: A simple FFT implementation</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20A%20simple%20FFT%20implementation_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20A%20simple%20FFT%20implementation_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20A%20simple%20FFT%20implementation_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: A simple FFT implementation</TITLE>     <LINK 
+href="F%23%20Journal%20A%20simple%20FFT%20implementation_files/style.css" rel="stylesheet" 
+type="text/css">     <LINK href="F%23%20Journal%20A%20simple%20FFT%20implementation_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20A%20simple%20FFT%20implementation_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20A%20simple%20FFT%20implementation_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20A%20simple%20FFT%20implementation_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>A simple FFT implementation</H1>
+      <P>Writing an implementation of the Fourier transform is an excellent 
+      lesson in algorithm design and optimization. Moreover, the Fourier 
+      transform is one of the most essential tools in numerical computing, with 
+      applications ranging from spectral analysis to the multiplication of large 
+      integers.</P>
+      <H2>Discrete Fourier Transform</H2>
+      <P>In its simplest form, the Fourier transform F             <SUB>k</SUB> 
+      of a signal f             <SUB>n</SUB> may be written:           </P>
+      <P><IMG src="F%23%20Journal%20A%20simple%20FFT%20implementation_files/dft.gif"> 
+                </P>
+      <P>This direct summation algorithm is referred to as the Discrete Fourier 
+      Transform (DFT) and is composed of O(N             <SUP>2</SUP> ) 
+      operations, i.e. this algorithm has quadratic asymptotic time complexity.  
+               </P>
+      <P>This naive algorithm may be implemented as a simple F# function:</P>
+<PRE>&gt; #light;;
+&gt; open System;;
+&gt; open Math;;
+&gt; let pi = Math.PI;;
+val pi : float
+&gt; let i = Complex.onei;;
+val i : complex
+&gt; let dft (ts : Math.Complex array) =
+    let N = Array.length ts
+    let f k =
+      {for n in 0 .. N-1 -&gt;
+         let t = ts.[n]
+         let w = 2. * pi / float N * float n * float k
+         t * complex (cos w) (sin w)}
+      |&gt; Seq.fold (+) Complex.zero
+    Array.init (Array.length ts) f;;
+val dft : Complex array -&gt; complex array</PRE>
+      <P>Due to numerical error, this              <CODE>dft</CODE> function 
+      often introduces tiny numbers when zero is expected. Consequently, it is 
+      useful when examining the output of the              <CODE>dft</CODE> 
+      function to be able to chop these small zeroes by truncating them to zero: 
+                </P>
+<PRE>&gt; let chop z =
+    if Complex.magnitude z &lt; sqrt epsilon_float then Complex.zero else z;;
+val chop : complex -&gt; complex</PRE>
+      <P>For example, the              <CODE>dft</CODE> function correctly 
+      computes the Fourier series of a sine wave:           </P>
+<PRE>&gt; dft
+    [|for i in 0 .. 15 -&gt;
+        complex (float i / 8. * pi |&gt; sin) 0.|]
+  |&gt; Array.map chop
+val it : complex array
+= [|0.0r+0.0i; -5.551115123e-17r+-8.0i; 0.0r+0.0i; 0.0r+0.0i; 0.0r+0.0i;
+    0.0r+0.0i; 0.0r+0.0i; 0.0r+0.0i; 0.0r+0.0i; 0.0r+0.0i; 0.0r+0.0i;
+    0.0r+0.0i; 0.0r+0.0i; 0.0r+0.0i; 0.0r+0.0i; -1.10467191e-14r+8.0i|]</PRE>
+      <P>However, this implementation is very slow, taking almost 10s to compute 
+      a simple 2             <SUP>12</SUP> -point DFT:           </P>
+<PRE>&gt; time dft [|for x in 1. .. 4096. -&gt; complex x 0.|] |&gt; ignore;;
+Took 9959ms</PRE>
+      <P>As we shall see, the performance of this improvement can be greatly 
+      improved upon.</P>
+      <H2>Radix 2 Fast Fourier Transform algorithm</H2>
+      <P>As always, algorithmic optimizations are the best place to search for 
+      performance improvements. In this case, the naive O(N             
+      <SUP>2</SUP> ) algorithm may be replaced by an O(N log N) 
+      divide-and-conquer algorithm when N is an integral power of two. This 
+      algorithm, often referred to as the radix-2 Fast Fourier Transform (FFT) 
+      has been the foundation of numerical Fourier transforms for at least 200 
+      years. The FFT algorithm splits an n-point FFT into two ½n-point FFTs 
+      composed of the even- and odd-indexed elements, respectively, as follows:  
+               </P>
+      <P><IMG src="F%23%20Journal%20A%20simple%20FFT%20implementation_files/fft.gif"> 
+                </P>
+      <P>The prefactors exp(-2 &#960; i k / N) are complex roots of unity and are 
+      called twiddle factors.</P>
+      <P>Using conventional rearrangements, this algorithm may be decomposed 
+      into an initial shuffle of the input followed by a sequence of traversals 
+      over the input data.</P>
+      <P>The sort and subsequent rewrites of the array are most easily written 
+      in terms of swaps and in-place rewrites, both of which may be elegantly 
+      added to the built-in Array module:</P>
+<PRE>&gt; module Array = struct
+    let swap (a : 'a array) i j =
+      let t = a.[i]
+      a.[i] &lt;- a.[j]
+      a.[j] &lt;- t
+ 
+    let apply f a =
+      for i=0 to Array.length a-1 do
+        a.[i] &lt;- f a.[i]
+  end;;
+module Array : begin
+  val swap : 'a array -&gt; int -&gt; int -&gt; unit
+  val apply : ('a -&gt; 'a) -&gt; 'a array -&gt; unit
+end</PRE>
+      <P>The initial sort reorders the elements of the input array in 
+      lexicographic order by the bits of their indices. This may be implemented 
+      as a simple F# function that uses bit-wise integer operations:</P>
+<PRE>&gt; let bitrev a =
+    let n = Array.length a
+    let mutable j = 0
+    for i=0 to n-2 do
+      if i&lt;j then Array.swap a i j
+      let rec aux m j =
+        let m = m/2
+        let j = j ^^^ m
+        if j &amp;&amp;&amp; m = 0 then aux m j else j
+      j &lt;- aux n j;;
+val bitrev : 'a array -&gt; unit</PRE>
+      <P>The following auxiliary function computes the twiddle factors:</P>
+<PRE>&gt; let f k n =
+    let t = 2. * Math.PI * float k / n
+    complex (cos t) (sin t)
+val f : int -&gt; float -&gt; complex</PRE>
+      <P>The inner loop of the algorithm operates on a              
+      <CODE>Complex array</CODE> and is easily written in F# using its 
+      overloaded operators to handle complex arithmetic:           </P>
+<PRE>&gt; let fft2 (a : Complex array) n j sign m =
+    let w = f (sign * m) (2. * float j)
+    let mutable i = m in
+    while i &lt; n do
+      let ai = a.[i]
+      let t = w * a.[i + j]
+      a.[i] &lt;- ai + t
+      a.[i + j] &lt;- ai - t
+      i &lt;- i + 2*j;;
+val fft2 : Complex array -&gt; int -&gt; int -&gt; int -&gt; int -&gt; unit</PRE>
+      <P>The following              <CODE>fft</CODE> function uses the           
+         <CODE>bitrev</CODE> and              <CODE>loop</CODE> functions:       
+          </P>
+<PRE>&gt; let fft sign a =
+    let n = Array.length a
+    bitrev a;
+    let mutable j = 1
+    while j &lt; n do
+    for m = 0 to j - 1 do
+      fft2 a n j sign m
+    j &lt;- 2*j;;
+val fft : int -&gt; Complex array -&gt; unit</PRE>
+      <P>The previous example of a 2             <SUP>12</SUP> -point transform 
+      that took almost 10s with the naive O(N             <SUP>2</SUP> ) 
+      algorithm now only takes 0.009s:           </P>
+<PRE>&gt; time (fft 1) [|for x in 1. .. 4096. -&gt; complex x 0.|] |&gt; ignore;;
+Took 9ms</PRE>
+      <P>In fact, this divide-and-conquer algorithm is so much faster that it 
+      can solve problems that were completely infeasible with the previous 
+      implementation:</P>
+<PRE>&gt; time (fft 1) [|for x in 1. .. 1048576. -&gt; complex x 0.|] |&gt; ignore;;
+Took 4781ms</PRE>
+      <P>However, despite its efficiency, this implementation can only be 
+      applied when N is an integral power of two.</P>
+      <H2>Bluestein's convolution algorithm</H2>
+      <P>The Fourier transform of an arbitrary-length signal may be computed by 
+      rephrasing the transform as a convolution and zero padding the convolution 
+      up to an integral power of two length. Note that zero padding a 
+      convolution is exact.</P>
+      <P>The DFT may be expressed as a convolution:</P>
+      <P><IMG src="F%23%20Journal%20A%20simple%20FFT%20implementation_files/bluestein.gif"> 
+                </P>
+      <P>where:</P>
+      <P><IMG src="F%23%20Journal%20A%20simple%20FFT%20implementation_files/bluestein2.gif"> 
+                </P>
+      <P>The factors exp(&#960; i n             <SUP>2</SUP> / N) can be compiled 
+      into an array:           </P>
+<PRE>&gt; let bluestein_sequence n =
+    let s = Math.PI / float n
+    [|for k in 0 .. n-1 -&gt;
+        let t = s * float(k*k)
+        complex (cos t) (sin t)|];;
+val bluestein_sequence : int -&gt; complex array</PRE>
+      <P>The following function gives the next power of two above the given 
+      number:</P>
+<PRE>&gt; let rec next_pow2 = function
+    | 0 -&gt; 1
+    | n -&gt; 2 * next_pow2(n / 2);;
+val next_pow2 : int -&gt; int</PRE>
+      <P>Padding is accomplished using the following function:</P>
+<PRE>&gt; let pad i n nb (w : complex array) = function
+    | i when i&lt;n -&gt; w.[i]
+    | i when i&gt;nb-n -&gt; w.[nb-i]
+    | _ -&gt; Complex.zero
+val pad : 'a -&gt; int -&gt; int -&gt; complex array -&gt; int -&gt; complex</PRE>
+      <P>These can be combined to compute the Fourier transform of an arbitrary 
+      length signal in-place by zero padding its convolution up to an integral 
+      power of two and using the              <CODE>fft</CODE> function:         
+        </P>
+<PRE>&gt; let bluestein a =
+    let n = Array.length a
+    let nb = next_pow2(2 * n - 1)
+    let w = bluestein_sequence n
+    let y = [|for i in 0 .. nb-1 -&gt; pad i n nb w i|]
+    fft (-1) y
+    let b = Array.create nb Complex.zero
+    for i in 0 .. n-1 do
+      b.[i] &lt;- Complex.conjugate w.[i] * a.[i]
+    fft (-1) b
+    let b = Array.map2 ( * ) b y
+    fft 1 b
+    let nbinv = complex (1. / float nb) 0.
+    for i in 0 .. n-1 do
+      a.[i] &lt;- nbinv * Complex.conjugate w.[i] * b.[i];;
+val bluestein : Complex array -&gt; unit</PRE>
+      <P>For a forward transform, the real and imaginary parts can be exchanged 
+      using this              <CODE>swapri</CODE> function:           </P>
+<PRE>&gt; let swapri a = Array.apply (fun z -&gt; complex z.i z.r) a
+val swapri : complex array -&gt; unit</PRE>
+      <P>The following              <CODE>is_pow2</CODE> function tests if a 
+      number is an integral power of two using the fact that only such numbers 
+      have no bits in common with their predecessor:           </P>
+<PRE>&gt; let is_pow2 n = n &amp;&amp;&amp; n-1 = 0
+val is_pow2 : int -&gt; bool</PRE>
+      <P>These routines may be combined to compute an arbitrary FFT:</P>
+<PRE>&gt; let fft1 sign a =
+    let n = Array.length a
+    if is_pow2 n then fft sign a else
+      if sign=1 then swapri a
+      bluestein a
+      if sign=1 then swapri a;;
+val fft1 : int -&gt; Complex array -&gt; unit</PRE>
+      <P>This              <CODE>fft1</CODE> function may be applied to 
+      arbitrary-length complex arrays to compute the Fourier transform in 
+      O(N\log N) time using the given sign to determine the direction of the 
+      transform. Consequently, it is productive to wrap this function in         
+           <CODE>fourier</CODE> and              <CODE>ifourier</CODE> functions 
+      that compute forward and reverse transforms using the appropriate signs:   
+              </P>
+<PRE>&gt; let fourier a = fft1 1 a; a;;
+val fourier : Complex array -&gt; Complex array
+&gt; let ifourier a = fft1 (-1) a; a;;
+val ifourier : Complex array -&gt; Complex array</PRE>
+      <P>Note that these functions return the input array because this is often 
+      useful and not because they are out-of-place transforms.</P>
+      <H2>Performance and testing</H2>
+      <P>The new function is most easily tested by comparing its input with that 
+      of the original              <CODE>dft</CODE> function on random input:    
+             </P>
+<PRE>&gt; let rand = new System.Random();;
+val rand : System.Random
+&gt; let a =
+    [|for i in 0 .. 14 -&gt;
+        complex (rand.NextDouble()) (rand.NextDouble())|];;
+val a : Complex array
+&gt; Seq.map2 (-) (dft (Array.copy a)) (fourier (Array.copy a))
+  |&gt; Seq.map Complex.magnitude;;
+  |&gt; Seq.fold max 0.;;
+val it : complex
+= 1.754046975e-14</PRE>
+      <P>Sure enough, the largest error introduced by the              
+      <CODE>fourier</CODE> function is very small.           </P>
+      <P>This final implementation is also fast, even for non-integral powers of 
+      two:</P>
+<PRE>&gt; time (ignore &lt;&lt; fourier) [|for n in 1 .. 4096 -&gt; complex (float n) 0.|]
+Took 9ms
+&gt; time (ignore &lt;&lt; fourier) [|for n in 1 .. 1048576 -&gt; complex (float n) 0.|]
+Took 4781ms
+&gt; time (ignore &lt;&lt; fourier) [|for n in 1 .. 1048575 -&gt; complex (float n) 0.|]
+Took 30227ms</PRE>
+      <P>Despite having a smaller number of elements, the 2             
+      <SUP>20</SUP> -1 length transform takes longer than the 2             
+      <SUP>20</SUP> length transform because algorithm resorts to 2             
+      <SUP>n+1</SUP> length transforms internally.           </P>
+      <H2>Summary</H2>
+      <P>As this example has shown, the F# programming language is an excellent 
+      choice for high performance numerical computing in a modern environment. 
+      Moreover, the expressiveness of the F# language allows sophisticated 
+      algorithms to be implemented with ease.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20A%20simple%20FFT%20implementation_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

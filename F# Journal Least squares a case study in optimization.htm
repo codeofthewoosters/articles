@@ -1,0 +1,543 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0072)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/qr.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Least squares: a case study in optimization</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Least squares: a case study in 
+optimization</TITLE>     <LINK href="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Least squares: a case study in optimization</H1>
+      <P>The challenge of finding the least squares best fit of a linear sum of 
+      functions is a common problem in regression. Linear algebra provides a 
+      powerful and general solution by expressing this problem in terms of 
+      matrices and then computing the QR decomposition in order to solve the 
+      matrix equation. This article describes a remarkably simple implementation 
+      of QR decomposition in F# before developing progressively more optimized 
+      implementations using the guidance of performance profiles and without 
+      sacrificing generality. In particular, heavy use of the F# keyword 
+      "inline" is made in order to express efficient reusable numerical 
+      methods.</P>
+      <H2>Introduction</H2>
+      <P>Least squares is a method for fitting functions to data where the 
+      parameters of the functions are chosen such that the sum of the squares of 
+      the differences between the observed data              <I>y               
+      <SUB>i</SUB>             </I> and expected value              <I>f(x       
+              <SUB>i</SUB> )             </I> is minimized.           </P>
+      <P>In the case where the number of parameters is equal to the number of 
+      observations              <I>(x               <SUB>i</SUB> , y             
+        <SUB>i</SUB> )             </I> the problem is easily phrased in terms 
+      of a square matrix A:           </P>
+      <P>A              <B>x</B> =              <B>b</B>           </P>
+      <P>where the elements A             <SUB><I>ij</I>             </SUB> are 
+      the values              <I>f               <SUB>j</SUB> (x               
+      <SUB>i</SUB> )             </I> , the vector              <B>b</B> 
+      contains the observed values              <I>y               <SUB>i</SUB>  
+                 </I> . The vector              <B>x</B> contains the unknown 
+      coefficients of the linear sum of functions              <I>f              
+       <SUB>j</SUB> (x)             </I> that goes through the points            
+        <I>(x               <SUB>i</SUB> , y               <SUB>i</SUB> )        
+           </I> .           </P>
+      <P>If there are more observations              <I>(x               
+      <SUB>i</SUB> , y               <SUB>i</SUB> )             </I> than 
+      functions              <I>f               <SUB>j</SUB> (x)             
+      </I> then there is no unique solution and the system is referred to as 
+      overdetermined. One important solution is the              <I>least 
+      squares</I> solution that minimizes the matrix norm ||A              
+      <B>x</B> -              <B>b</B> ||. Fortunately, the pseudoinverse of A 
+      computed from its QR decomposition does exactly this.           </P>
+      <P>The QR decomposition represents an m×n matrix A as the sum of two 
+      matrices Q and R:</P>
+      <P>A = Q R</P>
+      <P>where Q is an m×m unitary (its transpose is its inverse) and R is an 
+      m×n upper triangular.</P>
+      <P>With this decomposition, the problem may be rewritten:</P>
+      <P>R              <B>x</B> = Q             <SUP>T</SUP>             
+      <B>b</B>           </P>
+      <P>and solved using back substitution because R is upper triangular.</P>
+      <H2>QR decomposition</H2>
+      <P>The QR decomposition of a matrix is easily computed using householder 
+      reductions as follows:</P>
+<PRE>&gt; let qr (A: matrix) =
+    let m, n = A.Dimensions
+    let rec aux k (Q: matrix) (R: matrix) (QA: matrix) =
+      if k=n then Q, R*A else
+        let x = QA.Column 0
+        let u = Vector.mapi (fun i xi -&gt; if i=0 then xi - x.Norm else xi) x
+        let v = (1. / u.Norm) * u
+        let q k i j =
+          let x = if i=j then 1.0 else 0.0
+          if i&lt;k || j&lt;k then x else
+            x - 2. * v.[i-k] * v.[j-k]
+        let QA = Matrix.init (m-k) (m-k) (q 0) * QA
+        let QA = Matrix.init (m-k-1) (n-k-1) (fun i j -&gt; QA.[i+1, j+1])
+        let Qk = Matrix.init m m (q k)
+        aux (k+1) (Q * Qk.Transpose) (Qk * R) QA
+    let I = Matrix.identity m
+    aux 0 I I A;;
+val qr : matrix -&gt; matrix * Matrix&lt;float&gt;</PRE>
+      <P>This procedure extracts the first column of the matrix A and uses its 
+      first value to construct a reflection Q             <SUB>k</SUB> that 
+      zeroes all of the off-diagonal elements in the first column. The matrix A 
+      is then shrunk by removing its first row and column and the process is 
+      repeated. The matrices Q and R are accumulated as the procedure runs.      
+           </P>
+      <P>For example, the QR decomposition of the following non-square matrix 
+      is:</P>
+<PRE>&gt; let A =
+    matrix
+      [ [  2.; -1.;  1. ];
+        [  1.; -5.;  2. ];
+        [ -3.;  1.; -4. ];
+        [  1.; -1.;  1. ] ];;
+val it : Matrix&lt;float&gt; = matrix [[2.0; -1.0; 1.0]
+                                 [1.0; -5.0; 2.0]
+                                 [-3.0; 1.0; -4.0]
+                                 [1.0; -1.0; 1.0]]
+&gt; let Q, R = qr A;;
+val R : Matrix&lt;float&gt; =
+  matrix [[3.872983346; -2.840187787; 4.389381126]
+          [8.326672685e-17; 4.464676173; -0.7913974488]
+          [-1.054711873e-15; -2.220446049e-16; 1.451558959]
+          [2.220446049e-16; 0.0; -2.220446049e-16]]
+val Q : matrix =
+  matrix [[0.5163977795; 0.1045241914; -0.8156378912; 0.2390457219]
+          [0.2581988897; -0.9556497495; 0.07603404071; 0.1195228609]
+          [-0.7745966692; -0.268776492; -0.559887027; -0.1195228609]
+          [0.2581988897; -0.05972810934; -0.1244193393; -0.9561828875]]</PRE>
+      <P>Note that R is upper triangular, the product Q×R recovers the original 
+      matrix:</P>
+<PRE>&gt; Q*R;;
+val it : Matrix&lt;float&gt; = matrix [[2.0; -1.0; 1.0]
+                                 [1.0; -5.0; 2.0]
+                                 [-3.0; 1.0; -4.0]
+                                 [1.0; -1.0; 1.0]]</PRE>
+      <P>and the product Q Q             <SUP>T</SUP> recovers the identity 
+      matrix:           </P>
+<PRE>val it : Matrix&lt;float&gt; =
+  matrix [[1.0; 1.179611964e-16; -1.249000903e-16; 1.110223025e-16]
+          [1.179611964e-16; 1.0; 1.578598363e-16; -1.249000903e-16]
+          [-1.249000903e-16; 1.578598363e-16; 1.0; 2.220446049e-16]
+          [1.110223025e-16; -1.249000903e-16; 2.220446049e-16; 1.0]]</PRE>
+      <P>The matrix product is easily visualized using the F# for Visualization 
+      library:</P>
+<PRE>&gt; View(Row[math A; math "="; math Q; math R]);;</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/qr.gif"> 
+                  </P>
+      <P></P>
+      <P>Note that the lower triangular parts of R are zero to within numerical 
+      precision.</P>
+      <P>We shall begin by generalizing this implementation of QR decomposition 
+      to work on matrices with any element type before optimizing the 
+      generalized implementation.</P>
+      <H2>Generalizing numerical code using inline</H2>
+      <P>The              <CODE>inline</CODE> keyword in F# is often 
+      underappreciated but is, in fact, extremely powerful. Most importantly, 
+      marking a function as              <CODE>inline</CODE> not only causes the 
+      body of the function to be inlined into all call sites, affecting 
+      performance, but also causes a completely different              
+      <I>structural</I> type to be inferred for the function.           </P>
+      <P>For example, writing the simple              <CODE>sqr</CODE> function 
+      to square a value using multiplication            </P>
+<PRE>&gt; let sqr x = x * x;;
+val sqr : int -&gt; int
+&gt; let inline sqr x = x * x;;
+val inline sqr :
+   ^a -&gt;  ^b when  ^a : (static member ( * ) :  ^a *  ^a -&gt;  ^b)</PRE>
+      <P>Without inline, the type of the function is immediately specialized to  
+                  <CODE>int</CODE> but the              <CODE>inline</CODE> 
+      keyword results in a much more generic structural type being inferred. In 
+      this case, the type requires that the argument to              
+      <CODE>sqr</CODE> is of a type that provides a multiplication operator.     
+            </P>
+      <P>Consequently, the              <CODE>inline sqr</CODE> function may be 
+      applied to arguments of different types, such as              
+      <CODE>int</CODE> ,              <CODE>float</CODE> and even the 
+      arbitrary-precision rational              <CODE>BigNum</CODE> type:        
+         </P>
+<PRE>&gt; sqr 3;;
+val it : int = 9
+&gt; sqr 1.2;;
+val it : float = 1.44
+&gt; sqr 123N/234N;;
+val it : BigNum = 1681/26N</PRE>
+      <P>The              <CODE>qr</CODE> function may be written generically by 
+      adding extra arguments for a function to convert from the              
+      <CODE>int</CODE> type to the element type, a function to compute the norm 
+      of a vector, a function              <CODE>q</CODE> to compute the 
+      reflection matrix and a function to transpose a matrix (e.g. the Hermitian 
+      conjugate in the case of complex matrices):           </P>
+<PRE>&gt; let inline qr of_int norm q transpose (A: Matrix&lt;_&gt;) =
+    let ( *|| ) (A: Matrix&lt;'a&gt;) (B: Matrix&lt;'a&gt;) = A * B
+    let m, n = A.Dimensions
+    let rec aux k (Q: Matrix&lt;_&gt;) (R: Matrix&lt;_&gt;) (QA: Matrix&lt;_&gt;) =
+      if k=n then Q, R *|| A else
+        let x = QA.Column 0
+        let u = Vector.Generic.mapi (fun i xi -&gt; if i=0 then xi - norm x else xi) x
+        let v = (of_int 1 / norm u) * u
+        let q = q x v
+        let QA = Matrix.Generic.init (m-k) (m-k) (q 0) *|| QA
+        let QA = Matrix.Generic.init (m-k-1) (n-k-1) (fun i j -&gt; QA.[i+1, j+1])
+        let Qk = Matrix.Generic.init m m (q k)
+        aux (k+1) (Q *|| transpose Qk) (Qk *|| R) QA
+    let I = Matrix.Generic.identity m
+    aux 0 I I A;;
+val inline qr :
+  (int -&gt;  ^a) -&gt;
+    (Vector&lt; ^c&gt; -&gt;  ^b) -&gt;
+      (Vector&lt; ^c&gt; -&gt; Vector&lt; ^c&gt; -&gt; int -&gt; int -&gt; int -&gt;  ^c) -&gt;
+        (Matrix&lt; ^c&gt; -&gt; Matrix&lt; ^c&gt;) -&gt;
+          Matrix&lt; ^c&gt; -&gt; Matrix&lt; ^c&gt; * Matrix&lt; ^c&gt;
+    when ( ^a or  ^b) : (static member ( / ) :  ^a *  ^b -&gt;  ^c) and
+         ( ^c or  ^b) : (static member ( - ) :  ^c *  ^b -&gt;  ^c) and
+         ( ^c or Vector&lt; ^c&gt;) : (static member ( * ) :  ^c * Vector&lt; ^c&gt; -&gt;
+                                                         Vector&lt; ^c&gt;)</PRE>
+      <P>Note how the function definition is only marginally more complicated 
+      but the inferred type is substantially larger than before.</P>
+      <P>There were some hidden complications in this generalization:</P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>Norm</CODE> property of the vector class 
+        requires the element type to implement the                  
+        <CODE>INormFloat</CODE> interface which, in turn, requires a             
+             <CODE>Norm</CODE> function that returns a                  
+        <CODE>float</CODE> . This is not suitable for a generic definition not 
+        only because of the requirement upon the inexact concrete                
+          <CODE>float</CODE> type but also because the                  
+        <CODE>Complex</CODE> class does not implement the                  
+        <CODE>INormFloat</CODE> interface.               </LI>
+        <LI>The uses of the                  <CODE>*</CODE> operator for 
+        matrix-matrix multiply become ambiguous in the presence of genericity 
+        because the function is heavily overloaded. Consequently, we have 
+        explicitly defined a new                  <CODE>*||</CODE> operator for 
+        this purpose.               </LI>
+        <LI>The original implementation made unnecessary use of matrix 
+        transposition that this generlized implementation has replaced with an 
+        arbitrary procedure because the complex-valued case requires the use of 
+        the Hermitian conjugate.</LI>
+        <LI>The function used to compute the reflection matrix has been factored 
+        out because this is slightly different in the complex-valued case and, 
+        in particular, depends upon the vector                  <B>x</B> .       
+                </LI></UL>
+      <P></P>
+      <P>Factoring out the commonality between all QR decomposition 
+      implementations allows us to write implementations for concrete element 
+      types easily in terms of our generic              <CODE>qr</CODE> 
+      function. For example, implementations for the              
+      <CODE>float</CODE> ,              <CODE>float32</CODE> and              
+      <CODE>complex</CODE> types may be written:           </P>
+<PRE>&gt; module Float =
+    let qr =
+      qr float (fun (u: vector) -&gt; u.Norm)
+        (fun _ v k i j -&gt;
+          let x = if i=j then 1.0 else 0.0
+          if i&lt;k || j&lt;k then x else
+            x - 2.0 * v.[i-k] * v.[j-k])
+        id;;
+module Float = begin
+  val qr : (Matrix&lt;float&gt; -&gt; Matrix&lt;float&gt; * Matrix&lt;float&gt;)
+end</PRE>
+<PRE>&gt; module Float32 =
+    let qr =
+      qr float32 (fun (u: Vector&lt;float32&gt;) -&gt; float32 u.Norm)
+        (fun _ v k i j -&gt;
+          let x = if i=j then 1.0f else 0.0f
+          if i&lt;k || j&lt;k then x else
+            x - 2.0f * v.[i-k] * v.[j-k])
+        id;;
+module Float32 = begin
+  val qr : (Matrix&lt;float32&gt; -&gt; Matrix&lt;float32&gt; * Matrix&lt;float32&gt;)
+end</PRE>
+<PRE>&gt; module Complex =
+    let hermitian_conjugate (A: Matrix&lt;_&gt;) =
+      Matrix.Generic.map Complex.conjugate A.Transpose
+    
+    let qr =
+      qr
+        (fun n -&gt; complex (float n) 0.0)
+        (fun (u: Vector&lt;Complex&gt;) -&gt;
+          let mutable x = 0.0
+          let norm2 (z: complex) = z.r * z.r + z.i * z.i
+          for i=0 to u.Length - 1 do
+            x &lt;- x + norm2 u.[i]
+          complex (sqrt x) 0.0)
+        (fun x v k -&gt;
+          let hdot (u: Vector&lt;complex&gt;) (v: Vector&lt;_&gt;) =
+            Seq.zip u v
+            |&gt; Seq.fold (fun z (z1, z2) -&gt; z + z1.Conjugate * z2) Complex.Zero
+          let w = Complex.One + hdot x v / hdot v x
+          fun i j -&gt;
+            let x = if i=j then Complex.One else Complex.Zero
+            if i&lt;k || j&lt;k then x else
+              x - w * v.[i-k] * v.[j-k].Conjugate)
+        hermitian_conjugate;;
+module Complex = begin
+  val hermitian_conjugate : Matrix&lt;complex&gt; -&gt; Matrix&lt;complex&gt;
+  val qr : (Matrix&lt;Complex&gt; -&gt; Matrix&lt;Complex&gt; * Matrix&lt;Complex&gt;)
+end</PRE>
+      <P>We can test our complex-valued implementation on a variant of the 
+      previous example:</P>
+<PRE>&gt; let A =
+    [ [  2., 0.; -1., 0.;  1., 0. ];
+      [  1., 0.; -5., 0.;  2., 0. ];
+      [ -3., 1.;  1., 0.; -4., 0. ] ]
+    |&gt; Seq.map (Seq.map Complex.Create)
+    |&gt; Matrix.Generic.of_seq;;
+val A : Matrix&lt;Complex&gt; = matrix [[2r+0i; -1r+0i; 1r+0i]
+                                  [1r+0i; -5r+0i; 2r+0i]
+                                  [-3r+1i; 1r+0i; -4r+0i]]</PRE>
+<PRE>&gt; let Q, R = Complex.qr A;;
+val R : Matrix&lt;Complex&gt; =
+  matrix [[3.87298334620742r+1.11022302462516e-16i;
+           -2.58198889747161r-0.258198889747161i;
+           4.13118223595458r+1.03279555898864i]
+          [0r+2.77555756156289e-17i; 4.5018514709691r-9.71445146547012e-17i;
+           -0.903332038582616r+0.355409326655456i]
+          [-6.66133814775094e-16r+3.33066907387547e-16i;
+           0r-1.38777878078145e-16i; 1.38720658348465r-1.0547118733939e-15i]]
+val Q : Matrix&lt;Complex&gt; =
+  matrix [[0.516397779494322r+0i; 0.0740436097198863r+0.0296174438879546i;
+           -0.761185150937731r-0.384149515426519i]
+          [0.258198889747161r+0i; -0.962566926358525r+0.0148087219439773i;
+           0.0497971594071413r+0.0640249192377531i]
+          [-0.774596669241483r+0.258198889747161i;
+           -0.236939551103637r+0.103661053607841i;
+           -0.512199353902025r-0.0640249192377535i]]</PRE>
+<PRE>&gt; View(Grid[[math  A; math "="; math Q; math R];
+            [math ""; math "="; math(Q*R)]]);;</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/qr_complex.gif"> 
+                  </P>
+      <P></P>
+      <P>Before optimizing this code, let us consider a simple example of its 
+      application to least squares optimization.</P>
+      <P>Rather than using explicit matrix inversion, we can solve R             
+       <B>x</B> = Q             <SUP>T</SUP>             <B>b</B> directly 
+      because R is upper triangular using back substitution:           </P>
+<PRE>&gt; let back_subst (U: matrix) (b: vector) =
+    let m, n = U.Dimensions
+    assert(m=n)
+    let x = b.Copy()
+    for j=n-1 downto 1 do
+      x.[j] &lt;- x.[j] / U.[j,j]
+      for i=0 to j-1 do
+        x.[i] &lt;- x.[i] - x.[j] * U.[i,j]
+    x.[0] &lt;- x.[0] / U.[0,0]
+    x;;
+val back_subst : matrix -&gt; vector -&gt; Vector&lt;float&gt;</PRE>
+      <P>In this case, we shall consider 100 points taken from the first half 
+      cycle of the sine function:</P>
+<PRE>&gt; let xys =
+    [ for x in 0 .. 100 -&gt;
+        let x = float x / 100. * System.Math.PI
+        x, sin x ];;
+val xys : (float * float) list =
+  [(0.0, 0.0); (0.03141592654, 0.03141075908); (0.06283185307, 0.06279051953);
+   ...
+   (3.078760801, 0.06279051953); (3.110176727, 0.03141075908); ...]</PRE>
+<PRE>&gt; let plot = Plot([Data xys], (0., System.Math.PI));;
+val plot : Plot</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/qr_data.gif"> 
+                  </P>
+      <P></P>
+      <P>Let us consider fitting a polynomial (although we may use a linear 
+      superposition of any functions):</P>
+<PRE>&gt; let f j x = x ** float j;;
+val f : int -&gt; float -&gt; float</PRE>
+      <P>The matrix A and vector              <B>b</B> may be generated as 
+      follows:           </P>
+<PRE>&gt; let A =
+    matrix
+      [ for x, _ in xys -&gt;
+          [ for j in 0..2 -&gt;
+               f j x ] ];;
+val A : matrix = matrix [[1.0; 0.0; 0.0]
+                         [1.0; 0.03141592654; 0.0009869604401]
+                         ...]
+  let b = vector(Seq.map snd xys)
+val b : vector =
+  vector [|0.0; 0.03141075908; 0.06279051953; 0.09410831332; 0.1253332336;
+           0.156434465; 0.1873813146; 0.2181432414; 0.2486898872; 0.278991106;
+           ...|]</PRE>
+      <P>The three coefficients of the best fit quadratic can be obtained as 
+      follows:</P>
+<PRE>&gt; #time;;</PRE>
+<PRE>--&gt; Timing now on</PRE>
+<PRE>&gt; let c =
+    let m, n = A.Dimensions
+    let Q, R = Float.qr A
+    back_subst (R.Rows(0, n)) ((Q.Columns(0, n)).Transpose * b);;
+Real: 00:00:00.059, CPU: 00:00:00.062, GC gen0: 0, gen1: 0, gen2: 0</PRE>
+<PRE>val c : Vector&lt;float&gt; = vector [|-0.04749544914; 1.307501675; -0.4161907092|]</PRE>
+<PRE>&gt; #time;;</PRE>
+<PRE>--&gt; Timing now off</PRE>
+      <P>The best fit function is then:</P>
+<PRE>&gt; let best_fit (c: vector) x =
+    [ for j in 0..2 -&gt;
+        c.[j] * f j x ]
+    |&gt; Seq.sum;;
+val best_fit : vector -&gt; float -&gt; float</PRE>
+<PRE>&gt; plot.Data &lt;- [Function(best_fit c); Data xys];;</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/qr_bestfit.gif"> 
+                  </P>
+      <P></P>
+      <P>Note that it took only 59ms to compute the best fit quadratic for 100 
+      points. Repeating the procedure but fitting a 100th degree polynomial to 
+      200 points takes 16.1s, which is irritatingly slow. Thus, it is desirable 
+      to optimize our generic implementation.</P>
+      <H2>Profiling</H2>
+      <P>The first step in optimizing a program is to profile it running on 
+      realistic input, in order to quantify where the time is being spent.</P>
+      <P>In this case, a profile immediately shows that around 90% of the 
+      running time is spent performing dense matrix-matrix multiplications:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/profile1.gif"> 
+                  </P>
+      <P></P>
+      <P>Thus, the most productive optimizations will reduce the number and/or 
+      complexity of these multiplications.</P>
+      <H2>Optimization</H2>
+      <P>Fortunately, some obvious optimizations can be made. Firstly, the 
+      sequence of matrix multiplications being performed involves progessively 
+      simpler Q matrices with upper left corners that are progressively larger 
+      identity submatrices. Using the ordinary dense matrix-matrix 
+      multiplication is clearly wasteful here. Thus, we can accumuate the 
+      sequence of Q matrices and perform multiplications between smaller 
+      matrices when possible:</P>
+<PRE>&gt; let inline qr of_int norm q transpose (A: Matrix&lt;_&gt;) =
+    let ( *|| ) (A: Matrix&lt;'a&gt;) (B: Matrix&lt;'a&gt;) = A * B
+    let m, n = A.Dimensions
+    let Qs = Array.zeroCreate n
+    let rec aux k (QA: Matrix&lt;_&gt;) =
+      if k &lt; n then
+        let x = QA.Column 0
+        let u = Vector.Generic.mapi (fun i xi -&gt; if i=0 then xi - norm x else xi) x
+        let v = (of_int 1 / norm u) * u
+        Qs.[k] &lt;- Matrix.Generic.init (m-k) (m-k) (q x v)
+        let QA = Qs.[k] *|| QA
+        let QA = Matrix.Generic.init (m-k-1) (n-k-1) (fun i j -&gt; QA.[i+1, j+1])
+        aux (k+1) QA
+    aux 0 A
+    let expand (A: Matrix&lt;'a&gt;) : Matrix&lt;'a&gt; =
+      let m, n = A.Dimensions
+      Matrix.Generic.init (m+1) (n+1) (fun i j -&gt;
+        match i, j with
+        | 0, 0 -&gt; of_int 1
+        | 0, _ | _, 0 -&gt; of_int 0
+        | i, j -&gt; A.[i-1, j-1])
+    let I = Matrix.Generic.identity (m-n)
+    let Q = Array.foldBack (fun Qk Q -&gt; transpose Qk * expand Q) Qs I
+    let R = Array.foldBack (fun Qk R -&gt; expand R * Qk) Qs I * A
+    Q, R;;
+val inline qr :
+  (int -&gt;  ^a) -&gt;
+    (Vector&lt; ^a&gt; -&gt;  ^a0) -&gt;
+      (Vector&lt; ^a&gt; -&gt; Vector&lt; ^a&gt; -&gt; int -&gt; int -&gt;  ^a) -&gt;
+        (Matrix&lt; ^a&gt; -&gt;  ^b) -&gt; Matrix&lt; ^a&gt; -&gt; Matrix&lt; ^a&gt; * Matrix&lt; ^a&gt;
+    when ( ^a or  ^a0) : (static member ( / ) :  ^a *  ^a0 -&gt;  ^a) and
+         ( ^a or  ^a0) : (static member ( - ) :  ^a *  ^a0 -&gt;  ^a) and
+         ( ^a or Vector&lt; ^a&gt;) : (static member ( * ) :  ^a * Vector&lt; ^a&gt; -&gt;
+                                                         Vector&lt; ^a&gt;) and
+         ( ^b or Matrix&lt; ^a&gt;) : (static member ( * ) :  ^b * Matrix&lt; ^a&gt; -&gt;
+                                                         Matrix&lt; ^a&gt;)</PRE>
+      <P>This makes little difference in the heavily over-determined case but 
+      the previous example of fitting a 100th degree polynomial to 200 points is 
+      solved 2× faster with this optimization, from 16s down to 8s.</P>
+      <P>Secondly, the sequences of matrix multiplications that produce the Q 
+      and R matrices are now entirely independent and, consequently, are trivial 
+      to parallelize. As the overheads involved are relatively small (because 
+      performing a sequence of matrix-matrix multiplies is very expensive), we 
+      shall use asynchronous workflows for parallelism instead of the task 
+      parallel library:</P>
+<PRE>    let I = Matrix.Generic.identity (m-n)
+    ( async { return Array.foldBack (fun Qk Q -&gt; transpose Qk *|| expand Q) Qs I },
+      async { return Array.foldBack (fun Qk R -&gt; expand R *|| Qk) Qs I *|| A } )
+    |&gt; Async.Parallel2
+    |&gt; Async.RunSynchronously</PRE>
+      <P>This reduces the time taken to solve our example from 8s down to 5.2s, 
+      over 3× faster than the original!</P>
+      <P>Note that roughly one third of the time is spent in each of:</P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>Qs.[k] *|| QA</CODE> matrix-matrix 
+        multiplication in the                  <CODE>aux</CODE> function.        
+               </LI>
+        <LI>The                  <CODE>transpose Qk * expand Q</CODE> 
+        matrix-matrix multiplication when computing Q.               </LI>
+        <LI>The                  <CODE>expand R * Qk</CODE> matrix-matrix 
+        multiplication when computing Q.               </LI></UL>
+      <P></P>
+      <P>Consequently, performing the last two procedures in parallel reduces 
+      the time taken by roughly a third.</P>
+      <P>Finally, we can reuse our parallelized matrix-matrix multiply 
+      implementation to improve performance on multicore machines:</P>
+<PRE>    let ( *|| ) (A: Matrix&lt;'a&gt;) (B: Matrix&lt;'a&gt;) =
+      let (am, an), (bm, bn) = A.Dimensions, B.Dimensions
+      assert(an=bm)
+      let C = Matrix.Generic.zero am bn
+      let a, b, c = A.InternalDenseValues, B.InternalDenseValues, C.InternalDenseValues
+      let rec aux i0 i2 =
+        if i2 - i0 &lt; 2 || (i2 - i0) * bn * an &lt; threshold then
+          for i=i0 to i2 - 1 do
+            for j = 0 to bn - 1 do
+              let mutable r = a.[i,0] * b.[0,j]
+              for k = 1 to an - 1 do
+                r &lt;- r + a.[i,k] * b.[k,j]
+              c.[i,j] &lt;- r
+        else
+          let i1 = (i0 + i2) / 2
+          let f = System.Threading.Tasks.Future.Create(fun () -&gt; aux i0 i1)
+          aux i1 i2
+          f.Value
+      aux 0 am
+      C</PRE>
+      <P>This reduces the time taken to only 2.63s, over 6× faster than the 
+      original!</P>
+      <H2>Summary</H2>
+      <P>This article has shown how a common numerical method from linear 
+      algebra can be used to solve important practical problems in curve fitting 
+      via an elegant and yet efficient F# 
+implementation.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Least%20squares%20a%20case%20study%20in%20optimization_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

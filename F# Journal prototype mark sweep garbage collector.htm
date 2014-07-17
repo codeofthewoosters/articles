@@ -1,0 +1,163 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0081)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/prototypegc.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20prototype%20mark%20sweep%20garbage%20collector_files/style.css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20prototype%20mark%20sweep%20garbage%20collector_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20prototype%20mark%20sweep%20garbage%20collector_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20prototype%20mark%20sweep%20garbage%20collector_files/title.gif"> 
+    </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20prototype%20mark%20sweep%20garbage%20collector_files/left.gif"> 
+    </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Prototyping a mark-sweep garbage collector</H1>
+      <P>Garbage collectors can be notoriously difficult to write. Consequently, 
+      the availability of a working simulation can help greatly when trying to 
+      write a production-quality garbage collector. This article walks through 
+      the design and implementation of a prototype mark-sweep garbage collector. 
+      This not only demonstrates that it is possible to prototype low-level 
+      tools in F# but also serves as an educational example about garbage 
+      collection itself.</P>
+      <H2>Introduction</H2>
+      <P>John McCarthy invented the first garbage collector around 1960 for the 
+      Lisp programming language. This simple algorithm, known as mark-sweep, is 
+      still the backbone of most modern garbage collectors. However, garbage 
+      collected languages were not adopted as mainstream tools until Java in the 
+      late 1990s, over 30 years later! Without garbage collection, most 
+      programmers were expected to determine when heap allocated memory was no 
+      longer required and explicitly free it themselves.</P>
+      <P>The basic idea behind garbage collection is that all allocated heap 
+      blocks can be classified as either reachable from the running program or 
+      unreachable from it. The unreachable heap blocks be recycled safe in the 
+      knowledge that the program could never have used them again.</P>
+      <P>The many families of garbage collection algorithms are most broadly 
+      categorized into tracing and reference counting algorithms. Tracing 
+      collectors work by traversing the heap starting from immediately 
+      accessible heap blocks in order to determine the set of 
+      potentially-reachable heap blocks and then free the remaining unreachable 
+      heap blocks. In contrast, reference counting keeps track of the number of 
+      pointers to each heap block and frees when the last pointer to a heap 
+      block is dropped. This article considers two tracing garbage collection 
+      algorithms.</P>
+      <P>Tracing begins with the set of "global roots", the heap blocks pointed 
+      to from global variables and held on the stack and in registers. The mark 
+      phase recursively marks everything reachable from the global roots until 
+      all reachable heap blocks have been marked. In a mark-sweep collector, the 
+      sweep phase then iterates over the set of all allocated heap blocks 
+      freeing those that were not marked.</P>
+      <H2>Mark-sweep</H2>
+      <P>The mark-sweep algorithm is easily simulated in F#. Let us consider a 
+      simple list-based program for solving the n-queens problem. In this case, 
+      there are no global variables so the set of global roots is just the stack 
+      that contains all of the lists that will be used in the remainder of the 
+      program.</P>
+      <P>We begin by opening the <CODE>System.Collections.Generic</CODE> 
+      namespace:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Collections.Generic;;</CODE></P>
+      <P>Our lists will be represented by chains of the following 
+      <CODE>blk</CODE> type:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;blk&nbsp;=&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mutable&nbsp;marked:&nbsp;bool;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;head:&nbsp;int&nbsp;*&nbsp;int;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tail:&nbsp;blk&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;blk&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{mutable&nbsp;marked:&nbsp;bool;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;head:&nbsp;int&nbsp;*&nbsp;int;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tail:&nbsp;blk&nbsp;option;}</CODE></P>
+      <P>This simulates the head and tail of a list cell but with an additional 
+      mutable <CODE>marked</CODE> boolean that will be used to record whether or 
+      not the heap block is reachable.</P>
+      <P>The set of all allocated heap blocks will be recorded in the following 
+      <CODE>allocated</CODE> collection:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;mutable&nbsp;allocated&nbsp;=&nbsp;ResizeArray&lt;blk&gt;();;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;mutable&nbsp;allocated&nbsp;:&nbsp;List&lt;blk&gt;</CODE></P>
+      <P>We create our own module for manipulating our lists:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;module&nbsp;List&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;(|Nil|Cons|)&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;Nil<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;blk&nbsp;-&gt;&nbsp;Cons(blk.head,&nbsp;blk.tail)<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;empty&nbsp;=&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;cons&nbsp;x&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;blk&nbsp;=&nbsp;{&nbsp;marked&nbsp;=&nbsp;false;&nbsp;head&nbsp;=&nbsp;x;&nbsp;tail&nbsp;=&nbsp;xs&nbsp;}<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allocated.Add&nbsp;blk<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Some&nbsp;blk<BR>&nbsp;&nbsp;&nbsp;&nbsp;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;filter&nbsp;f&nbsp;=&nbsp;function<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Nil&nbsp;-&gt;&nbsp;empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Cons(x,&nbsp;xs)&nbsp;-&gt;&nbsp;if&nbsp;f&nbsp;x&nbsp;then&nbsp;cons&nbsp;x&nbsp;(filter&nbsp;f&nbsp;xs)&nbsp;else&nbsp;filter&nbsp;f&nbsp;xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;module&nbsp;List&nbsp;=&nbsp;begin<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;(&nbsp;|Nil|Cons|&nbsp;)&nbsp;:&nbsp;blk&nbsp;option&nbsp;-&gt;&nbsp;Choice&lt;unit,((int&nbsp;*&nbsp;int)&nbsp;*&nbsp;blk&nbsp;option)&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;empty&nbsp;:&nbsp;'a&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;cons&nbsp;:&nbsp;int&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;blk&nbsp;option&nbsp;-&gt;&nbsp;blk&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;filter&nbsp;:&nbsp;(int&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;bool)&nbsp;-&gt;&nbsp;blk&nbsp;option&nbsp;-&gt;&nbsp;blk&nbsp;option<BR>&nbsp;&nbsp;&nbsp;&nbsp;end</CODE></P>
+      <P>Note that the <CODE>cons</CODE> function that allocates a new list cell 
+      also registers it in the <CODE>allocated</CODE> collection. We have been 
+      slightly naughty in that our <CODE>filter</CODE> function has not been 
+      instrumented to perform garbage collection but this does not affect our 
+      results.</P>
+      <P>As the stack is backtracked when functions return it is most simply 
+      represented as an ordinary F# list. The following <CODE>push</CODE> 
+      function pushes a reference onto the stack if it is non-empty:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;push&nbsp;x&nbsp;xs&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;x&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;None&nbsp;-&gt;&nbsp;xs<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Some&nbsp;x&nbsp;-&gt;&nbsp;x::xs;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;push&nbsp;:&nbsp;'a&nbsp;option&nbsp;-&gt;&nbsp;'a&nbsp;list&nbsp;-&gt;&nbsp;'a&nbsp;list</CODE></P>
+      <P>The following <CODE>gcMark</CODE> function implements the mark phase of 
+      the garbage collector by setting all <CODE>marked</CODE> booleans to 
+      <CODE>false</CODE> and then recursively marking the 
+<CODE>stack</CODE>:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;gcMark&nbsp;stack&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i=0&nbsp;to&nbsp;allocated.Count-1&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allocated.[i].marked&nbsp;&lt;-&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;rec&nbsp;mark&nbsp;blk&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;not&nbsp;blk.marked&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;blk.marked&nbsp;&lt;-&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Option.iter&nbsp;mark&nbsp;blk.tail<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;List.iter&nbsp;mark&nbsp;stack;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;gcMark&nbsp;:&nbsp;blk&nbsp;list&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The <CODE>gcSweep</CODE> function filters out unmarked heap blocks from 
+      the <CODE>allocated</CODE> collection:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;gcSweep()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;allocated.RemoveAll(fun&nbsp;blk&nbsp;-&gt;&nbsp;not&nbsp;blk.marked)&nbsp;|&gt;&nbsp;ignore;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;gcSweep&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The <CODE>gc</CODE> function performs the mark phase and then the sweep 
+      phase and prints some statistics about the number and proportion of heap 
+      blocks that were collected:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;gc&nbsp;stack&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gcMark&nbsp;stack<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;old&nbsp;=&nbsp;allocated.Count<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gcSweep()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;n&nbsp;=&nbsp;old&nbsp;-&nbsp;allocated.Count<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;printfn&nbsp;"Recycled&nbsp;%d/%d&nbsp;heap&nbsp;blocks&nbsp;(%f%%)"&nbsp;n&nbsp;old&nbsp;(float&nbsp;n&nbsp;/&nbsp;float&nbsp;old&nbsp;*&nbsp;100.0);;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;gc&nbsp;:&nbsp;blk&nbsp;list&nbsp;-&gt;&nbsp;unit</CODE></P>
+      <P>The <CODE>safe</CODE> function of our n-queens solver is not affected 
+      by garbage collection:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;safe&nbsp;(x0,&nbsp;y0)&nbsp;(x1,&nbsp;y1)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x0&lt;&gt;x1&nbsp;&amp;&amp;&nbsp;y0&lt;&gt;y1&nbsp;&amp;&amp;&nbsp;x0-y0&lt;&gt;x1-y1&nbsp;&amp;&amp;&nbsp;x0+y0&lt;&gt;x1+y1;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;safe&nbsp;:&nbsp;int&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;*&nbsp;int&nbsp;-&gt;&nbsp;bool</CODE></P>
+      <P>The <CODE>search</CODE> function pushes its parameters that are lists 
+      onto the stack and considers invoking the GC before performing the usual 
+      tests:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;search&nbsp;stack&nbsp;n&nbsp;nqs&nbsp;qs&nbsp;ps&nbsp;a&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;stack'&nbsp;=&nbsp;stack&nbsp;|&gt;&nbsp;push&nbsp;qs&nbsp;|&gt;&nbsp;push&nbsp;ps<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;allocated.Count&nbsp;&gt;&nbsp;8192&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;gc&nbsp;stack'<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;ps&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;List.Nil&nbsp;-&gt;&nbsp;if&nbsp;nqs=n&nbsp;then&nbsp;a+1&nbsp;else&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;List.Cons(q,&nbsp;ps)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;search&nbsp;stack'&nbsp;n&nbsp;(nqs+1)&nbsp;(List.cons&nbsp;q&nbsp;qs)&nbsp;(List.filter&nbsp;(safe&nbsp;q)&nbsp;ps)&nbsp;a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;search&nbsp;stack&nbsp;n&nbsp;nqs&nbsp;qs&nbsp;ps;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;search&nbsp;:&nbsp;blk&nbsp;list&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;blk&nbsp;option&nbsp;-&gt;&nbsp;blk&nbsp;option&nbsp;-&gt;&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>The stack manipulations are subtle. If the GC is invoked then it must 
+      use a stack that includes all global roots including those that were 
+      passed in to this function. The first recursive call to 
+      <CODE>search</CODE> uses newly created lists from the calls to 
+      <CODE>cons</CODE> and <CODE>filter</CODE> but they will be pushed onto the 
+      stack by the callee so the caller need not push them. The final call can 
+      use the original <CODE>stack</CODE> because it is in tail position and, 
+      therefore, none of the lists created within the body of this call will be 
+      required when the tail call returns. Note that this reduction in stack 
+      space is precisely tail call elimination.</P>
+      <P>The list of all board positions is created by the following 
+      <CODE>ps</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;ps&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;mutable&nbsp;list&nbsp;=&nbsp;List.empty<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;i&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;j&nbsp;in&nbsp;1..n&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list&nbsp;&lt;-&nbsp;List.cons&nbsp;(i,&nbsp;j)&nbsp;list<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;list;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;ps&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;blk&nbsp;option</CODE></P>
+      <P>The number of solutions to the n-queens problem may then be computed 
+      using the following <CODE>solve</CODE> function:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;solve&nbsp;n&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;search&nbsp;[]&nbsp;n&nbsp;0&nbsp;List.empty&nbsp;(ps&nbsp;n)&nbsp;0;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;solve&nbsp;:&nbsp;int&nbsp;-&gt;&nbsp;int</CODE></P>
+      <P>Calling the <CODE>solve</CODE> function to solve the 8-queens problem 
+      prints output showing that many garbage collection were performed:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;solve&nbsp;8;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8058/8194&nbsp;heap&nbsp;blocks&nbsp;(98.340249%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8058/8193&nbsp;heap&nbsp;blocks&nbsp;(98.352252%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8064/8193&nbsp;heap&nbsp;blocks&nbsp;(98.425485%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8060/8197&nbsp;heap&nbsp;blocks&nbsp;(98.328657%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8060/8194&nbsp;heap&nbsp;blocks&nbsp;(98.364657%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;...<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8076/8193&nbsp;heap&nbsp;blocks&nbsp;(98.571952%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8096/8199&nbsp;heap&nbsp;blocks&nbsp;(98.743749%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8094/8193&nbsp;heap&nbsp;blocks&nbsp;(98.791651%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8104/8195&nbsp;heap&nbsp;blocks&nbsp;(98.889567%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;Recycled&nbsp;8150/8193&nbsp;heap&nbsp;blocks&nbsp;(99.475162%)<BR>&nbsp;&nbsp;&nbsp;&nbsp;92&nbsp;solutions&nbsp;to&nbsp;the&nbsp;8-queens&nbsp;problem</CODE></P>
+      <P>Note that the GC cycles each collect around 98% of all heap blocks in 
+      this case. This figure is high because most heap blocks die young. In 
+      fact, this observation is the core of the weak generational hypothesis 
+      that is the motivation for using generational garbage collectors like the 
+      one in .NET. In generational collectors, the majority of heap blocks that 
+      become unreachable soon after being allocated are collected very 
+      efficiently and the cost of evacuation to the next generation is only paid 
+      for the small proportion of survivors (2% in this case).</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a 
+      mark-sweep garbage collector. The resulting target program bore a strong 
+      resemblance to the original F# code but with a little instrumentation to 
+      record locally-held pointers (the stack) and allocations.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of garbage 
+      collection and simulation.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2011</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20prototype%20mark%20sweep%20garbage%20collector_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

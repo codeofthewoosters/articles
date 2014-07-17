@@ -1,0 +1,156 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0080)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/chatserver.html -->
+<HTML><HEAD><META content="IE=7.0000" http-equiv="X-UA-Compatible">
+<TITLE>F# Journal</TITLE>
+<META content="text/html; charset=windows-1252" http-equiv=Content-Type><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20chat%20server_files/style.css"><LINK rel=stylesheet 
+type=text/css href="F%23%20Journal%20chat%20server_files/style(1).css"><LINK 
+rel=stylesheet type=text/css 
+href="F%23%20Journal%20chat%20server_files/individual.css">
+<META name=GENERATOR content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>
+<TABLE id=logo>
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG 
+      src="F%23%20Journal%20chat%20server_files/title.gif"> </TD>
+    <TD><IMG src="F%23%20Journal%20chat%20server_files/left.gif"> 
+  </TD></TR></TBODY></TABLE>
+<TABLE id=menu>
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A> </TD>
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A> </TD>
+    <TD width="25%"></TD></TR></TBODY></TABLE>
+<TABLE id=page>
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Chat server</H1>
+      <P>Perhaps the simplest complete working example that can be constructed 
+      using the generic server architecture described in the previous articles 
+      is a chat server that allows clients to logon and communicate by posting 
+      messages that are relayed to all other logged-on clients. This article 
+      describes a chat server and clients with GUI interface for 
+      demonstration.</P>
+      <H2>Anatomy of the chat server</H2>
+      <P>Our generic server architecture was built around three core functions. 
+      The <CODE>validate</CODE> function was responsible for validating messages 
+      per-connection as they are received from the client. The 
+      <CODE>execute</CODE> function was responsible for processing messages 
+      centrally in the core of the server. And the <CODE>filter</CODE> function 
+      was responsible for filtering messages per-connection before they are 
+      returned to the client.</P>
+      <P>Our chat server requires clients to login before they can post and 
+      receive messages, and accumulates statistics on word frequencies that 
+      clients can query by sending the message <CODE>\freqs</CODE>. Messages are 
+      only forwarded to clients that are logged on.</P>
+      <P>This gives us functionality for all three of the functions that make up 
+      the server. The <CODE>validate</CODE> function will handle logging on and 
+      will only relay messages to the core of the server once the client has 
+      logged on. The <CODE>execute</CODE> function will accumulate word 
+      frequency statistics and detect the <CODE>\freqs</CODE>.</P>
+      <H2>Concrete server</H2>
+      <P>We begin by defining the types that will be used by our concrete 
+      implementation of the generic server. We disambiguate strings representing 
+      users from other strings by wrapping them in a <CODE>User</CODE> union 
+      type constructor:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;user&nbsp;=&nbsp;User&nbsp;of&nbsp;string;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;user&nbsp;=&nbsp;|&nbsp;User&nbsp;of&nbsp;string</CODE></P>
+      <P>This is a common trick that is more typeful and, therefore, catches 
+      more errors than using the union type directly.</P>
+      <P>Requests to login will be validated to produce either successful or 
+      failed login attempts so we create a <CODE>result</CODE> union type that 
+      can represent these two options:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;result&lt;'a,&nbsp;'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;of&nbsp;'b;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;result&lt;'a,'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Success&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Failure&nbsp;of&nbsp;'b</CODE></P>
+      <P>We handle two kinds of messages, those related to login and those 
+      conveying information to be posted to all logged in clients:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;message&lt;'a,&nbsp;'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Login&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PostMessage&nbsp;of&nbsp;'b;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;message&lt;'a,&nbsp;'b&gt;&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Login&nbsp;of&nbsp;'a<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PostMessage&nbsp;of&nbsp;'b</CODE></P>
+      <P>The connection state includes whether or not a client is currently 
+      logged in and, if so, what their username is:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;type&nbsp;loginState&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NotLoggedIn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;IsLoggedInAs&nbsp;of&nbsp;user;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;type&nbsp;loginState&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NotLoggedIn<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;IsLoggedInAs&nbsp;of&nbsp;user</CODE></P>
+      <P>The core of the server accumulates a <CODE>Map</CODE> to keep track of 
+      the word frequencies:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;initialCoreState()&nbsp;=&nbsp;Map.empty;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;initialCoreState&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Map&lt;'a,'b&gt;&nbsp;when&nbsp;'a&nbsp;:&nbsp;comparison</CODE></P>
+      <P>The <CODE>execute</CODE> function passes through <CODE>Login</CODE> 
+      messages and acts upon <CODE>PostMessage</CODE> messages, either to emit 
+      the word frequencies or to accumulate more:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;execute(wordFrequencies,&nbsp;message)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Login&nbsp;login&nbsp;as&nbsp;message&nbsp;-&gt;&nbsp;return&nbsp;wordFrequencies,&nbsp;Login&nbsp;login<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PostMessage(from,&nbsp;@"\freqs")&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;lines&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Map.toSeq&nbsp;wordFrequencies<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;Seq.map&nbsp;(fun&nbsp;(s,&nbsp;n)&nbsp;-&gt;&nbsp;sprintf&nbsp;"%s:&nbsp;%d"&nbsp;s&nbsp;n)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;wordFrequencies,&nbsp;PostMessage(String.concat&nbsp;"\n"&nbsp;lines)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PostMessage(from,&nbsp;message)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;add&nbsp;map&nbsp;key&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Map.add&nbsp;key&nbsp;(1&nbsp;+&nbsp;defaultArg&nbsp;(Map.tryFind&nbsp;key&nbsp;map)&nbsp;0)&nbsp;map<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f&nbsp;add&nbsp;=&nbsp;Seq.fold&nbsp;add&nbsp;wordFrequencies&nbsp;(message.Split[|'&nbsp;'|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;wordFrequencies&nbsp;=&nbsp;Seq.fold&nbsp;add&nbsp;wordFrequencies&nbsp;(message.Split[|'&nbsp;'|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;message&nbsp;=&nbsp;PostMessage(sprintf&nbsp;"%s:&nbsp;%s"&nbsp;from&nbsp;message)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;wordFrequencies,&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;execute&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Map&lt;string,int&gt;&nbsp;*&nbsp;message&lt;'a,(string&nbsp;*&nbsp;string)&gt;&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async&lt;Map&lt;string,int&gt;&nbsp;*&nbsp;message&lt;'a,string&gt;&gt;</CODE></P>
+      <P>Note how the <CODE>Login&nbsp;login</CODE> message must be destructured 
+      and restructured because the result has a different type due to the change 
+      in the <CODE>PostMessage</CODE> union case. Specifically, messages going 
+      in for execution have the type 
+      <CODE>message&lt;'a,(string&nbsp;*&nbsp;string)&gt;&nbsp;</CODE> whereas 
+      messages going out have the type <CODE>message&lt;'a,string&gt;</CODE>. 
+      Therefore, the <CODE>Login</CODE> union case must be copied in order to 
+      satisfy the type system.</P>
+      <P>The connection state consists of the connection ID and the login 
+      state:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;initialConnectionState&nbsp;id&nbsp;=&nbsp;id,&nbsp;NotLoggedIn;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;initialConnectionState&nbsp;:&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;*&nbsp;loginState</CODE></P>
+      <P>The <CODE>validate</CODE> function accepts new logins, sends a failure 
+      message back to the client if it attempts to post a message without being 
+      logged in and sends posted messages to all clients when the client is 
+      logged in:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;validate((id,&nbsp;login&nbsp;as&nbsp;state),&nbsp;message)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;login,&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_,&nbsp;Login&nbsp;user&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;(id,&nbsp;IsLoggedInAs&nbsp;user),&nbsp;Login(Success&nbsp;user),&nbsp;ToAll<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NotLoggedIn,&nbsp;PostMessage&nbsp;_&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;state,&nbsp;Login(Failure()),&nbsp;To&nbsp;id<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;IsLoggedInAs(User&nbsp;user),&nbsp;PostMessage&nbsp;message&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;return&nbsp;state,&nbsp;PostMessage(user,&nbsp;message),&nbsp;ToAll<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;validate&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(connectionId&nbsp;*&nbsp;loginState)&nbsp;*&nbsp;message&lt;user,'a&gt;&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async&lt;(connectionId&nbsp;*&nbsp;loginState)&nbsp;*<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;message&lt;result&lt;user,unit&gt;,(string&nbsp;*&nbsp;'a)&gt;&nbsp;*&nbsp;destination&gt;</CODE></P>
+      <P>The <CODE>filter</CODE> function filters out posted messages when the 
+      client is not logged in and forwards them otherwise:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;filter((_,&nbsp;login&nbsp;as&nbsp;state),&nbsp;message)&nbsp;=&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;login,&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NotLoggedIn,&nbsp;PostMessage&nbsp;_&nbsp;-&gt;&nbsp;return&nbsp;state,&nbsp;None<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;IsLoggedInAs&nbsp;_,&nbsp;_<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;NotLoggedIn,&nbsp;Login&nbsp;_&nbsp;-&gt;&nbsp;return&nbsp;state,&nbsp;Some&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;};;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;filter&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;('a&nbsp;*&nbsp;loginState)&nbsp;*&nbsp;message&lt;'b,'c&gt;&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Async&lt;('a&nbsp;*&nbsp;loginState)&nbsp;*&nbsp;message&lt;'b,'c&gt;&nbsp;option&gt;</CODE></P>
+      <H2>User interface</H2>
+      <P>The remainder of the program is devoted to the user interface. After 
+      referencing the <CODE>WindowsBase</CODE>, <CODE>PresentationCore</CODE>, 
+      <CODE>PresentationFramework</CODE> and <CODE>System.Xaml</CODE> DLLs, we 
+      open two relevant namespaces:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Net;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;open&nbsp;System.Windows;;</CODE></P>
+      <P>The following <CODE>display</CODE> function takes a <CODE>Label</CODE> 
+      control and returns a function that appends a new line of text to it by 
+      invoking the necessary update on the UI thread:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;display&nbsp;(body:&nbsp;Controls.Label)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;text&nbsp;=&nbsp;ref&nbsp;""<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;line&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;try<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;f()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;text&nbsp;:=&nbsp;sprintf&nbsp;"%s%s\n"&nbsp;!text&nbsp;line<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body.Content&nbsp;&lt;-&nbsp;!text<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body.Dispatcher.Invoke(System.Action&lt;_&gt;(f),&nbsp;[|box()|])<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;e&nbsp;-&gt;&nbsp;printfn&nbsp;"%A"&nbsp;e;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;display&nbsp;:&nbsp;Controls.Label&nbsp;-&gt;&nbsp;(string&nbsp;-&gt;&nbsp;unit)</CODE></P>
+      <P>The following <CODE>client</CODE> function starts an agent that acts as 
+      a client to our server, forwarding messages posted to this agent down the 
+      client connection to the server for processing and displaying incoming 
+      messages received from the server:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;client&nbsp;display&nbsp;(address,&nbsp;port)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor.Start(fun&nbsp;inbox&nbsp;-&gt;&nbsp;async&nbsp;{<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;client&nbsp;=&nbsp;new&nbsp;Sockets.TcpClient(address,&nbsp;port)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use&nbsp;stream&nbsp;=&nbsp;client.GetStream()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;deserializer&nbsp;client&nbsp;stream&nbsp;inbox.Post&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;while&nbsp;true&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let!&nbsp;message&nbsp;=&nbsp;inbox.Receive()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Incoming(Login(Success(User&nbsp;user)))&nbsp;-&gt;&nbsp;display(sprintf&nbsp;"%s&nbsp;logged&nbsp;in"&nbsp;user)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Incoming(Login(Failure()))&nbsp;-&gt;&nbsp;display&nbsp;"Failed&nbsp;to&nbsp;login"<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Incoming(PostMessage&nbsp;message)&nbsp;-&gt;&nbsp;display&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Outgoing&nbsp;message&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do!&nbsp;serialize&nbsp;stream&nbsp;message<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;match&nbsp;message&nbsp;with<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;Login(User&nbsp;user)&nbsp;-&gt;&nbsp;display(sprintf&nbsp;"Logging&nbsp;in&nbsp;as&nbsp;%s"&nbsp;user)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;PostMessage&nbsp;message&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;_&nbsp;-&gt;&nbsp;()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;});;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;client&nbsp;:<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(string&nbsp;-&gt;&nbsp;unit)&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;string&nbsp;*&nbsp;int&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;MailboxProcessor&lt;connectionMessage&lt;message&lt;result&lt;user,unit&gt;,string&gt;,<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;toServer&gt;&gt;</CODE></P>
+      <P>The following <CODE>post</CODE> function sends the first string it is 
+      given as a username for logon and all subsequent strings as messages to be 
+      posted to all clients:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;post()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;first&nbsp;=&nbsp;ref&nbsp;true<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fun&nbsp;message&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;!first&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;first&nbsp;:=&nbsp;false<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Login(User&nbsp;message)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;else<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;PostMessage&nbsp;message;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;post&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;(string&nbsp;-&gt;&nbsp;message&lt;user,string&gt;)</CODE></P>
+      <P>The following <CODE>add</CODE> function serves as a helper function, 
+      making it easier to add controls to a dock panel:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;add&nbsp;(panel:&nbsp;Controls.DockPanel)&nbsp;dock&nbsp;control&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Controls.DockPanel.SetDock(control,&nbsp;dock)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;panel.Children.Add&nbsp;control&nbsp;|&gt;&nbsp;ignore<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;control;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;add&nbsp;:&nbsp;Controls.DockPanel&nbsp;-&gt;&nbsp;Controls.Dock&nbsp;-&gt;&nbsp;'a&nbsp;-&gt;&nbsp;'a&nbsp;when&nbsp;'a&nbsp;:&gt;&nbsp;UIElement</CODE></P>
+      <P>The client window contains a menu that allows new client windows to be 
+      spawned. Therefore, the <CODE>clientMenu</CODE> function and 
+      <CODE>clientWindow</CODE> function are mutually recursive:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;let&nbsp;rec&nbsp;clientMenu&nbsp;(panel:&nbsp;Controls.DockPanel)&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;menu&nbsp;=&nbsp;Controls.Menu()&nbsp;|&gt;&nbsp;add&nbsp;panel&nbsp;Controls.Dock.Top<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;menuItem&nbsp;=&nbsp;Controls.MenuItem(Header="New&nbsp;client")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;menuItem.Click.Add(fun&nbsp;_&nbsp;-&gt;&nbsp;clientWindow()&nbsp;|&gt;&nbsp;ignore)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;menu.ItemsSource&nbsp;&lt;-&nbsp;[Controls.MenuItem(Header="Control",&nbsp;ItemsSource=[menuItem])]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;and&nbsp;clientWindow()&nbsp;=<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;post&nbsp;=&nbsp;post()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;panel&nbsp;=&nbsp;Controls.DockPanel()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;clientMenu&nbsp;panel<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;entry&nbsp;=&nbsp;Controls.TextBox()&nbsp;|&gt;&nbsp;add&nbsp;panel&nbsp;Controls.Dock.Bottom<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;body&nbsp;=&nbsp;Controls.Label()&nbsp;|&gt;&nbsp;add&nbsp;panel&nbsp;Controls.Dock.Top<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;client&nbsp;=&nbsp;client&nbsp;(display&nbsp;body)&nbsp;("localhost",&nbsp;8001)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entry.KeyDown.Add(fun&nbsp;e&nbsp;-&gt;<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;if&nbsp;e.Key&nbsp;=&nbsp;Input.Key.Return&nbsp;then<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;client.Post(Outgoing(post&nbsp;entry.Text))<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;entry.Text&nbsp;&lt;-&nbsp;"")<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;window&nbsp;=&nbsp;Window(Title="Client",&nbsp;Content=panel)<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window.Show()<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;window;;<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;clientMenu&nbsp;:&nbsp;Controls.DockPanel&nbsp;-&gt;&nbsp;unit<BR>&nbsp;&nbsp;&nbsp;&nbsp;val&nbsp;clientWindow&nbsp;:&nbsp;unit&nbsp;-&gt;&nbsp;Window</CODE></P>
+      <P>Finally, the main program bundles the core logic and connection logic 
+      into two tuples and uses the <CODE>startServer</CODE> function to start a 
+      server running with this functionality before spawning a window providing 
+      a user interface to a client that connects itself to the server:</P>
+      <P><CODE>&nbsp;&nbsp;&nbsp;&nbsp;&gt;&nbsp;[&lt;System.STAThread&gt;]<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;do<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;coreLogic&nbsp;=&nbsp;initialCoreState,&nbsp;execute<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;connectionLogic&nbsp;=&nbsp;initialConnectionState,&nbsp;validate,&nbsp;filter<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;let&nbsp;server&nbsp;=&nbsp;startServer&nbsp;coreLogic&nbsp;connectionLogic&nbsp;IPAddress.Loopback&nbsp;8001<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Application().Run(clientWindow())<BR>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&gt;&nbsp;ignore;;</CODE></P>
+      <P>When run, this program produces a window that can be used to login and 
+      then post messages to a chat server and a menu allows more clients to be 
+      created. Any client can post the <CODE>\freqs</CODE> in order to obtain 
+      the current word frequency statistics from the server.</P>
+      <H2>Summary</H2>
+      <P>This article has described the design and implementation of a chat 
+      server based upon the generic server architecture that was described in 
+      the previous article. The chat server allows multiple clients to connect 
+      simultaneously and communicate with each other, and gathers statistics on 
+      the frequencies of different words in the conversations that take place on 
+      the server. Heavy use is made of generics but the code remains clear 
+      thanks to type inference.</P>
+      <P>Future F#.NET Journal articles will revisit the subjects of concurrent 
+      and server-side programming.</P></TD></TR></TBODY></TABLE>
+<TABLE id=footer>
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2010</TD>
+    <TD>Contact the <A href="mailto:webmaster@ffconsultancy.com">webmaster</A> 
+    </TD></TR></TBODY></TABLE>
+<SCRIPT type=text/javascript 
+src="F%23%20Journal%20chat%20server_files/urchin.js">
+    <script type="text/javascript">_uacct = "UA-197840-1"; urchinTracker();</SCRIPT>
+</BODY></HTML>

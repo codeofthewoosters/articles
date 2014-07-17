@@ -1,0 +1,450 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0081)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/web_crawler.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Concurrent web crawling</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Concurrent%20web%20crawling_files/style.css" rel="stylesheet" 
+type="text/css">   <LINK href="F%23%20Journal%20Concurrent%20web%20crawling_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Concurrent%20web%20crawling_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Concurrent web crawling</TITLE>     <LINK href="F%23%20Journal%20Concurrent%20web%20crawling_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Concurrent%20web%20crawling_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Concurrent%20web%20crawling_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Concurrent%20web%20crawling_files/title.gif"> 
+              </TD>
+    <TD><IMG 
+      src="F%23%20Journal%20Concurrent%20web%20crawling_files/left.gif">         
+    </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Concurrent web crawling</H1>
+      <P>Web-enabled technology is now ubiquitous and of huge commercial value. 
+      These kinds of programs share two common characteristics: they send 
+      information over the internet and they perform tasks concurrently. This 
+      article is the first in a series to examine the use of the F# programming 
+      language and its relatives in the growing area of concurrent web 
+      programming.</P>
+      <H2>Introduction</H2>
+      <P>The internet contains a wealth of data and metadata and web programming 
+      has been the foundation of some of the world's most prolific hi-tech 
+      companies such as              <A href="http://www.google.com/">Google</A> 
+      and              <A href="http://www.youtube.com/">YouTube</A> . The term 
+      "web programming" is generally used to refer to the authoring of programs 
+      that send and receive data over the internet. Microsoft's .NET platform is 
+      largely designed to facilitate these kinds of applications and, 
+      consequently, the .NET framework provides a wealth of functionality that 
+      greatly simplifies web programming.           </P>
+      <P>This article describes how the F# programming language can be used to 
+      build a simple web crawler. This application fetches remote web pages and 
+      extracts references to other web pages from them in order to traverse the 
+      web. In this case, we shall restrict our program to fetch only web pages 
+      sharing the same base URL (e.g. from the same domain) but web crawlers 
+      have a wide variety of uses from helping web developers to search for 
+      invalid links to building the immense databases used to power the          
+          <A href="http://www.google.com/">Google</A> search engine.           
+      </P>
+      <H3>Uniform Resource Identifiers</H3>
+      <P>The address of a web page is called a Uniform Resource Identifier or    
+                <B>URI</B> . For example, the absolute address of our home page 
+      is:           </P>
+<PRE>&gt; let home = "http://www.ffconsultancy.com/index.html";;
+val string : string</PRE>
+      <P>URIs are the core data structure handled by a web crawler. Fortunately, 
+      the .NET framework provides all of the functionality required to 
+      manipulate URIs in the              <CODE>System.Uri</CODE> class. The 
+      previous example may be used to construct an object of this class, 
+      whereupon the string representation is parsed and decomposed into a 
+      variety of fields:           </P>
+<PRE>&gt; let homeUri = System.Uri home;;
+val homeUri : System.Uri</PRE>
+<PRE>&gt; homeUri;;
+val it : System.Uri
+= http://www.ffconsultancy.com/index.html
+    {AbsolutePath = "/index.html";
+     AbsoluteUri = "http://www.ffconsultancy.com/index.html";
+     Authority = "www.ffconsultancy.com";
+     DnsSafeHost = "www.ffconsultancy.com";
+     Fragment = "";
+     Host = "www.ffconsultancy.com";
+     HostNameType = Dns;
+     IsAbsoluteUri = true;
+     IsDefaultPort = true;
+     IsFile = false;
+     IsLoopback = false;
+     IsUnc = false;
+     LocalPath = "/index.html";
+     OriginalString = "http://www.ffconsultancy.com/index.html";
+     PathAndQuery = "/index.html";
+     Port = 80;
+     Query = "";
+     Scheme = "http";
+     Segments = [|"/"; "index.html"|];
+     UserEscaped = false;
+     UserInfo = "";}</PRE>
+      <P>Our web crawler must also be able to handle relative addresses. For 
+      example, the following URI might be used to represent the address of our 
+      products page relative to our home page:</P>
+<PRE>&gt; let products = "products/";;
+val products : string</PRE>
+      <P>This eventuality may be handled using one of the overloaded 
+      constructors of the              <CODE>System.Uri</CODE> class. 
+      Specifically, the following overload accepts a base URI first and handles 
+      the string in the context of that base URI:           </P>
+<PRE>&gt; let productsUri = System.Uri(homeUri, products);;
+val productsUri : System.Uri
+&gt; productsUri;;
+val it : System.Uri
+= http://www.ffconsultancy.com/products/
+    {AbsolutePath = "/products/";
+     AbsoluteUri = "http://www.ffconsultancy.com/products/";
+     Authority = "www.ffconsultancy.com";
+     DnsSafeHost = "www.ffconsultancy.com";
+     Fragment = "";
+     Host = "www.ffconsultancy.com";
+     HostNameType = Dns;
+     IsAbsoluteUri = true;
+     IsDefaultPort = true;
+     IsFile = false;
+     IsLoopback = false;
+     IsUnc = false;
+     LocalPath = "/products/";
+     OriginalString = "http://www.ffconsultancy.com/products/";
+     PathAndQuery = "/products/";
+     Port = 80;
+     Query = "";
+     Scheme = "http";
+     Segments = [|"/"; "products/"|];
+     UserEscaped = false;
+     UserInfo = "";}</PRE>
+      <P>Note that the              <CODE>AbsoluteUri</CODE> property of the 
+      resulting object gives the URI as              
+      <CODE>http://www.ffconsultancy.com/products/</CODE> as expected.           
+      </P>
+      <H3>Downloading web pages</H3>
+      <P>The HTML of our products page may be downloaded from the              
+      <CODE>productsUri</CODE> defined above by first instantiating the          
+          <CODE>System.Net.WebClient</CODE> class:           </P>
+<PRE>&gt; let client = new System.Net.WebClient();;
+val client : System.Net.WebClient</PRE>
+      <P>Then creating a suitable encoding:</P>
+<PRE>&gt; let enc = System.Text.UTF8Encoding();;
+val enc : System.Text.UTF8Encoding</PRE>
+      <P>And finally using the              <CODE>DownloadData</CODE> method to 
+      download the HTML from the given URI before converting it from a byte 
+      array into a string using a particular character encoding:           </P>
+<PRE>&gt; let html =
+    client.DownloadData productsUri
+    |&gt; enc.GetString;;
+val html : string</PRE>
+      <P>This obtains the following result:</P>
+<PRE>&gt; html;;
+val it : string
+= "&lt;?xml version=\"1.0\" encoding=\"iso-8859-1\"?&gt;\n&lt;!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML
+1.1//EN\"\n          \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\"&gt;\n&lt;html&gt;\n  &lt;head&gt;\n
+&lt;title&gt;Flying Frog Consultancy Limited&lt;/title&gt;\n    &lt;meta name=\"Keywords\" content=\"Objective
+...</PRE>
+      <P>This string may then be dissected in various different ways.</P>
+      <H3>Extracting links using regular expressions</H3>
+      <P>Let us consider the references to other URIs that appear in the         
+           <CODE>href</CODE> attribute of tags in web pages:           </P>
+<PRE>&lt;a href="..."&gt;</PRE>
+      <P>As many web pages are malformed and rely upon error correction in the 
+      browser, it is desirable to extract references using a robust technique 
+      that does not require web pages to be parsed as valid XML. This is most 
+      easily achieved using regular expressions, a topic that will be covered in 
+      detail in a future F#.NET Journal article.</P>
+      <P>The following regular expression achieves this:</P>
+<PRE>href="([^"]+)</PRE>
+      <P>This regex matches text beginning with              <CODE>href="</CODE> 
+      and extracts text up to the next              <CODE>"</CODE> and may be 
+      instantiated as follows:           </P>
+<PRE>&gt; let link = System.Text.RegularExpressions.Regex("href=\"([^\"]+)");;
+val link : System.Text.RegularExpressions.Regex</PRE>
+      <P>The URIs from the previously-defined              <CODE>html</CODE> may 
+      be extracted as follows:           </P>
+<PRE>&gt; [ for x in link.Matches html -&gt;
+      x.Groups.[1].Value ]
+val it : string list
+= ["../style.css"; "style.css"; "../index.html";
+   "signal_processing_net/index.html"; "fsharp_journal/index.html";
+   "ocaml_for_scientists/index.html"; "CWT/index.html";
+   "fsharp_journal/index.html"; "fsharp_journal/index.html";
+   "ocaml_for_scientists/index.html"; "ocaml_for_scientists/index.html";
+   "fsharp_for_visualization/index.html";
+   "fsharp_for_visualization/index.html"; "fsharp_for_numerics/index.html";
+   "fsharp_for_numerics/index.html"; "ocaml_journal/index.html";
+   "ocaml_journal/index.html"; "signal_processing_net/index.html";
+   "signal_processing_net/index.html"; "CWT/index.html"; "CWT/index.html";
+   "smoke_vector_graphics/index.html"; "smoke_vector_graphics/index.html";
+   "fsharp_for_scientists/index.html"; "fsharp_for_scientists/index.html";
+   "mailto:webmaster@ffconsultancy.com"]</PRE>
+      <P>The              <CODE>Matches</CODE> method returns the sequence of 
+      substrings in              <CODE>html</CODE> that were found to match the  
+                  <CODE>link</CODE> regular expression. The actual substring 
+      matched is of the form              <CODE>href="http://...</CODE> and the 
+      text of the URI itself is given at the index 1 of the              
+      <CODE>Groups</CODE> because the regular expression bracketed this 
+      subexpression. The              <CODE>Value</CODE> property extracts the 
+      string itself which may now be used to construct a              
+      <CODE>System.Uri</CODE> object.           </P>
+      <H2>Non-concurrent web crawler</H2>
+      <P>In the context of web crawling, concurrency is an optimization. 
+      Therefore, let us try to build a simple non-concurrent web crawler 
+      first.</P>
+      <P>We begin by defining the URI that will be crawled:</P>
+<PRE>&gt; let homeUri = System.Uri "http://192.168.2.7/libboost-doc/HTML/";;
+val homeUri : System.Uri</PRE>
+      <P>The web crawler maintains a set of URIs that have already been visited. 
+      The simplest representation is the purely functional              
+      <CODE>Set</CODE> data structure provided by F#. However, this requires the 
+      element type to implement the              <CODE>IComparable</CODE> 
+      interface and the              <CODE>System.Uri</CODE> class does not. So 
+      we shall create a new              <CODE>ComparableUri</CODE> class 
+      derived from              <CODE>System.Uri</CODE> that implements the      
+              <CODE>IComparable</CODE> interface:           </P>
+<PRE>&gt; type ComparableUri(uri: System.Uri) =
+    inherit System.Uri(uri.AbsoluteUri)
+    
+    let elts (uri: System.Uri) =
+      uri.Scheme, uri.Host, uri.Port, uri.Segments
+    
+    interface System.IComparable with
+      member this.CompareTo(uri2) =
+        compare (elts this) (elts(uri2 :?&gt; ComparableUri))
+    
+    override this.Equals(uri2) =
+      compare this (uri2 :?&gt; ComparableUri) = 0;;
+type ComparableUri =
+  class
+    inherit System.Uri
+    interface System.IComparable
+    new : uri:System.Uri -&gt; ComparableUri
+    override Equals : uri2:obj -&gt; bool
+  end</PRE>
+      <P>We instantiate the regular expression that will be used to extract URIs 
+      from HTML:</P>
+<PRE>&gt; let link =
+    let opts = System.Text.RegularExpressions.RegexOptions.Compiled
+    System.Text.RegularExpressions.Regex("href=\"([^\"]+)", opts);;
+val link : System.Text.RegularExpressions.Regex</PRE>
+      <P>Note that we have enabled compilation of the regular expression to 
+      optimized native code.</P>
+      <P>The following              <CODE>download</CODE> function fetches the 
+      HTML from the given URI:           </P>
+<PRE>&gt; let download (url: System.Uri) =
+    let client = new System.Net.WebClient()
+    let enc = System.Text.UTF8Encoding()
+    client.DownloadData url |&gt; enc.GetString;;
+val download : System.Uri -&gt; string</PRE>
+      <P>The following              <CODE>extract</CODE> function uses the 
+      regular expression              <CODE>link</CODE> to identify URIs 
+      referenced from within the given              <CODE>html</CODE> :          
+       </P>
+<PRE>&gt; let extract baseUri html =
+    [ for url in link.Matches html -&gt;
+        try [ComparableUri(System.Uri(baseUri, url.Groups.[1].Value))] with _ -&gt; [] ]
+    |&gt; List.concat;;
+val extract : System.Uri -&gt; string -&gt; ComparableUri list</PRE>
+      <P>Note the careful exception handling used to ignore malformed URIs 
+      whilst keeping results from other well-formed URIs.</P>
+      <P>The non-concurrent crawler is always in one of two states:</P>
+<PRE>&gt; type state =
+    | Crawl of System.Uri
+    | Finished;;
+type state =
+  | Crawl of System.Uri
+  | Finished</PRE>
+      <P>The crawler uses two pieces of global mutable state. The first is the 
+      set of visited URIs. The second is the queue of URIs waiting to be 
+      visited, represented using the mutable              <CODE>Queue</CODE> 
+      implementation from the .NET framework. This mutable state can be 
+      productively encapsulated as private data within a              
+      <CODE>UriCollector</CODE> class in order to minimize the area of code that 
+      can mutate these data structures:           </P>
+<PRE>&gt; type UriCollector(homeUri: System.Uri) =
+    let mutable visited : Set&lt;ComparableUri&gt; = Set.empty</PRE>
+<PRE>    let waiting : System.Collections.Generic.Queue&lt;ComparableUri&gt; =
+      System.Collections.Generic.Queue()</PRE>
+<PRE>    let invalid (homeUri : System.Uri) uri =
+      visited.Contains uri || not(homeUri.IsBaseOf uri)</PRE>
+<PRE>    do
+      waiting.Enqueue(ComparableUri homeUri)</PRE>
+<PRE>    member this.Pop() =
+      if waiting.Count = 0 then Finished else
+        let uri = waiting.Dequeue()
+        if invalid homeUri uri then this.Pop() else
+          visited &lt;- visited.Add uri
+          printf "%d: %s\n" waiting.Count uri.AbsoluteUri
+          Crawl uri</PRE>
+<PRE>    member this.Push uris =
+      Seq.iter waiting.Enqueue uris</PRE>
+<PRE>    member this.Visited = visited;;
+type UriCollector =
+  class
+    new : homeUri:System.Uri -&gt; UriCollector
+    member Pop : unit -&gt; state
+    member Push : uris:seq&lt;#ComparableUri&gt; -&gt; unit
+    member Visited : Set&lt;ComparableUri&gt;
+  end</PRE>
+      <P>The              <CODE>Pop</CODE> member function determines the 
+      current state of the crawler by trying to find a valid URI to crawl or 
+      returning              <CODE>Finished</CODE> otherwise. The              
+      <CODE>Push</CODE> member function pushes the given links onto the queue of 
+      URIs waiting to be visited.           </P>
+      <P>Finally, the following              <CODE>crawl</CODE> function is the 
+      core of the web crawler:           </P>
+<PRE>&gt; let rec crawl() =
+    match pop() with
+    | Finished -&gt; ()
+    | Crawl url -&gt;
+        let refs = try download url |&gt; extract url with _ -&gt; []
+        push url refs
+        crawl();;
+val crawl : unit -&gt; unit</PRE>
+      <P>This function attempts to pop a URI from the collection of URIs waiting 
+      to be crawled, crawls it (if available) and pushes the URIs referenced 
+      from it onto the waiting list before recursing.</P>
+      <P>Despite its simplicity, this non-concurrent web crawler can be 
+      surprisingly effective:</P>
+<PRE>&gt; let () =
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    waiting.Enqueue(ComparableUri homeUri)
+    crawl()
+    printf "Visited %d URLs in %dms\n" visited.Count t.ElapsedMilliseconds;;
+Visited 3264 URLs in 13013ms</PRE>
+      <H2>Concurrent implementation</H2>
+      <P>The conventional and lowest-level approach to concurrent programming is 
+      based upon multithreading because IO operations like downloading a web 
+      page only block the current thread and other threads may continue to 
+      execute. A more modern alternative is message passing and F#'s 
+      asynchronous workflows are designed to facilitate this. This section 
+      describes a similar web crawler that uses asynchronous workflows to fetch 
+      data concurrently. This amortizes the latency of fetching data and greatly 
+      improves performance when latency is a bottleneck.</P>
+      <P>We begin by augmenting the              
+      <CODE>Sytem.Net.WebRequest</CODE> class with a new              
+      <CODE>GetResponseAsync</CODE> member that starts a download without 
+      blocking until it is completed:           </P>
+<PRE>&gt; type System.Net.WebRequest with
+    member x.GetResponseAsync() =
+      Async.BuildPrimitive(x.BeginGetResponse, x.EndGetResponse)</PRE>
+      <P>The following              <CODE>crawl</CODE> function fetches HTML 
+      from the given URI, extracts the links and calls the              
+      <CODE>post</CODE> function to crawl each link before calling the post 
+      function with              <CODE>Finished</CODE> to indicate that the 
+      download of this URI has been completed:           </P>
+<PRE>&gt; let crawl post (uri: ComparableUri) =
+    async { try
+              let! html =
+                async { let req = System.Net.WebRequest.Create(uri, Timeout=5)
+                        use! response = req.GetResponseAsync()
+                        use reader = new System.IO.StreamReader(response.GetResponseStream())
+                        return reader.ReadToEnd() }
+              for link in extract uri html do
+                post(Crawl link)
+            finally post Finished };;
+val crawl : (state -&gt; unit) -&gt; ComparableUri -&gt; Async&lt;unit&gt;</PRE>
+      <P>Note how the final post of              <CODE>Finished</CODE> appears 
+      after the              <CODE>try..finally</CODE> construct to ensure that 
+      it is always posted.           </P>
+      <P>The following              <CODE>uriCollector</CODE> function creates a 
+      mailbox that repeatedly handles messages until the web crawler completes:  
+               </P>
+<PRE>&gt; let uriCollector (baseUri: System.Uri) =
+    use waitHandle = new System.Threading.AutoResetEvent(false)
+    let result = ref Set.empty
+    let mailBox =
+      MailboxProcessor.Start(fun self -&gt;
+        let rec waitForUrl (visited: Set&lt;ComparableUri&gt;, downloads) =
+          async { let! message = self.Receive()
+                  match message with
+                  | Crawl uri -&gt;
+                      if not (visited.Contains uri) &amp;&amp; baseUri.IsBaseOf uri then
+                        do! Async.SpawnChild(crawl self.Post uri)
+                        return! waitForUrl(visited.Add uri, downloads + 1)
+                      else
+                        return! waitForUrl(visited, downloads)
+                  | Finished -&gt;
+                      if downloads &gt; 1 then
+                        return! waitForUrl(visited, downloads - 1)
+                      else
+                        printf "Finished\n"
+                        result := visited
+                        waitHandle.Set() |&gt; ignore
+                        return () }
+        waitForUrl(Set.empty, 0))
+    mailBox.Post(Crawl(ComparableUri baseUri))
+    waitHandle.WaitOne() |&gt; ignore
+    !result;;
+val uriCollector : System.Uri -&gt; Set&lt;ComparableUri&gt;</PRE>
+      <P>There are several interesting aspects to this function:</P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>waitHandle</CODE> is used to block the 
+        calling thread until the web crawler runs to completion whereupon the 
+        handle is set and the current thread continues, returning the gathered 
+        data.               </LI>
+        <LI>The                  <CODE>result</CODE> is set using mutation but 
+        the                  <CODE>visited</CODE> and                  
+        <CODE>downloads</CODE> values are immutable and accumulated in a 
+        functional style as the web crawler runs.               </LI>
+        <LI>The                  <CODE>MailboxProcessor</CODE> starts a function 
+        that receives messages represented by values of the type                 
+         <CODE>state</CODE> and acts upon them, calling itself via its           
+               <CODE>Post</CODE> method to recurse into URI links.               
+        </LI>
+        <LI>The                  <CODE>crawl</CODE> function is spawned 
+        concurrently using the                  <CODE>Async.SpawnChild</CODE> 
+        function.               </LI>
+        <LI>Once the mailbox is started, an initial                  
+        <CODE>Crawl</CODE> message is sent with the first URI.               
+        </LI></UL>
+      <P></P>
+      <P>This program may be called synchronously (i.e. blocking until its 
+      result is returned) as follows:</P>
+<PRE>&gt; do
+    let t = System.Diagnostics.Stopwatch.StartNew()
+    let visited = uriCollector(System.Uri "http://192.168.2.7/libboost-doc/HTML/")
+    printf "Visited %d URIs in %dms\n" visited.Count t.ElapsedMilliseconds;;
+Visited 3264 URIs in 10668ms</PRE>
+      <P>This concurrent implementation has reduced the time taken to crawl a 
+      local site from 13s to 10s. The performance boost is more pronounced over 
+      a network with more significant latency. Applying the same test to the     
+               <CODE>www.expert-fsharp.com</CODE> site, the time taken is 
+      reduced from 4s to only 1.5s.           </P>
+      <H2>Summary</H2>
+      <P>This article has described how a simple non-concurrent web crawler may 
+      be converted into a concurrent web crawler using asynchronous workflows to 
+      provide considerable performance improvements in the presence of latency. 
+      This technique is applicable to a wide variety of modern software 
+      applications.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Concurrent%20web%20crawling_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

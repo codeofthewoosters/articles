@@ -1,0 +1,519 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0086)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/term_interpreter.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Language-oriented programming: The Term-level 
+Interpreter</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Language-oriented programming: The Term-level 
+Interpreter</TITLE>     <LINK href="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Language-oriented programming: The Term-level Interpreter</H1>
+      <P>Modern software is using a wider variety of languages than ever before. 
+      The ability to parse and interpret these languages is of growing 
+      importance. Fortunately, F# inherits incredibly powerful constructs for 
+      parsing and interpreting other languages from its predecessors. This 
+      article explains how the power of F# can be harnessed to write a complete 
+      term-level interpreter for a programming language in only a tiny amount of 
+      F# code.</P>
+      <H2>Introduction</H2>
+      <P>Previous F#.NET Journal articles have already covered lexing and 
+      parsing. These processes can translate source code from a text file into 
+      an abstract syntax tree (AST) data structure representing the program. As 
+      an F# variant type, the resulting AST is highly amenable to manipulation 
+      using pattern matching. One such form of manipulation is term-level 
+      interpreting. Other forms include compilation and term rewriting.</P>
+      <P>The simplest way to evaluate a program given its AST is to traverse the 
+      AST and perform the necessary operations required by the program. Each 
+      expression in the AST can be evaluated to yield a "value". The type of 
+      such a "value" is itself another F# variant type. This is the essence of 
+      term-level interpreting: expressions are converted into values. 
+      Consequently, the eval function of a term-level interpreter typically has 
+      a type of the form:</P>
+<PRE>val eval : state -&gt; expr -&gt; value</PRE>
+      <P>where the type              <CODE>state</CODE> denotes a mapping from 
+      the names of bound variables to their values.           </P>
+      <P>This article describes the implementation of a minimal term-level 
+      interpreter for a programming language. An interesting quirk will be that 
+      the target language is itself a functional programming language, with 
+      support for first-class functions and closures!</P>
+      <P>Even though this project requires only a tiny amount of source code to 
+      accomplish its task, it is useful to present this source code in a 
+      structured way that will scale well to much larger projects, e.g. to 
+      handle real programming languages. An interpreter is most easily 
+      decomposed into six different modules:</P>
+      <P>
+      <UL>
+        <LI>The                  <CODE>Expr</CODE> module defines the AST type 
+        used to represent expressions in the target language.               
+</LI>
+        <LI>The                  <CODE>Value</CODE> module defines the type used 
+        to represent values in the target language.               </LI>
+        <LI>The                  <CODE>Eval</CODE> module defines a function 
+        that evaluates expressions into values.               </LI>
+        <LI>The                  <CODE>Lex</CODE> module contains the lexer for 
+        the language generated by                  <CODE>fslex</CODE> .          
+             </LI>
+        <LI>The                  <CODE>Parse</CODE> module contains the parser 
+        generated from the grammar of the language by                  
+        <CODE>fsyacc</CODE> .               </LI>
+        <LI>The                  <CODE>Main</CODE> module pulls together the 
+        components of the program in order to provide the primary functionality, 
+        in this case an interactive session for a simple functional programming 
+        language.               </LI></UL>
+      <P></P>
+      <P>The components of the interpreter have the following dependencies:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/term_interpreter_deps.gif"> 
+                  </P>
+      <P></P>
+      <P>This classic dependency graph breaks down into three 
+      largely-independent parts:</P>
+      <P>
+      <OL>
+        <LI>The                  <CODE>Expr</CODE> ,                  
+        <CODE>Lex</CODE> and                  <CODE>Parse</CODE>  modules for 
+        converting source code into expression trees.               </LI>
+        <LI>The                  <CODE>Expr</CODE> ,                  
+        <CODE>Value</CODE> and                  <CODE>Eval</CODE> modules for 
+        interpreting expressions into values.               </LI>
+        <LI>The                  <CODE>Main</CODE> module that brings the 
+        parsing and interpreting components together to form a complete program. 
+                      </LI></OL>
+      <P></P>
+      <P>These dependencies can be reflected in the Visual Studio project by 
+      reordering the compilation units into the following order in the Solution 
+      Explorer pane:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/interpreter_vs.gif"> 
+                  </P>
+      <P></P>
+      <P>We shall now examine the contents of each module in detail before 
+      descibing how this term-level interpreter can be used to evaluate some 
+      code.</P>
+      <H2>Expr module</H2>
+      <P>This module is defined in the file "expr.fs" and contains the 
+      definitions of several variant types:</P>
+<PRE>#light</PRE>
+<PRE>type unop = Neg
+type binop = Add | Sub | Mul | Div | Equal | Apply</PRE>
+<PRE>type expr =
+  | ENum of Math.BigNum
+  | EVar of string
+  | EUnOp of unop * expr
+  | EBinOp of binop * expr * expr
+  | EFun of string * expr
+  | ELet of bool * string * expr * expr
+  | EIf of expr * expr * expr
+  with
+  static member ( ~- ) f = EUnOp(Neg, f)
+  static member ( + ) (f, g) = EBinOp(Add, f, g)
+  static member ( - ) (f, g) = EBinOp(Sub, f, g)
+  static member ( * ) (f, g) = EBinOp(Mul, f, g)
+  static member ( / ) (f, g) = EBinOp(Div, f, g)</PRE>
+<PRE>type statement =
+  | SExpr of expr
+  | SLet of bool * string * expr</PRE>
+      <P>The              <CODE>unop</CODE> and              <CODE>binop</CODE> 
+      variant types represent the sets of unary and binary operators supporting 
+      by this language.           </P>
+      <P>The              <CODE>expr</CODE> type is the type of an abstract 
+      syntax tree, used to represent the expressions of our target language. 
+      Values of this type are generated by the parser and given to the 
+      interpreter for evaluation into values.           </P>
+      <P>The              <CODE>statement</CODE> type denotes a top-level 
+      statement in the interactive mode. This can either be an expression or a   
+                 <CODE>let</CODE> binding used to define a new variable. In the 
+      former case, the result of evaluating the expression will be printed in 
+      the interactive mode.           </P>
+      <H2>Value module</H2>
+      <P>The "value.fs" defines this module and is written as follows:</P>
+<PRE>#light</PRE>
+<PRE>open Expr</PRE>
+<PRE>type closure = 
+  {
+    arg: string;
+    env: (string * value ref) list;
+    body: expr;
+  }</PRE>
+<PRE>and value =
+  | VNum of Math.BigNum
+  | VBool of bool
+  | VClosure of closure
+  with
+    static member to_q f = match f with VNum x -&gt; x | x -&gt; failwith "Expected a number"</PRE>
+<PRE>    static member to_bool f = match f with VBool x -&gt; x | x -&gt; failwith "Expected a bool"</PRE>
+<PRE>    static member func f =
+      match f with
+      | VClosure fn -&gt; fn
+      | x -&gt; failwith "Expected a function"</PRE>
+<PRE>    static member ( ~- ) f = VNum(value.to_q f)
+    static member apply f g h = VNum(f (value.to_q g) (value.to_q h))
+    static member ( + ) (f, g) = value.apply ( + ) f g
+    static member ( - ) (f, g) = value.apply ( - ) f g
+    static member ( * ) (f, g) = value.apply ( * ) f g
+    static member ( / ) (f, g) = value.apply ( / ) f g
+  end</PRE>
+<PRE>let to_string = function
+  | VNum n -&gt; n.ToString()
+  | VBool true -&gt; "true"
+  | VBool false -&gt; "false"
+  | VClosure fn -&gt; sprintf "fun %s -&gt; %A" fn.arg fn.body</PRE>
+      <P>The              <CODE>closure</CODE> record type is the essential 
+      component of an interpreter for a functional programming language. A 
+      closure is the representation of a functional value and can be applied to 
+      an argument value in order to invoke the function. The difference between 
+      a C-style function pointer and a closure is that a closure can 
+      automatically capture variables bound in its environment when it is 
+      created. This is quantified in this              <CODE>closure</CODE> type 
+      by the              <CODE>env</CODE> field that contains an association 
+      list mapping variable names to the values they had when the closure was 
+      created.           </P>
+      <P>The              <CODE>value</CODE> type represents an evaluated value 
+      for our target language. Note that the definition of this type is mutually 
+      recursive with the definition of the              <CODE>closure</CODE> 
+      type because the environment of a closures uses the              
+      <CODE>value</CODE> type and the              <CODE>VClosure</CODE> 
+      constructor of the              <CODE>value</CODE> type has an argument of 
+      the              <CODE>closure</CODE> type. In this simple case, 
+      expressions will evaluate to either rational numbers, booleans or 
+      closures. The              <CODE>value</CODE> variant type is augmented 
+      with some auxiliary functions to unbox values that are expected to be of a 
+      certain type and some overloaded operators to simplify arithmetic 
+      operations on numeric values.           </P>
+      <P>Finally, the              <CODE>to_string</CODE> function creates a 
+      string representation of a value. The string representation of a closure 
+      in OCaml or F# is denoted              <CODE>&lt;fun&gt;</CODE> but we 
+      have chosen to convey more information by printing the abstract syntax 
+      tree of the body of the closure.           </P>
+      <H2>Eval module</H2>
+      <P>The core of the interpreter is an              <CODE>eval</CODE> 
+      function that evaluates expressions of the type              
+      <CODE>Expr.expr</CODE> into values of the type              
+      <CODE>Value.value</CODE> . This is contained in the "eval.fs" file that 
+      defines the              <CODE>Eval</CODE> module:           </P>
+<PRE>#light</PRE>
+<PRE>open Expr
+open Value</PRE>
+<PRE>let rec eval vars = function
+  | ENum i -&gt; VNum i
+  | EVar s -&gt;
+      try
+        !(List.assoc s vars)
+      with Not_found -&gt;
+        failwith (sprintf "Unknown variable \"%s\"" s)
+  | EUnOp(Neg, f) -&gt; VNum(-value.to_q(eval vars f))
+  | EBinOp(op, e1, e2) -&gt;
+      match op, eval vars e1, eval vars e2 with
+      | Apply, closure, arg -&gt;
+          let fn = value.func closure
+          eval ((fn.arg, ref arg) :: fn.env) fn.body
+      | Add, n, m -&gt; n + m
+      | Sub, n, m -&gt; n - m
+      | Mul, n, m -&gt; n * m
+      | Div, n, m -&gt; n / m
+      | Equal, v1, v2 -&gt; VBool (v1 = v2)
+  | EFun(arg, body) -&gt; VClosure { arg=arg; env=vars; body=body }
+  | EIf(p, t, f) -&gt; eval vars (if value.to_bool (eval vars p) then t else f)
+  | ELet(false, var, body, rest) -&gt;
+      eval ((var, ref (eval vars body)) :: vars) rest
+  | ELet(true, var, EFun(arg, body), rest) -&gt;
+      let value = ref (VNum 0N)
+      let vars = (var, value) :: vars
+      value := VClosure { arg=arg; env=vars; body=body }
+      eval vars rest
+  | ELet(true, var, _, rest) -&gt;
+      failwith "A \"let rec\" may only define a function"</PRE>
+      <P>This              <CODE>eval</CODE> is little more than a big pattern 
+      match that recognises valid expressions and converts them into values. In 
+      this case, the only kind of expression that we disallow is a recursive 
+      non-functional value.           </P>
+      <P>The cases in this pattern match are as follows:</P>
+      <P>
+      <UL>
+        <LI>A numeric literal expression evaluates to its numeric value.</LI>
+        <LI>An identifier is looked up in the current bindings to find the value 
+        of the variable with that name.</LI>
+        <LI>The unary negation operator unboxes the value that results from 
+        evaluating the rest of the expression (expecting it to be a number), 
+        negates it and then boxes it in the                  <CODE>VNum</CODE> 
+        constructor as a new numeric value.               </LI>
+        <LI>Binary operators are handled by evaluating the two subexpressions 
+        and then handling the results in an inner pattern match. Function 
+        application expects a closure from the left subexpression. Arithmetic 
+        operations all expect numeric values from both left and right 
+        subexpressions and produce a numeric result. Equality is polymorphic and 
+        produces a boolean result, boxed in the                  
+        <CODE>VBool</CODE> type constructor.               </LI>
+        <LI>Function expressions are evaluated into closures, capturing the 
+        current set of variable bindings                  <CODE>vars</CODE> as 
+        the environment.               </LI>
+        <LI>If expressions evaluate the predicate subexpression and then either 
+        the true or false branch subexpression.</LI>
+        <LI>Non-recursive                  <CODE>let</CODE> bindings evaluate 
+        the                  <CODE>body</CODE> , bind the result to the variable 
+        and then evaluate the                  <CODE>rest</CODE> .               
+        </LI>
+        <LI>Recursive                  <CODE>let</CODE> bindings are required to 
+        contain a function expression. A closure is built from the function 
+        expression as before but the environment of the closure includes the 
+        binding of the closure itself, so the recursive function definition can 
+        refer to itself in its own body.               </LI>
+        <LI>Finally, recursive                  <CODE>let</CODE> bindings that 
+        do not have a function expression for a body cause an error.             
+          </LI></UL>
+      <P></P>
+      <P>Even though this              <CODE>eval</CODE> function is capable of 
+      interpreting non-trivial programs from a functional language, its 
+      implementation is incredibly concise and, thanks to features like pattern 
+      matching, also perfectly comprehensible.           </P>
+      <H2>Parse module</H2>
+      <P>The              <CODE>Parse</CODE> module is generated from the 
+      following yacc grammar:           </P>
+<PRE>%{
+open Expr</PRE>
+<PRE>let applies es =
+  List.fold1_left (fun h t -&gt; EBinOp(Apply, h, t)) es
+%}</PRE>
+<PRE>%token &lt;string&gt; IDENT
+%token &lt;Math.BigNum&gt; NUM
+%token EQUAL
+%token PLUS MINUS TIMES DIVIDE POWER
+%token OPEN CLOSE
+%token LET REC IN
+%token FUN RIGHTARROW
+%token IF THEN ELSE
+%token SEMISEMI EOF</PRE>
+<PRE>%right LET REC IN
+%right FUN RIGHTARROW
+%right IF THEN ELSE
+%left EQUAL
+%left PLUS MINUS
+%left TIMES DIVIDE
+%right POWER
+%left prec_uminus
+%left prec_apply</PRE>
+<PRE>%start statement
+%type &lt;Expr.statement option&gt; statement</PRE>
+<PRE>%%</PRE>
+<PRE>fin:
+| SEMISEMI {}
+| EOF {}
+;</PRE>
+<PRE>rec_opt: { false }
+| REC    { true }
+;</PRE>
+<PRE>statement:
+| fin                          { None }
+| LET rec_opt IDENT EQUAL expr { Some(SLet($2, $3, $5)) }
+| expr fin                     { Some(SExpr $1) }
+;</PRE>
+<PRE>simple_expr:
+| NUM             { ENum $1 }
+| IDENT           { EVar $1 }
+| OPEN expr CLOSE { $2 }
+;</PRE>
+<PRE>simple_expr_list:
+| simple_expr { [$1] }
+| simple_expr simple_expr_list { $1 :: $2 }
+;</PRE>
+<PRE>expr:
+| simple_expr                                   { $1 }
+| simple_expr simple_expr_list %prec prec_apply { applies ($1::$2) }
+| expr EQUAL expr                               { EBinOp(Equal, $1, $3) }
+| expr PLUS expr                                { $1 + $3 }
+| expr MINUS expr                               { $1 - $3 }
+| expr TIMES expr                               { $1 * $3 }
+| expr DIVIDE expr                              { $1 / $3 }
+| FUN IDENT RIGHTARROW expr                     { EFun($2, $4) }
+| IF expr THEN expr ELSE expr                   { EIf($2, $4, $6) }
+| LET rec_opt IDENT EQUAL expr IN expr          { ELet($2, $3, $5, $7) }
+;</PRE>
+      <P>The rules that make up this grammar are mostly self-explanatory. One 
+      interesting rule is the use of              <CODE>simple_expr</CODE> ,     
+               <CODE>simple_expr_list</CODE> and              <CODE>expr</CODE> 
+      to handle the elegant notation              <CODE>f x y</CODE> for curried 
+      function application. The rules for              <CODE>expr</CODE> handle 
+      either a single              <CODE>simple_expr</CODE> or a sequence of one 
+      or more whitespace-separated              <CODE>simple_expr</CODE> s. In 
+      the latter case, the resulting list is traversed by the              
+      <CODE>applies</CODE> function (defined in the preamble) in order to parse 
+      function application as left-associative.           </P>
+      <P>The "parse.fs" F# source code can be generated by applying the          
+          <CODE>fsyacc.exe</CODE> program to the "parse.fsy" grammar definition: 
+                </P>
+<PRE>C:\Documents and Settings\Jon\My Documents\Visual Studio 2005\Projects\Interpret
+er&gt;"C:\Program Files\FSharp-1.9.3.7\bin\fsyacc.exe" parse.fsy
+building tables
+computing first function
+building kernels
+computing lookahead relations
+building lookahead table
+building action table
+building goto table
+56 states
+5 nonterminals
+21 terminals
+20 productions
+#rows in action table: 56
+#unique rows in action table: 42
+maximum #different actions per state: 9
+average #different actions per state: 4</PRE>
+      <P>Both the grammar definition and the generated code can be included in 
+      the Visual Studio project (see later).</P>
+      <H2>Lex module</H2>
+      <P>Similarly, the              <CODE>Lex</CODE> module is autogenerated 
+      from the following lexer definition:           </P>
+<PRE>{
+open Parse
+open Lexing</PRE>
+<PRE>let ident = function
+  | "let" -&gt; LET
+  | "rec" -&gt; REC
+  | "in" -&gt; IN
+  | "fun" -&gt; FUN
+  | "if" -&gt; IF
+  | "then" -&gt; THEN
+  | "else" -&gt; ELSE
+  | s -&gt; IDENT s
+}</PRE>
+<PRE>let digit = ['0'-'9']
+let alpha = ['a'-'z' 'A'-'Z']+
+let ident = alpha+ (alpha | digit)*</PRE>
+<PRE>rule token = parse
+| ['\n' '\r']     { token lexbuf }
+| [' ' '\t']      { token lexbuf }
+| '='             { EQUAL }
+| '+'             { PLUS }
+| '-'             { MINUS }
+| '*'             { TIMES }
+| '/'             { DIVIDE }
+| '('             { OPEN }
+| ')'             { CLOSE }
+| ";;"            { SEMISEMI }
+| "-&gt;"            { RIGHTARROW }
+| digit+          { NUM(Math.BigNum.of_string(lexeme lexbuf)) }
+| ident           { lexeme lexbuf |&gt; ident }
+| _               { EOF }</PRE>
+      <P>This is also only marginally more complicated than the lexer developed 
+      in the F#.NET Journal article on fslex and fsyacc.</P>
+      <P>Running the              <CODE>fslex</CODE> program on this lexer 
+      definition generates the "lex.fs" source code:           </P>
+<PRE>C:\Documents and Settings\Jon\My Documents\Visual Studio 2005\Projects\Interpret
+er&gt;"C:\Program Files\FSharp-1.9.3.7\bin\fslex.exe" lex.fsl
+compiling to dfas (can take a while...)
+651 NFA nodes
+21 states
+writing output</PRE>
+      <P>This leaves only the main program to tie these components together.</P>
+      <H2>Main module</H2>
+      <P>The              <CODE>Main</CODE> module is the final compilation unit 
+      in the project and invokes a              <CODE>main</CODE> function that 
+      implements the interactive session:           </P>
+<PRE>#light</PRE>
+<PRE>open Expr</PRE>
+<PRE>let lexbuf = Lexing.from_channel stdin</PRE>
+<PRE>let rec main state =
+  printf "&gt; "
+  let state =
+    try
+      match Parse.statement Lex.token (Lexing.from_channel stdin) with
+        Some(SExpr expr) -&gt;
+          printf "eval %A\n" expr
+          printf "= %s\n" (Value.to_string (Eval.eval state expr))
+          Some state
+      | Some(SLet(is_rec, f, b)) -&gt;
+          printf "val %s\n" f
+          Some ((f, ref (Eval.eval state (ELet(is_rec, f, b, EVar f)))) :: state)
+      | None -&gt; None
+    with
+    | Failure s -&gt;
+        printf "%s\n" s
+        Some state
+    | e -&gt;
+        printf "Error: %A\n" e
+        Some state
+  Option.iter main state</PRE>
+<PRE>let () =
+  ["true", ref (Value.VBool true);
+   "false", ref (Value.VBool false)]
+  |&gt; main</PRE>
+      <P>This              <CODE>main</CODE> function is also quite 
+      straightforward. A prompt is printed before input is parsed from           
+         <CODE>stdin</CODE> . The parser will return either some binding or 
+      expression or              <CODE>None</CODE> if the user evaluates the 
+      empty line in order to quit. Evaluating an expression results in the 
+      expression being printed and the              <CODE>main</CODE> function 
+      recurses using the same              <CODE>state</CODE> (variable 
+      bindings). Interpreting a              <CODE>let</CODE> binding causes the 
+      equivalent expression to be evaluated and the              
+      <CODE>state</CODE> is augmented with this new definition.           </P>
+      <H2>Results</H2>
+      <P>Building and running the Visual Studio project spawns a console window 
+      with a prompt waiting for input in our new language:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/interpreter_output.gif"> 
+                  </P>
+      <P></P>
+      <P>The language is remarkably expressive considering how small its 
+      interpreter is. Here, we define the usual              <CODE>nest</CODE> 
+      combinator and a              <CODE>succ</CODE> function to compute the 
+      increment of a number. Nesting the              <CODE>succ</CODE> function 
+      gives an              <CODE>add</CODE> function. Nesting the              
+      <CODE>add</CODE> function gives a              <CODE>mul</CODE> function 
+      and nesting the              <CODE>mul</CODE> function gives a             
+       <CODE>pow</CODE> function.           </P>
+      <P>Despite its simplicity, this project is an excellent starting point for 
+      a wide variety of other projects based around language oriented 
+      programming. Due to concerns about interoperability, language oriented 
+      programming is becoming increasingly popular as a way to autogenerate 
+      large code bases written in previous generation languages like Java.</P>
+      <P>Future F#.NET Journal articles will cover important variations on this 
+      theme, including the creation of rewrite languages (used by computer 
+      algebra systems and for data manipulation such as XSLT), code generation, 
+      compilation to .NET bytecode and even the generation of shader programs 
+      for execution on the graphics card!</P>
+      <H2>Download</H2>
+      <P>The Visual Studio project than accompanies this article is available 
+      for download              <A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/code/Interpreter.zip">here</A>
+       .           </P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Language-oriented%20programming%20The%20Term-level%20Interpreter_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>

@@ -1,0 +1,475 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0074)http://www.ffconsultancy.com/products/fsharp_journal/subscribers/rtin.html -->
+<!--?xml version="1.0" encoding="iso-8859-1"?--><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"><HTML><HEAD><META 
+content="IE=10.000" http-equiv="X-UA-Compatible">
+   <TITLE>F# Journal: Triangulated Irregular Networks (TINs)</TITLE>   
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252"><LINK 
+href="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/style.css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/style(1).css" 
+rel="stylesheet" type="text/css">   <LINK href="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/individual.css" 
+rel="stylesheet" type="text/css"> 
+<META name="GENERATOR" content="MSHTML 10.00.9200.16458"></HEAD>
+<BODY>       <TITLE>F# Journal: Triangulated Irregular Networks (TINs)</TITLE>   
+  <LINK href="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/style.css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/style(1).css" 
+rel="stylesheet" type="text/css">     <LINK href="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/individual.css" 
+rel="stylesheet" type="text/css">         
+<TABLE id="logo">
+  <TBODY>
+  <TR>
+    <TD width="100%"><IMG src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/title.gif"> 
+              </TD>
+    <TD><IMG src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/left.gif"> 
+              </TD></TR></TBODY></TABLE>
+<TABLE id="menu">
+  <TBODY>
+  <TR>
+    <TD width="25%">
+    <TD width="25%"><A 
+      href="http://www.ffconsultancy.com/products/index.html">Home Page</A>      
+         </TD>
+    <TD width="25%"><A href="http://www.ffconsultancy.com/products/fsharp_journal/subscribers/index.html">The 
+      F# Journal</A>         </TD>
+    <TD width="25%"></TR></TBODY></TABLE>
+<TABLE id="page">
+  <TBODY>
+  <TR>
+    <TD>
+      <H1>Triangulated Irregular Networks (TINs)</H1>
+      <P>Adaptive subdivision is a hot topic in computer graphics and forms the 
+      foundation of many state-of-the-art algorithms for large scale 
+      visualization used for everything from scientific visualization of huge 
+      data sets to game graphics that immerse players in expansive virtual 
+      worlds. This article describes one of the most popular approaches for the 
+      adaptive subdivision of 3D meshes and implements a capable plotting 
+      algorithm with real-time visualization using Windows Presentation 
+      Foundation showcasing how this simple algorithm works and can be used to 
+      solve many different problems.</P>
+      <H2>Introduction</H2>
+      <P>Although some problems can be solved using flat array-based data 
+      structures and loop-based algorithms, the ability to handle a variety of 
+      scales inevitably requires to use of hierarchical tree-like data 
+      structures and, consequently, recursive algorithms. Such applications are 
+      in abundance in the context of computer graphics, where modern 
+      visualization frameworks are required to render a wide range of scales, 
+      from individual organisms to entire planets.</P>
+      <P>Adaptive subdivision algorithms are beautiful examples of recursion 
+      being applied very successfully to fundamental problems. The following 
+      diagram illustrates how a single two-triangle square may be recursively 
+      decomposed into progressively more triangles, giving a finer-grained 
+      tesselations, in order to focus triangle density on a certain area:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/rtin.gif"> 
+                  </P>
+      <P></P>
+      <P>In its simplest form, such an algorithm has two different aspects:</P>
+      <P>
+      <OL>
+        <LI>A function to split a given triangle in a mesh.</LI>
+        <LI>A metric quantifying the desire to split any given triangle.</LI></OL>
+      <P></P>
+      <P>This is precisely the approach described and implemented in this 
+      article. The representation is sometimes known as a Right-angle Triangular 
+      Irregular Network (RTIN) because it is assumed to start with right-angled 
+      triangles and subdivides them along their hypotenuses to produce more 
+      right-angled triangles. However, the algorithm is actually completely 
+      agnostic with regard to the vertex positions so any layout can be used 
+      with the same simple algorithm.</P>
+      <P>The RTIN was made famous in the context of terrain rendering by the 
+      Real-time Optimally-Adapting Mesh (ROAM) algorithm described              
+      <A href="https://graphics.llnl.gov/ROAM/roam.pdf">here</A> . Although this 
+      technique has been superceded in the context of terrain rendering by newer 
+      algorithms than handle batches of triangles in order to push computational 
+      burden onto the previously-underused GPU, this basic approach is still the 
+      method of choice for a variety of other applications including graph 
+      plotting.           </P>
+      <H2>Design</H2>
+      <P>Let us begin by considering the theoretical task of representing and 
+      subdividing such a mesh.</P>
+      <H3>Representing triangles</H3>
+      <P>A triangle in a mesh may be represented by its three vertices and its 
+      three neighboring triangles. In the context of a right-angle triangular 
+      network, a triangle also has a apex vertex and a hypotenuse edge.</P>
+      <H3>Representing a mesh of connected triangles</H3>
+      <P>An entire connected mesh may be traversed by following each triangle's 
+      links to its neighbors. Consequently, we might represent a mesh by a 
+      single "root" triangle. However, we wish to be able to split some 
+      triangles more than others according to our metric so we shall represent 
+      the mesh by the set of all of the triangles that it contains. The built-in 
+                   <CODE>Set</CODE>  module provides an elegant way to store a 
+      set of triangles that is particularly suitable because we can order the 
+      triangles in a set according to their error metric. This technique is 
+      referred to as a priority queue for splitting in the ROAM paper.           
+      </P>
+      <H3>Subdividing triangles</H3>
+      <P>The process of splitting is quite simple for this kind of TIN:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/split.gif"> 
+                  </P>
+      <P></P>
+      <P>A triangle may be split only when it is hypotenuse to hypotenuse with 
+      its neighbor. If this is not the case then the neighbor sharing the 
+      hypotenuse must be split in order to make this the case.</P>
+      <P>The split then replaces the two neighboring triangles with four 
+      triangles by introducing a new central vertex. Note that this affects not 
+      only the two removed and four inserted triangles but also their four 
+      neighbors, which must have their neighbor information updated to keep the 
+      topology consistent.</P>
+      <P>Although it is entirely feasible to perform the reverse              
+      <I>merge</I> operation we shall not consider it here.           </P>
+      <H3>The error metric</H3>
+      <P>Having mastered the subdivision process itself, it is essential that 
+      the effort of subdivision is focused on the appropriate parts of the mesh. 
+      This is done by choosing a suitable error metric and subdividing the 
+      triangles that are the poorest approximation to the underlying surface 
+      first.</P>
+      <P>In the context of tesselating surface plots, the distance of a function 
+      evaluation from the centre of the triangle to the surface of the triangle 
+      gives an estimate of how accurately the flat triangle represents the 
+      underlying surface:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/point_to_plane.gif"> 
+                  </P>
+      <P></P>
+      <H2>Implementation</H2>
+      <P>We begin by referencing the relevant DLLs (for Windows Presentation 
+      Foundation and the F# PowerPack library):</P>
+<PRE>&gt; #light;;
+&gt; #r "FSharp.PowerPack.dll";;
+&gt; #r "PresentationCore.dll";;
+&gt; #r "PresentationFramework.dll";;
+&gt; #r "WindowsBase.dll";;
+&gt; open Microsoft.FSharp.Math;;
+&gt; open System.Windows.Media;;
+&gt; open System.Windows.Media.Media3D;;</PRE>
+      <P>We shall use the              
+      <CODE>System.Windows.Media.Media3D.Vector3D</CODE> type to represent a 3D 
+      vector.           </P>
+      <P>The following function              <CODE>f</CODE> defines the shape of 
+      the surface being tesselated as a function of the              <I>x</I> 
+      and              <I>z</I> coordinates:           </P>
+<PRE>&gt; let f x y =
+    let x, y = x * 5., y * 5.
+    let r = 5. * sqrt(x * x + y * y)
+    let z = sin(r + 3. * x) / r
+    let z = 0.2 + if z &lt;&gt; z then 0.4 else z
+    max 0. (min 1. z)
+val f : float -&gt; float -&gt; float</PRE>
+      <P>Note that we clamp the value of              <CODE>f</CODE> within the 
+      range 0..1.           </P>
+      <P>The following              <CODE>mk</CODE> function replaces the        
+            <I>y</I> -coordinate of the given vector with the value calculated 
+      from the              <I>x</I> and              <I>z</I> coordinates using 
+      the              <CODE>f</CODE> function:           </P>
+<PRE>&gt; let mk (u: Vector3D) = Vector3D(u.X, f u.X u.Z, u.Z);;
+val mk : Vector3D -&gt; Vector3D</PRE>
+      <P>The following              <CODE>triangle</CODE> type encapsulates our 
+      representation of a triangle as its error metric, 3 vertices and 3 
+      neighboring triangles and associates comparison and equality functions 
+      with the type itself:           </P>
+<PRE>&gt; type triangle =
+    { error: float; av: Vector3D; v0: Vector3D; v1: Vector3D;
+      mutable bt: triangle; mutable t0: triangle; mutable t1: triangle } with
+    
+    interface System.IComparable with
+      override t1.CompareTo(t2) =
+        let t2 = t2 :?&gt; triangle
+        let f (u: Vector3D) = (u.X, u.Y, u.Z)
+        compare
+          (t1.error, f t1.av, f t1.v0, f t1.v1)
+          (t2.error, f t2.av, f t2.v0, f t2.v1)
+    
+    override x.Equals y =
+      let y = y :?&gt; triangle
+      LanguagePrimitives.PhysicalEquality x y;;
+type triangle =
+  {error: float;
+   av: Vector3D;
+   v0: Vector3D;
+   v1: Vector3D;
+   mutable bt: triangle;
+   mutable t0: triangle;
+   mutable t1: triangle;}
+  with
+    interface System.IComparable
+    override Equals : y:obj -&gt; bool
+  end</PRE>
+      <P>Generic comparison is overridden using the              
+      <CODE>CompareTo</CODE> member of the              
+      <CODE>System.IComparable</CODE> interface. This compared by error metric 
+      first and then vertices, ensuring that a set of triangles is sorted 
+      primarily by error but also allowing many triangles to share the same 
+      error metric by having different vertices (otherwise the              
+      <CODE>Set</CODE> data structure would remove "duplicates" that had only 
+      the same error metric).           </P>
+      <P>Generic equality is overridden using the              
+      <CODE>Equals</CODE> member found in any object and simply uses physical 
+      (reference) equality to avoid having to compare actual fields.           
+      </P>
+      <P>Note that the error metric is a function of immutable data in the 
+      triangle (the vertex positions) and not mutable data. Thus, we may mutate 
+      the neighbor topology of a triangle safe in the knowledge that we have not 
+      changed its error metric and, consequently, invalidated its position in a 
+      set of triangles.</P>
+      <P>The following              <CODE>tri</CODE> function constructs a new 
+      triangle from three vertices with the neighbors initially set to point to 
+      itself, which we use to denote an edge triangle that has no neighbor.      
+           </P>
+<PRE>&gt; let tri(av: Vector3D, v0: Vector3D, v1: Vector3D) =
+    let m = mk(1. / 3. * (av + v0 + v1))
+    let n = Vector3D.CrossProduct(v0 - av, v1 - av)
+    let error = Vector3D.DotProduct(m - av, n) / sqrt(Vector3D.DotProduct(n, n))
+    let rec t = { error= -error * error; av=av; v0=v0; v1=v1; bt=t; t0=t; t1=t }
+    t;;
+val tri : Vector3D * Vector3D * Vector3D -&gt; triangle</PRE>
+      <P>The following              <CODE>replace</CODE> function searches a 
+      triangle              <CODE>t1</CODE> for references to a neighbor         
+           <CODE>t2</CODE> and replaces it with              <CODE>t3</CODE> . 
+      This function will be used when updating the nearest neighbor topology 
+      during splitting.           </P>
+<PRE>&gt; let replace t1 t2 t3 =
+    if t1 &lt;&gt; t2 then
+      if t1.bt = t2 then t1.bt &lt;- t3 else
+        if t1.t0 = t2 then t1.t0 &lt;- t3 else
+          if t1.t1 = t2 then t1.t1 &lt;- t3;;
+val replace : triangle -&gt; triangle -&gt; triangle -&gt; unit</PRE>
+      <P>Note that the              <CODE>&lt;&gt;</CODE> and              
+      <CODE>=</CODE> operators used in this              <CODE>replace</CODE> 
+      function invoke the              <CODE>Equals</CODE> method of the         
+           <CODE>triangle</CODE> type.           </P>
+      <P>The              <CODE>Set</CODE> type can be used to store values of 
+      our              <CODE>triangle</CODE> type without us having to do any 
+      more work because the necessary comparison routine is part of the 
+      definition of our type.           </P>
+      <P>The following              <CODE>network</CODE> type encapsulates the 
+      representation of a triangulated irregular network which, in this case, is 
+      just a set of triangles:           </P>
+<PRE>&gt; type network = { mutable triangles: Set&lt;triangle&gt; };;
+type network =
+  {mutable triangles: Set&lt;triangle&gt;;}</PRE>
+      <P>The following              <CODE>network</CODE> value is our initial 
+      network consisting of a square of two triangles:           </P>
+<PRE>&gt; let network =
+    let v0 = mk(Vector3D(-1., 0.,-1.))
+    let v1 = mk(Vector3D( 1., 0.,-1.))
+    let v2 = mk(Vector3D( 1., 0., 1.))
+    let v3 = mk(Vector3D(-1., 0., 1.))
+    
+    let t0 = tri(v3, v2, v0)
+    let t1 = tri(v1, v0, v2)
+    t0.bt &lt;- t1
+    t1.bt &lt;- t0
+    
+    { triangles = Set.add t0 (Set.singleton t1) };;
+val network : network</PRE>
+      <P>Note that we adjust the vertex coordinates using the              
+      <CODE>mk</CODE> function and set the hypotenuse neighbors of the two 
+      triangles to each other before constructing a set containing the two 
+      triangles.           </P>
+      <P>The following              <CODE>split</CODE> function and its          
+          <CODE>split1</CODE> and              <CODE>split2</CODE> relatives 
+      implement the splitting algorithm:           </P>
+<PRE>&gt; let rec split network t =
+    if t.bt &lt;&gt; t then split2 network t else split1 network t
+  and split2 network t =
+    if t.bt.bt &lt;&gt; t then split network t.bt
+    let m = mk(0.5 * (t.v0 + t.v1))
+    let t0, t1 = tri(m, t.v1, t.av), tri(m, t.av, t.v0)
+    let t2, t3 = tri(m, t.v0, t.bt.av), tri(m, t.bt.av, t.v1)
+    if t.t0 &lt;&gt; t then t0.bt &lt;- t.t0
+    t0.t0 &lt;- t1
+    t0.t1 &lt;- t3
+    if t.t1 &lt;&gt; t then t1.bt &lt;- t.t1
+    t1.t0 &lt;- t2
+    t1.t1 &lt;- t0
+    if t.bt.t0 &lt;&gt; t.bt then t2.bt &lt;- t.bt.t0
+    t2.t0 &lt;- t3
+    t2.t1 &lt;- t1
+    if t.bt.t1 &lt;&gt; t.bt then t3.bt &lt;- t.bt.t1
+    t3.t0 &lt;- t0
+    t3.t1 &lt;- t2
+    replace t.t0 t t0
+    replace t.t1 t t1
+    replace t.bt.t0 t.bt t2
+    replace t.bt.t1 t.bt t3
+    network.triangles &lt;- network.triangles - set [t; t.bt] + set [t0; t1; t2; t3]
+  and split1 network t =
+    let m = mk(0.5 * (t.v0 + t.v1))
+    let t0, t1 = tri(m, t.v1, t.av), tri(m, t.av, t.v0)
+    if t.t0 &lt;&gt; t then t0.bt &lt;- t.t0
+    t0.t0 &lt;- t1
+    if t.t1 &lt;&gt; t then t1.bt &lt;- t.t1
+    t1.t1 &lt;- t0
+    replace t.t0 t t0
+    replace t.t1 t t1
+    network.triangles &lt;- network.triangles - set [t] + set [t0; t1];;
+val split : network -&gt; triangle -&gt; unit
+val split2 : network -&gt; triangle -&gt; unit
+val split1 : network -&gt; triangle -&gt; unit</PRE>
+      <P>The              <CODE>split</CODE> function tests to see if the 
+      hypotenuse has a neighbor and, if so, uses the              
+      <CODE>split2</CODE> function to split both triangles, otherwise uses the   
+                 <CODE>split1</CODE> function to split only the current 
+      triangle. This is required for meshes with edges but a mesh might also be 
+      a closed manifold in which case this test and the              
+      <CODE>split1</CODE> function would be redundant.           </P>
+      <P>The              <CODE>split1</CODE> function essentially performs half 
+      of the operations of the              <CODE>split2</CODE> function so let 
+      us study the latter. The              <CODE>split2</CODE> function begins 
+      by splitting the neighbor across the hypotenuse              
+      <CODE>t.bt</CODE> if it has not already been split. This ensures that the 
+      triangles              <CODE>t</CODE> and              <CODE>t.bt</CODE> 
+      form a square:           </P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/split2.gif"> 
+                  </P>
+      <P></P>
+      <P>The two triangles t and t.bt are replaced with four triangles t         
+          <SUB>0..3</SUB> and the four neighbors (t.t0, t.t1, t.bt.t0 and 
+      t.bt.t1) are updated to point to the new triangles. Note that these 
+      neighbors might not exist so we must be careful to test for that.          
+       </P>
+      <P>The following              <CODE>subdivide</CODE> function splits the 
+      most erroneous triangle in the mesh when either the error is sufficiently 
+      large or when there are too few triangles currently in the mesh:           
+      </P>
+<PRE>&gt; let subdivide() =
+    let t = Set.min_elt network.triangles
+    if t.error &lt; -1e-5 || network.triangles.Count &lt; 1000 then
+      split network t
+    else
+      completed &lt;- true;;
+val subdivide : unit -&gt; unit</PRE>
+      <P>The following              <CODE>render</CODE> function rotates the 
+      mesh (i.e. keeping the light sources stationary) according to the current 
+      time and sets the vertex, normal and index arrays of the mesh to represent 
+      the current tesselation:           </P>
+<PRE>&gt; let render (group: Model3DGroup) (geo: GeometryModel3D) _ _ =
+    geo.Transform &lt;-
+      let t = 0.03 * float time.ElapsedMilliseconds
+      RotateTransform3D(AxisAngleRotation3D(Vector3D(0., 1., 0.), t))
+    if not completed then
+      let mutable i = 0
+      let mesh = geo.Geometry :?&gt; MeshGeometry3D
+      mesh.Positions.Clear()
+      mesh.Normals.Clear()
+      mesh.TriangleIndices.Clear()
+      for t in network.triangles do
+        for v in [t.av; t.v0; t.v1; t.av; t.v0; t.v1] do
+          mesh.Positions.Add(Point3D(v.X, v.Y, v.Z))
+        let n = Vector3D.CrossProduct(t.v0 - t.av, t.v1 - t.av)
+        for n in [n; n; n; -n; -n; -n] do
+          mesh.Normals.Add n
+        for i in [i; i+1; i+2; i; i+2; i+1] do
+          mesh.TriangleIndices.Add i
+        i &lt;- i + 6
+      subdivide();;
+val render : Model3DGroup -&gt; GeometryModel3D -&gt; 'a -&gt; 'b -&gt; unit</PRE>
+      <P>Finally, the main program creates a WPF              
+      <CODE>Window</CODE> that contains a              
+      <CODE>Controls.Viewport3D</CODE> that contains a              
+      <CODE>ModelVisual3D</CODE> that contains a              
+      <CODE>Model3DGroup</CODE> that contains three directional lights and a     
+               <CODE>GeometryModel3D</CODE> that is a              
+      <CODE>MeshGeometry3D</CODE> :           </P>
+<PRE>&gt; [&lt;System.STAThread&gt;]
+  do
+    let mesh = System.Windows.Media.Media3D.MeshGeometry3D()
+    let geo = GeometryModel3D(mesh, DiffuseMaterial Brushes.White)</PRE>
+<PRE>    let group = System.Windows.Media.Media3D.Model3DGroup()
+    for c, d in [ Colors.Red, Vector3D(1., 0., -1.); 
+                  Colors.Green, Vector3D(1., -1., -1.);
+                  Colors.Blue, Vector3D(0., -1., -1.) ] do
+      group.Children.Add(DirectionalLight(Color=c, Direction=d))
+    group.Children.Add geo</PRE>
+<PRE>    let visual = System.Windows.Media.Media3D.ModelVisual3D()
+    visual.Content &lt;- group</PRE>
+<PRE>    let viewport3d = System.Windows.Controls.Viewport3D()
+    viewport3d.Camera &lt;-
+      PerspectiveCamera(Position=Point3D(0., 3., 5.),
+                        LookDirection=Vector3D(0., -2.7, -5.))
+    viewport3d.Children.Add visual</PRE>
+<PRE>    let window = System.Windows.Window()
+    window.Content &lt;- viewport3d
+    window.Background &lt;- Brushes.DarkGreen</PRE>
+<PRE>    System.EventHandler(render group geo)
+    |&gt; System.Windows.Media.CompositionTarget.add_Rendering</PRE>
+<PRE>    (System.Windows.Application()).Run window |&gt; ignore;;</PRE>
+      <P>This tiny program is all that is required to perform efficient adaptive 
+      subdivision of 3D meshes.</P>
+      <H2>Results</H2>
+      <P>This program only takes a fraction of a second to tesselate a 
+      complicated function, producing thousands of triangles that accurately 
+      approximate the curved 3D surface and would be ideal for a graph 
+      plotter:</P>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/wave2.gif"> 
+                  </P>
+      <P></P>
+      <P>The              <CODE>render</CODE> function can be augmented to strip 
+      out near vertical sliver triangles in order to open branch cuts:           
+      </P>
+<PRE>&gt; let render (group: Model3DGroup) (geo: GeometryModel3D) _ _ =
+    geo.Transform &lt;-
+      let t = 0.03 * float time.ElapsedMilliseconds
+      RotateTransform3D(AxisAngleRotation3D(Vector3D(0., 1., 0.), t))
+    if not completed then
+      let mutable i = 0
+      let mesh = geo.Geometry :?&gt; MeshGeometry3D
+      mesh.Positions.Clear()
+      mesh.Normals.Clear()
+      mesh.TriangleIndices.Clear()
+      for t in network.triangles do
+        let y0 = min t.v0.Y (min t.v1.Y t.av.Y) in
+        let y1 = max t.v0.Y (max t.v1.Y t.av.Y) in
+        let dx, dz = t.v1.X - t.v0.X, t.v1.Z - t.v0.Z
+        let e = (y1 - y0) / sqrt(dx*dx + dz*dz) in
+        if e &lt; 100. then
+          for v in [t.av; t.v0; t.v1; t.av; t.v0; t.v1] do
+            mesh.Positions.Add(Point3D(v.X, v.Y, v.Z))
+          let n = Vector3D.CrossProduct(t.v0 - t.av, t.v1 - t.av)
+          for n in [n; n; n; -n; -n; -n] do
+            mesh.Normals.Add n
+          for i in [i; i+1; i+2; i; i+2; i+1] do
+            mesh.TriangleIndices.Add i
+          i &lt;- i + 6
+      subdivide();;
+val render : Model3DGroup -&gt; GeometryModel3D -&gt; 'a -&gt; 'b -&gt; unit</PRE>
+      <P>The imaginary part of the natural logarithm of a complex number in the 
+      Argand plane contains a single branch cut that is now visualized correctly 
+      using this program:</P>
+<PRE>&gt; let f x y =
+    let x, y = x * 5., y * 5.
+    let z = 0.5 + 0.25 * Complex.imagPart(log(complex x y))
+    max 0. (min 1. z)
+val f : float -&gt; float -&gt; float</PRE>
+      <P>
+      <P style="text-align: center;"><IMG src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/branch_cut2.gif"> 
+                  </P>
+      <P></P>
+      <P>Considering how short this program is, the fidelity and functionality 
+      that it provides is quite incredible.</P>
+      <H2>Summary</H2>
+      <P>This article has described and implemented the simplest form of 
+      adaptive subdivision and has already provided the beginnings of a 
+      sophisticated adaptive 3D surface plotter capable of handling irregular 
+      surfaces and even branch cuts.</P>
+      <P>This program can be used as the foundation of many other applications 
+      including terrain visualization, planet visualization and contour 
+      plotting. The rendering of 2D contours using this technology is 
+      particularly enlightening: the error metric is chosen to split triangles 
+      that span the boundary of one or more contours.</P>
+      <P>Future F#.NET Journal articles will revisit the subject of adaptive 
+      subdivision.</P></TD></TR></TBODY></TABLE>
+<TABLE id="footer">
+  <TBODY>
+  <TR>
+    <TD>© Flying Frog Consultancy Ltd., 2007</TD>
+    <TD>Contact the            <A 
+      href="mailto:webmaster@ffconsultancy.com">webmaster</A>         
+  </TD></TR></TBODY></TABLE>
+<SCRIPT src="F%23%20Journal%20Triangulated%20Irregular%20Networks%20(TINs)_files/urchin.js" type="text/javascript">
+<script type="text/javascript">
+_uacct = "UA-197840-1";
+urchinTracker();</SCRIPT>
+ </BODY></HTML>
